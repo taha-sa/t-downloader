@@ -1,0 +1,50 @@
+// Sağ tık menüsü (Türkçe).
+import * as native from "./native.js";
+import { sendDownload, addBypass } from "./capture.js";
+
+const ITEMS = [
+  { id: "td-link", title: "T-Downloader ile indir", contexts: ["link"] },
+  { id: "td-page", title: "Tüm linkleri T-Downloader ile indir", contexts: ["page"] },
+  { id: "td-selection", title: "Seçili linkleri indir", contexts: ["selection"] },
+  { id: "td-media", title: "Bu videoyu indir", contexts: ["video", "audio"] },
+];
+
+export function createMenus() {
+  chrome.contextMenus.removeAll(() => {
+    void chrome.runtime.lastError;
+    for (const it of ITEMS) chrome.contextMenus.create(it);
+  });
+}
+
+async function queueUrl(url, referrer) {
+  if (!/^https?:|^ftp:/i.test(url || "")) return;
+  // Host yoksa sessizce tarayıcıya bırak (yedek indirme yakalanmasın diye bypass).
+  if (!native.isConnected()) {
+    native.connect();
+    if (!native.isConnected()) { addBypass(url); try { await chrome.downloads.download({ url }); } catch { /* yut */ } return; }
+  }
+  const ok = await sendDownload({ url, referrer });
+  if (!ok) { addBypass(url); try { await chrome.downloads.download({ url }); } catch { /* yut */ } }
+}
+
+async function collectLinks(tabId, frameId, selectionOnly) {
+  try {
+    const r = await chrome.tabs.sendMessage(tabId, { kind: "collectLinks", selectionOnly }, { frameId });
+    return r?.urls || [];
+  } catch { return []; }
+}
+
+export async function onMenuClick(info, tab) {
+  const referrer = info.pageUrl || tab?.url || "";
+  switch (info.menuItemId) {
+    case "td-link": return queueUrl(info.linkUrl, referrer);
+    case "td-media": return queueUrl(info.srcUrl, referrer);
+    case "td-page":
+    case "td-selection": {
+      if (!tab?.id) return;
+      const sel = info.menuItemId === "td-selection";
+      const urls = await collectLinks(tab.id, sel ? info.frameId ?? 0 : 0, sel);
+      for (const u of urls) await queueUrl(u, referrer);
+    }
+  }
+}
