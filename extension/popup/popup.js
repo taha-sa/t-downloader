@@ -12,13 +12,13 @@ function render(s) {
   } else {
     statusEl.textContent = "Uygulamaya bağlı değil";
     statusEl.className = "status bad";
-    hint.textContent = "T-Downloader kurulu/çalışır değilse indirmeler tarayıcıda kalır.";
+    hint.textContent = "T-Downloader kurulu/çalışır değilse indirmeler tarayıcıda kalır." + (s.error ? ` (Hata: ${s.error})` : "");
   }
 }
 
 chrome.runtime.sendMessage({ kind: "getStatus" }, (s) => {
   void chrome.runtime.lastError;
-  render(s || { hostOk: false, captureEnabled: true });
+  render(s || { hostOk: false, captureEnabled: true, error: "eklenti arka planı yanıt vermedi" });
 });
 
 toggle.addEventListener("change", () => {

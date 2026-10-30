@@ -10,6 +10,8 @@ let timer = null;
 const listeners = new Set(); // (msg) => void
 const pending = new Set();   // { match, resolve, timer }
 
+let lastError = null;
+export const getLastError = () => lastError;
 export const isConnected = () => port !== null;
 export const onHostMessage = (fn) => listeners.add(fn);
 
@@ -18,12 +20,14 @@ export function connect() {
   let p;
   try {
     p = chrome.runtime.connectNative(HOST_NAME);
-  } catch {
+  } catch (e) {
+    lastError = String(e?.message || e);
     scheduleReconnect();
     return;
   }
   port = p;
   p.onMessage.addListener((msg) => {
+    lastError = null;
     backoff = MIN_BACKOFF; // canlı host: bekleme sıfırlanır
     for (const w of [...pending]) {
       if (w.match(msg)) { clearTimeout(w.timer); pending.delete(w); w.resolve(msg); }
@@ -31,7 +35,7 @@ export function connect() {
     for (const fn of listeners) { try { fn(msg); } catch { /* yut */ } }
   });
   p.onDisconnect.addListener(() => {
-    void chrome.runtime.lastError; // host yoksa sessiz geç
+    lastError = chrome.runtime.lastError?.message || "bağlantı kapandı"; // teşhis için sakla
     if (port === p) port = null;
     for (const w of [...pending]) { clearTimeout(w.timer); pending.delete(w); w.resolve(null); }
     scheduleReconnect();

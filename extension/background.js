@@ -49,6 +49,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           hostOk: !!pong,
           version: pong?.version || hostVersion,
           captureEnabled: settings.getUserCapture(),
+          error: native.getLastError(),
         });
       })();
       return true; // asenkron yanıt
