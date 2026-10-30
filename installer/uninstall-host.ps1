@@ -13,7 +13,8 @@ $destJson = Join-Path $destDir "$HostName.json"
 $dry = $DryRun.IsPresent -or $WhatIfPreference
 $keys = @(
     "HKCU:\Software\Google\Chrome\NativeMessagingHosts\$HostName",
-    "HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\$HostName"
+    "HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\$HostName",
+    "HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\$HostName"
 )
 
 foreach ($k in $keys) {

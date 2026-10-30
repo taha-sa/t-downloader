@@ -8,3 +8,4 @@ TestResults/
 # Gelistirme anahtarlari (asla commit edilmez)
 *.pem
 dev-extension-key*
+dist/

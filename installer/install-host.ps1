@@ -3,7 +3,7 @@
   T-Downloader native messaging host kaydini kurar (HKCU, yonetici gerekmez).
 .DESCRIPTION
   1) Host manifest JSON'unu %APPDATA%\T-Downloader\native-host\ altina yazar.
-  2) Chrome ve Edge icin HKCU\Software\...\NativeMessagingHosts\com.tdownloader.host
+  2) Chrome, Edge ve Brave icin HKCU\Software\...\NativeMessagingHosts\com.tdownloader.host
      anahtarinin varsayilan degerine bu JSON'un yolunu yazar.
   -DryRun veya -WhatIf ile hicbir sey yazilmaz, yapilacaklar gosterilir.
 .PARAMETER HostExe
@@ -57,7 +57,8 @@ $jsonText = $manifest | ConvertTo-Json -Depth 4
 
 $keys = @(
     "HKCU:\Software\Google\Chrome\NativeMessagingHosts\$HostName",
-    "HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\$HostName"
+    "HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\$HostName",
+    "HKCU:\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\$HostName"
 )
 
 if ($dry) {
