@@ -231,42 +231,44 @@ public sealed class VideoButtonWindow : Form
         bool mainDown = _down == ButtonRegion.Main && _hover == ButtonRegion.Main;
         float pen = Math.Max(1f, L.U);
         var body = new RectangleF(pen / 2, pen / 2, L.W - pen, L.H - pen);
+        // sarı-siyah: siyah gövde; ana bölge üzerindeyken sarı zemin + siyah metin
+        Color fgMain = mainHot ? Theme.Black : Theme.Text;
+        Color glyph = mainHot ? Theme.TextDim : Theme.TextDim;
         using (var path = Capsule(body))
         {
-            Color top = mainDown ? Theme.Pressed : mainHot ? Theme.Hover : Color.White;
-            Color bottom = mainDown ? Theme.Pressed : mainHot ? Color.FromArgb(0xC4, 0xEA, 0xE6) : Theme.Surface;
+            Color top = mainDown ? Theme.YellowDark : mainHot ? Theme.YellowLight : Color.FromArgb(0x26, 0x26, 0x26);
+            Color bottom = mainDown ? Theme.YellowDark : mainHot ? Theme.Yellow : Theme.Black;
             using (var br = new LinearGradientBrush(new RectangleF(0, 0, L.W, L.H), top, bottom, LinearGradientMode.Vertical))
                 g.FillPath(br, path);
             // sağ bölüm ("?" ve "X") hafif koyu zemin
             var clip = g.Clip;
             g.SetClip(new RectangleF(L.DividerX, 0, L.W - L.DividerX, L.H));
-            using (var br = new SolidBrush(Color.FromArgb(0x1E, Theme.Navy))) g.FillPath(br, path);
+            using (var br = new SolidBrush(Color.FromArgb(0xB0, Theme.Black))) g.FillPath(br, path);
             g.Clip = clip;
-            using var bp = new Pen(Theme.Border, pen);
+            using var bp = new Pen(Theme.Yellow, pen);
             g.DrawPath(bp, path);
         }
-        using (var dp = new Pen(Theme.Border, pen))
+        using (var dp = new Pen(Color.FromArgb(0x90, Theme.Yellow), pen))
             g.DrawLine(dp, L.DividerX, L.H * 0.2f, L.DividerX, L.H * 0.8f);
 
-        // oynat simgesi: turkuaz daire + beyaz üçgen
+        // oynat simgesi: sarı daire + siyah üçgen (üzerindeyken siyah daire + sarı üçgen)
         float pd = L.PlayD, px = 6 * L.U, py = (L.H - pd) / 2f;
-        using (var br = new SolidBrush(mainHot ? Theme.TealDark : Theme.Teal)) g.FillEllipse(br, px, py, pd, pd);
+        using (var br = new SolidBrush(mainHot ? Theme.Black : Theme.Yellow)) g.FillEllipse(br, px, py, pd, pd);
         float cx = px + pd / 2f + pd * 0.06f, cy = py + pd / 2f, s = pd * 0.26f;
-        using (var br = new SolidBrush(Color.White))
+        using (var br = new SolidBrush(mainHot ? Theme.Yellow : Theme.Black))
             g.FillPolygon(br, new[] { new PointF(cx - s * 0.8f, cy - s), new PointF(cx + s, cy), new PointF(cx - s * 0.8f, cy + s) });
 
         // metin
         using (var f = new Font("Arial", L.FontPx, FontStyle.Bold, GraphicsUnit.Pixel))
-        using (var br = new SolidBrush(mainHot ? Theme.TealDark : Theme.Navy))
+        using (var br = new SolidBrush(fgMain))
         {
             var sf = new StringFormat(StringFormat.GenericTypographic) { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
             g.DrawString(_mainText, f, br, new RectangleF(L.TextX, 0, L.TextW + 4, L.H), sf);
         }
 
         // "?" ve "X"
-        var glyph = Color.FromArgb(0x6B, 0x7A, 0x90);
-        if (!L.Help.IsEmpty) DrawHelp(g, L.Help, _hover == ButtonRegion.Help ? Theme.Teal : glyph, _hover == ButtonRegion.Help, pen);
-        DrawClose(g, L.Close, _hover == ButtonRegion.Close ? Color.FromArgb(0xD1, 0x4B, 0x2A) : glyph, _hover == ButtonRegion.Close, pen);
+        if (!L.Help.IsEmpty) DrawHelp(g, L.Help, _hover == ButtonRegion.Help ? Theme.Yellow : glyph, _hover == ButtonRegion.Help, pen);
+        DrawClose(g, L.Close, _hover == ButtonRegion.Close ? Theme.Danger : glyph, _hover == ButtonRegion.Close, pen);
     }
 
     private static GraphicsPath Capsule(RectangleF r)

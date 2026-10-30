@@ -242,7 +242,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         {
             if (_yt.FindYtDlp() == null)
             {
-                var miss = new ToolStripMenuItem("yt-dlp bulunamadı — kurulum bilgisi") { ForeColor = Color.Firebrick };
+                var miss = new ToolStripMenuItem("yt-dlp bulunamadı — kurulum bilgisi") { ForeColor = Theme.Danger };
                 miss.Click += (_, _) => ShowInstallInfo();
                 menu.Items.Add(miss);
             }
@@ -293,7 +293,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         int i = menu.Items.IndexOf(loading);
         if (i < 0) return;
         menu.Items.RemoveAt(i);
-        var it = new ToolStripMenuItem(text) { ForeColor = Color.Firebrick, Enabled = click != null };
+        var it = new ToolStripMenuItem(text) { ForeColor = Theme.Danger, Enabled = click != null };
         if (click != null) it.Click += (_, _) => click();
         menu.Items.Insert(i, it);
     }

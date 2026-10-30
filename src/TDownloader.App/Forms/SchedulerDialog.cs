@@ -13,7 +13,7 @@ public sealed class SchedulerDialog : DluForm
     private readonly DownloadManager _mgr;
     private readonly CheckBox _enable;
     private readonly DateTimePicker _time;
-    private readonly CheckBox[] _days = new CheckBox[7];
+    private readonly CheckBox[] _days = new DarkCheck[7];
     private readonly ComboBox _finish;
     private readonly ListView _files;
     private readonly Action _queueStarted;
@@ -31,23 +31,23 @@ public sealed class SchedulerDialog : DluForm
         SetClientDlu(434, 286);
 
         MakeLabel("Kuyruklar", 7, 14, 115, 10);
-        var tree = Add(new TreeView { HideSelection = false, ShowLines = false }, 7, 27, 115, 233);
+        var tree = Add(new DarkTree { HideSelection = false, ShowLines = false, BorderStyle = BorderStyle.FixedSingle }, 7, 27, 115, 233);
         tree.Nodes.Add("Ana kuyruk");
         tree.SelectedNode = tree.Nodes[0];
 
-        var grp = Add(new GroupBox { Text = "Ana kuyruk" }, 133, 8, 294, 252);
+        var grp = Add(new DarkGroup { Text = "Ana kuyruk" }, 133, 8, 294, 252);
         T Put<T>(T c, double x, double y, double w, double h) where T : Control { c.Bounds = Dlu.R(x, y, w, h); grp.Controls.Add(c); return c; }
 
-        _enable = Put(new CheckBox { Text = "Şu zamanda başlat:", AutoEllipsis = true }, 8, 14, 110, 11);
+        _enable = Put(new DarkCheck { Text = "Şu zamanda başlat:", AutoEllipsis = true }, 8, 14, 110, 11);
         _time = Put(new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "HH:mm", ShowUpDown = true }, 120, 12, 50, 14);
         Put(new Label { Text = "Günler:" }, 8, 34, 60, 10);
         for (int i = 0; i < 7; i++)
         {
-            _days[i] = Put(new CheckBox { Text = DayList[i].Name, AutoEllipsis = true }, 8 + (i % 4) * 68, 46 + (i / 4) * 13, 66, 11);
+            _days[i] = Put(new DarkCheck { Text = DayList[i].Name, AutoEllipsis = true }, 8 + (i % 4) * 68, 46 + (i / 4) * 13, 66, 11);
             _days[i].Checked = _s.Scheduler.Days.Contains(DayList[i].Dow);
         }
         Put(new Label { Text = "Kuyruk bitince:" }, 8, 78, 70, 10);
-        _finish = Put(new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }, 80, 76, 130, 64);
+        _finish = Put(new DarkCombo { DropDownStyle = ComboBoxStyle.DropDownList }, 80, 76, 130, 64);
         _finish.Items.AddRange(new object[] { "Hiçbir şey yapma", "Bildirim göster", "Uygulamadan çık" });
         _finish.SelectedIndex = _s.Scheduler.OnFinished switch { "exit" => 2, "notify" => 1, _ => 0 };
         Put(new Label { Text = "Kuyruktaki dosyalar:" }, 8, 98, 120, 10);

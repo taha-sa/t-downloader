@@ -36,7 +36,7 @@ public sealed class MainForm : Form
     private readonly ToolStripStatusLabel _stTotal = new("Toplam: 0") { AutoSize = false, Width = 90, BorderSides = ToolStripStatusLabelBorderSides.Left };
     private readonly SplitContainer _split = new();
     private readonly Panel _catPanel = new();
-    private readonly TreeView _tree = new();
+    private readonly DarkTree _tree = new();
     private readonly BufferedListView _list = new();
     private readonly ContextMenuStrip _ctx = new();
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 400 };
@@ -69,6 +69,7 @@ public sealed class MainForm : Form
         AutoScaleMode = AutoScaleMode.None;
         _s = Dlu.Scale;
         Font = Theme.UiFont();
+        BackColor = Theme.Bg; ForeColor = Theme.Text;
         Text = "T-Downloader";
         Icon = Icons.AppIcon();
         // IDM ana pencere: 532x209 DLU liste+ağaç alanı (798 px genişlik); yükseklik pratik amaçlı büyütüldü.
@@ -110,6 +111,13 @@ public sealed class MainForm : Form
     private int Scaled(int px) => (int)Math.Round(px * _s);
 
     // ------------------------------------------------------------ gizli başlangıç / öne getirme
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Dark.Window(Handle);
+        Dark.ApplyTree(this);
+    }
 
     protected override void SetVisibleCore(bool value)
     {
@@ -159,6 +167,7 @@ public sealed class MainForm : Form
     private void BuildMenu()
     {
         _menu.Renderer = new ThemeRenderer();
+        _menu.BackColor = Theme.Surface; _menu.ForeColor = Theme.Text;
         _menu.ImageScalingSize = new Size(Scaled(16), Scaled(16));
 
         var tasks = new ToolStripMenuItem("&Görevler");
@@ -231,7 +240,7 @@ public sealed class MainForm : Form
         _tool.Height = Scaled(42) + 2;
         _tool.ImageScalingSize = new Size(Scaled(24), Scaled(24));
         _tool.Padding = new Padding(2, 0, 2, 0);
-        _tool.BackColor = Theme.Surface;
+        _tool.BackColor = Theme.Surface; _tool.ForeColor = Theme.Text;
 
         void B(string text, string tip, string icon, Action click)
         {
@@ -269,14 +278,16 @@ public sealed class MainForm : Form
         _split.FixedPanel = FixedPanel.Panel1;
         _split.SplitterWidth = Scaled(4);
         _split.Panel1MinSize = Scaled(60);
+        _split.BackColor = Theme.Border;
+        _split.Panel1.BackColor = Theme.Bg; _split.Panel2.BackColor = Theme.Bg;
 
         // kategori paneli
         _catPanel.Dock = DockStyle.Fill;
-        var caption = new Panel { Dock = DockStyle.Top, Height = Scaled(20), BackColor = Theme.Navy };
-        var cl = new Label { Text = "Kategoriler", ForeColor = Color.White, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(Scaled(6), 0, 0, 0) };
-        var close = new Button { Text = "×", Dock = DockStyle.Right, Width = Scaled(20), FlatStyle = FlatStyle.Flat, ForeColor = Color.White, TabStop = false };
+        var caption = new Panel { Dock = DockStyle.Top, Height = Scaled(20), BackColor = Theme.Black };
+        var cl = new Label { Text = "Kategoriler", ForeColor = Theme.Yellow, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(Scaled(6), 0, 0, 0) };
+        var close = new Button { Text = "×", Dock = DockStyle.Right, Width = Scaled(20), FlatStyle = FlatStyle.Flat, ForeColor = Theme.Text, TabStop = false };
         close.FlatAppearance.BorderSize = 0;
-        close.FlatAppearance.MouseOverBackColor = Theme.NavyLight;
+        close.FlatAppearance.MouseOverBackColor = Theme.Hover;
         close.Click += (_, _) => ToggleCategories();
         caption.Controls.Add(cl); caption.Controls.Add(close);
 
@@ -306,6 +317,7 @@ public sealed class MainForm : Form
 
         // liste
         _list.Dock = DockStyle.Fill;
+        _list.BorderStyle = BorderStyle.None;
         _list.View = View.Details;
         _list.FullRowSelect = true;
         _list.AllowColumnReorder = true;
@@ -333,6 +345,7 @@ public sealed class MainForm : Form
     private void BuildStatus()
     {
         _status.Renderer = new ThemeRenderer();
+        _status.BackColor = Theme.Surface; _status.ForeColor = Theme.Text;
         _status.SizingGrip = true;
         foreach (var s in new[] { _stActive, _stSpeed, _stTotal }) { s.Width = Scaled(s.Width); s.TextAlign = ContentAlignment.MiddleLeft; }
         _status.Items.AddRange(new ToolStripItem[] { _stMain, _stActive, _stSpeed, _stTotal });
@@ -346,7 +359,7 @@ public sealed class MainForm : Form
         m.Items.Add(Mi("&Tümünü Durdur", _mgr.PauseAll, Keys.None, "stopall"));
         m.Items.Add(new ToolStripSeparator());
         m.Items.Add(Mi("Çı&kış", ExitApp));
-        var n = new NotifyIcon { Icon = Icons.AppIcon(), Text = "T-Downloader", ContextMenuStrip = m, Visible = true };
+        var n = new NotifyIcon { Icon = Icons.TrayIcon(), Text = "T-Downloader", ContextMenuStrip = m, Visible = true };
         n.DoubleClick += (_, _) => ShowMain();
         return n;
     }
@@ -419,7 +432,7 @@ public sealed class MainForm : Form
         li.SubItems[6].Text = Fmt.Date(it.LastTryAt);
         li.SubItems[7].Text = Fmt.Date(it.AddedAt);
         li.SubItems[8].Text = it.Description ?? "";
-        li.ForeColor = it.Status == DownloadStatus.Failed ? Color.Firebrick : SystemColors.WindowText;
+        li.ForeColor = it.Status == DownloadStatus.Failed ? Theme.Danger : Theme.Text;
     }
 
     private void Flush()

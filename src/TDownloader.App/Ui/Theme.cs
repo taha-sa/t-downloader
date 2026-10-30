@@ -1,58 +1,174 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace TDownloader.App.Ui;
 
-/// <summary>Renk ailesi: koyu lacivert + turkuaz vurgu.</summary>
+/// <summary>Renk ailesi: siyah/koyu gri zemin + sarı vurgu (mavi/turkuaz yok).</summary>
 public static class Theme
 {
-    public static readonly Color Navy = Color.FromArgb(0x12, 0x2B, 0x4A);
-    public static readonly Color NavyLight = Color.FromArgb(0x2A, 0x4A, 0x72);
-    public static readonly Color Teal = Color.FromArgb(0x00, 0xB3, 0xA4);
-    public static readonly Color TealDark = Color.FromArgb(0x00, 0x8C, 0x82);
-    public static readonly Color Surface = Color.FromArgb(0xF3, 0xF6, 0xFA);
-    public static readonly Color Border = Color.FromArgb(0xC5, 0xD0, 0xDE);
-    public static readonly Color Hover = Color.FromArgb(0xD8, 0xF1, 0xEF);
-    public static readonly Color Pressed = Color.FromArgb(0xB4, 0xE6, 0xE2);
+    public static readonly Color Yellow = Color.FromArgb(0xFF, 0xC1, 0x07);
+    public static readonly Color YellowDark = Color.FromArgb(0xE0, 0xA8, 0x00);
+    public static readonly Color YellowLight = Color.FromArgb(0xFF, 0xD5, 0x4F);
+    public static readonly Color Black = Color.FromArgb(0x11, 0x11, 0x11);
+    public static readonly Color Bg = Color.FromArgb(0x1E, 0x1E, 0x1E);          // pencere / liste zemini
+    public static readonly Color Surface = Color.FromArgb(0x2A, 0x2A, 0x2A);     // menü, araç çubuğu, durum çubuğu, başlık
+    public static readonly Color Field = Color.FromArgb(0x2D, 0x2D, 0x2D);       // metin kutusu / düğme zemini
+    public static readonly Color Border = Color.FromArgb(0x4A, 0x4A, 0x4A);
+    public static readonly Color Hover = Color.FromArgb(0x3C, 0x3C, 0x3C);
+    public static readonly Color Pressed = Color.FromArgb(0x5C, 0x4A, 0x00);     // koyu amber
+    public static readonly Color Text = Color.FromArgb(0xF5, 0xF5, 0xF5);
+    public static readonly Color TextDim = Color.FromArgb(0xB0, 0xB0, 0xB0);
+    public static readonly Color Disabled = Color.FromArgb(0x80, 0x80, 0x80);
+    public static readonly Color Danger = Color.FromArgb(0xFF, 0x6B, 0x5E);
+    public static readonly Color Ok = Color.FromArgb(0x7C, 0xD9, 0x92);
+    public static readonly Color IconLine = Color.FromArgb(0xE8, 0xE8, 0xE8);
 
+    /// <summary>Bağlantı/segment renkleri: sarı-amber-beyaz-gri tonları.</summary>
     public static readonly Color[] SegmentColors =
     {
-        Color.FromArgb(0x00, 0xB3, 0xA4), Color.FromArgb(0x2A, 0x6F, 0xB5), Color.FromArgb(0x7B, 0x61, 0xC9),
-        Color.FromArgb(0xE0, 0x8A, 0x1E), Color.FromArgb(0x3F, 0xA3, 0x4D), Color.FromArgb(0xD1, 0x4B, 0x6A),
-        Color.FromArgb(0x1C, 0x9F, 0xD6), Color.FromArgb(0x8A, 0x9B, 0x2C),
+        Color.FromArgb(0xFF, 0xC1, 0x07), Color.FromArgb(0xFF, 0x8F, 0x00), Color.FromArgb(0xFF, 0xE0, 0x82),
+        Color.FromArgb(0xE0, 0xE0, 0xE0), Color.FromArgb(0xE6, 0x51, 0x00), Color.FromArgb(0xBC, 0xAA, 0x64),
+        Color.FromArgb(0xFF, 0xAB, 0x40), Color.FromArgb(0x9E, 0x9E, 0x9E),
     };
 
     public static Font UiFont(float pt = 8f, FontStyle st = FontStyle.Regular) => new("Tahoma", pt, st);
 }
 
+/// <summary>Koyu temayı yerel pencerelere uygulayan Win32 yardımcıları.</summary>
+public static class Dark
+{
+    [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] private static extern int SetWindowTheme(IntPtr h, string? app, string? ids);
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int v, int size);
+
+    private static int Rgb(Color c) => c.R | (c.G << 8) | (c.B << 16);
+
+    /// <summary>Koyu başlık çubuğu (Win10 20H1+/Win11); desteklenmeyen sistemlerde sessizce yok sayılır.</summary>
+    public static void Window(IntPtr h)
+    {
+        try
+        {
+            int on = 1; DwmSetWindowAttribute(h, 20, ref on, 4);
+            int cap = Rgb(Theme.Black), txt = Rgb(Theme.Text), bdr = Rgb(Theme.Border);
+            DwmSetWindowAttribute(h, 35, ref cap, 4);
+            DwmSetWindowAttribute(h, 36, ref txt, 4);
+            DwmSetWindowAttribute(h, 34, ref bdr, 4);
+        }
+        catch (Exception) { }
+    }
+
+    public static void SetTheme(IntPtr h, string name) { try { SetWindowTheme(h, name, null); } catch (Exception) { } }
+    public static void Explorer(IntPtr h) { try { SetWindowTheme(h, "DarkMode_Explorer", null); } catch (Exception) { } }
+
+    private static void WithHandle(Control c, Action<IntPtr> a)
+    {
+        if (c.IsHandleCreated) a(c.Handle);
+        else c.HandleCreated += (_, _) => a(c.Handle);
+    }
+
+    /// <summary>Denetim ağacındaki standart denetimlerin renklerini koyu temaya çevirir.</summary>
+    public static void ApplyTree(Control root)
+    {
+        foreach (Control c in root.Controls)
+        {
+            Style(c);
+            if (c.HasChildren) ApplyTree(c);
+        }
+    }
+
+    private static void Style(Control c)
+    {
+        switch (c)
+        {
+            case Button b when b.FlatStyle != FlatStyle.Flat || b.FlatAppearance.BorderSize != 0:
+                b.FlatStyle = FlatStyle.Flat; b.UseVisualStyleBackColor = false;
+                b.BackColor = Theme.Field; b.ForeColor = Theme.Text;
+                var fa = b.FlatAppearance;
+                fa.BorderSize = 1; fa.BorderColor = Theme.Border;
+                fa.MouseOverBackColor = Theme.Hover; fa.MouseDownBackColor = Theme.Pressed;
+                Form? form = b.FindForm();
+                if (form != null && form.AcceptButton == b) fa.BorderColor = Theme.Yellow;
+                break;
+            case TextBox t:
+                t.BackColor = Theme.Field; t.ForeColor = Theme.Text; t.BorderStyle = BorderStyle.FixedSingle;
+                WithHandle(t, Explorer);
+                break;
+            case NumericUpDown n:
+                n.BackColor = Theme.Field; n.ForeColor = Theme.Text; n.BorderStyle = BorderStyle.FixedSingle;
+                foreach (Control k in n.Controls) { var kk = k; WithHandle(kk, Explorer); }
+                break;
+            case DateTimePicker d:
+                d.CalendarForeColor = Theme.Text; d.CalendarMonthBackground = Theme.Field; d.CalendarTitleBackColor = Theme.Black;
+                d.CalendarTitleForeColor = Theme.Yellow; d.CalendarTrailingForeColor = Theme.Disabled;
+                d.BackColor = Theme.Field; d.ForeColor = Theme.Text;
+                WithHandle(d, Explorer);
+                foreach (Control k in d.Controls) { var kk = k; WithHandle(kk, Explorer); }
+                break;
+            case LinkLabel l:
+                l.LinkColor = Theme.Yellow; l.ActiveLinkColor = Theme.YellowLight; l.VisitedLinkColor = Theme.YellowDark;
+                break;
+            case TabPage p:
+                p.UseVisualStyleBackColor = false; p.BackColor = Theme.Bg;
+                break;
+        }
+    }
+
+}
+
 public sealed class ThemeColors : ProfessionalColorTable
 {
+    public ThemeColors() { UseSystemColors = false; }
     public override Color ButtonSelectedHighlight => Theme.Hover;
+    public override Color ButtonSelectedHighlightBorder => Theme.Yellow;
     public override Color ButtonSelectedGradientBegin => Theme.Hover;
     public override Color ButtonSelectedGradientMiddle => Theme.Hover;
     public override Color ButtonSelectedGradientEnd => Theme.Hover;
-    public override Color ButtonSelectedBorder => Theme.Teal;
+    public override Color ButtonSelectedBorder => Theme.Yellow;
+    public override Color ButtonPressedHighlight => Theme.Pressed;
+    public override Color ButtonPressedHighlightBorder => Theme.Yellow;
     public override Color ButtonPressedGradientBegin => Theme.Pressed;
     public override Color ButtonPressedGradientMiddle => Theme.Pressed;
     public override Color ButtonPressedGradientEnd => Theme.Pressed;
-    public override Color ButtonPressedBorder => Theme.TealDark;
+    public override Color ButtonPressedBorder => Theme.Yellow;
+    public override Color ButtonCheckedHighlight => Theme.Pressed;
+    public override Color ButtonCheckedGradientBegin => Theme.Pressed;
+    public override Color ButtonCheckedGradientMiddle => Theme.Pressed;
+    public override Color ButtonCheckedGradientEnd => Theme.Pressed;
+    public override Color CheckBackground => Theme.Pressed;
+    public override Color CheckSelectedBackground => Theme.Pressed;
+    public override Color CheckPressedBackground => Theme.Pressed;
     public override Color ToolStripGradientBegin => Theme.Surface;
     public override Color ToolStripGradientMiddle => Theme.Surface;
     public override Color ToolStripGradientEnd => Theme.Surface;
+    public override Color ToolStripContentPanelGradientBegin => Theme.Surface;
+    public override Color ToolStripContentPanelGradientEnd => Theme.Surface;
+    public override Color ToolStripPanelGradientBegin => Theme.Surface;
+    public override Color ToolStripPanelGradientEnd => Theme.Surface;
     public override Color MenuStripGradientBegin => Theme.Surface;
     public override Color MenuStripGradientEnd => Theme.Surface;
     public override Color MenuItemSelected => Theme.Hover;
     public override Color MenuItemSelectedGradientBegin => Theme.Hover;
     public override Color MenuItemSelectedGradientEnd => Theme.Hover;
-    public override Color MenuItemBorder => Theme.Teal;
+    public override Color MenuItemPressedGradientBegin => Theme.Bg;
+    public override Color MenuItemPressedGradientMiddle => Theme.Bg;
+    public override Color MenuItemPressedGradientEnd => Theme.Bg;
+    public override Color MenuItemBorder => Theme.Yellow;
     public override Color MenuBorder => Theme.Border;
-    public override Color ToolStripDropDownBackground => Color.White;
-    public override Color ImageMarginGradientBegin => Theme.Surface;
-    public override Color ImageMarginGradientMiddle => Theme.Surface;
-    public override Color ImageMarginGradientEnd => Theme.Surface;
+    public override Color ToolStripDropDownBackground => Theme.Bg;
+    public override Color ImageMarginGradientBegin => Theme.Bg;
+    public override Color ImageMarginGradientMiddle => Theme.Bg;
+    public override Color ImageMarginGradientEnd => Theme.Bg;
     public override Color SeparatorDark => Theme.Border;
+    public override Color SeparatorLight => Theme.Border;
     public override Color ToolStripBorder => Theme.Border;
     public override Color StatusStripGradientBegin => Theme.Surface;
     public override Color StatusStripGradientEnd => Theme.Surface;
+    public override Color GripDark => Theme.Disabled;
+    public override Color GripLight => Theme.Surface;
+    public override Color OverflowButtonGradientBegin => Theme.Surface;
+    public override Color OverflowButtonGradientMiddle => Theme.Surface;
+    public override Color OverflowButtonGradientEnd => Theme.Surface;
+    public override Color RaftingContainerGradientBegin => Theme.Surface;
+    public override Color RaftingContainerGradientEnd => Theme.Surface;
 }
 
 public static class Dlu
@@ -65,7 +181,7 @@ public static class Dlu
     public static Rectangle R(double x, double y, double w, double h) => new(X(x), Y(y), X(w), Y(h));
 }
 
-/// <summary>Tahoma 8pt + Dpi ölçekli taban pencere.</summary>
+/// <summary>Tahoma 8pt + Dpi ölçekli, koyu temalı taban pencere.</summary>
 public class DluForm : Form
 {
     public DluForm()
@@ -73,7 +189,15 @@ public class DluForm : Form
         AutoScaleMode = AutoScaleMode.None;
         Font = Theme.UiFont();
         Icon = Icons.AppIcon();
-        BackColor = SystemColors.Control;
+        BackColor = Theme.Bg;
+        ForeColor = Theme.Text;
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Dark.Window(Handle);
+        Dark.ApplyTree(this);
     }
 
     /// <summary>İçerik alanını DLU olarak ayarlar.</summary>
@@ -88,7 +212,7 @@ public class DluForm : Form
 
     protected Button MakeButton(string text, double x, double y, double w, double h, DialogResult dr = DialogResult.None)
     {
-        var b = new Button { Text = text, DialogResult = dr, FlatStyle = FlatStyle.System, UseVisualStyleBackColor = true };
+        var b = new Button { Text = text, DialogResult = dr };
         return Add(b, x, y, w, h);
     }
 
@@ -96,19 +220,338 @@ public class DluForm : Form
         => Add(new Label { Text = text, TextAlign = a, AutoEllipsis = true }, x, y, w, h);
 }
 
+/// <summary>Koyu tema, sarı seçim; owner-draw liste (sistem mavisi seçim rengi kullanılmaz).</summary>
 public sealed class BufferedListView : ListView
 {
-    public BufferedListView() { DoubleBuffered = true; }
+    /// <summary>Hücreler arasına ince ızgara çizgisi çizer.</summary>
+    [System.ComponentModel.Browsable(false), System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool Grid { get; set; }
+
+    private HeaderFiller? _filler;
+
+    public BufferedListView()
+    {
+        DoubleBuffered = true;
+        OwnerDraw = true;
+        BackColor = Theme.Bg;
+        ForeColor = Theme.Text;
+        BorderStyle = BorderStyle.FixedSingle;
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // Not: Explorer koyu teması uygulanmaz; fare altındaki satıra mavimsi sistem tonu çizdiği için (yan etki: açık renkli kaydırma çubuğu).
+        _filler?.ReleaseHandle();
+        var hdr = SendMessage(Handle, 0x101F /*LVM_GETHEADER*/, IntPtr.Zero, IntPtr.Zero);
+        if (hdr != IntPtr.Zero) { _filler = new HeaderFiller(); _filler.AssignHandle(hdr); }
+    }
+
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        _filler?.ReleaseHandle(); _filler = null;
+        base.OnHandleDestroyed(e);
+    }
+
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr h);
+    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr h, IntPtr dc);
+    [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, ref RECT l);
+    [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
+
+    /// <summary>Son sütundan sonra kalan başlık boşluğunu (sistem çizer) koyu renkle boyar.</summary>
+    private sealed class HeaderFiller : NativeWindow
+    {
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg != 0x000F /*WM_PAINT*/) return;
+            int count = (int)SendMessage(Handle, 0x1200 /*HDM_GETITEMCOUNT*/, IntPtr.Zero, IntPtr.Zero);
+            int right = 0;
+            for (int i = 0; i < count; i++)
+            {
+                var r = new RECT();
+                SendMessage(Handle, 0x1207 /*HDM_GETITEMRECT*/, (IntPtr)i, ref r);
+                right = Math.Max(right, r.Right);
+            }
+            GetClientRect(Handle, out var cr);
+            if (right >= cr.Right) return;
+            IntPtr dc = GetDC(Handle);
+            try
+            {
+                using var g = Graphics.FromHdc(dc);
+                using var br = new SolidBrush(Theme.Surface);
+                g.FillRectangle(br, right, 0, cr.Right - right, cr.Bottom);
+                using var p = new Pen(Theme.Border);
+                g.DrawLine(p, right, cr.Bottom - 1, cr.Right, cr.Bottom - 1);
+            }
+            finally { ReleaseDC(Handle, dc); }
+        }
+    }
+
+    protected override void OnDrawColumnHeader(DrawListViewColumnHeaderEventArgs e)
+    {
+        var g = e.Graphics;
+        using (var br = new SolidBrush(Theme.Surface)) g.FillRectangle(br, e.Bounds);
+        using (var p = new Pen(Theme.Border))
+        {
+            g.DrawLine(p, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+            g.DrawLine(p, e.Bounds.Right - 1, e.Bounds.Top + 3, e.Bounds.Right - 1, e.Bounds.Bottom - 4);
+        }
+        var r = Rectangle.Inflate(e.Bounds, -(int)(5 * Dlu.Scale), 0);
+        TextRenderer.DrawText(g, e.Header?.Text ?? "", Font, r, Theme.Text, Flags(e.Header?.TextAlign ?? HorizontalAlignment.Left));
+    }
+
+    protected override void OnDrawItem(DrawListViewItemEventArgs e)
+    {
+        if (View != View.Details) { e.DrawDefault = true; return; }
+        var b = e.Item.Bounds;
+        var row = new Rectangle(0, b.Y, Math.Max(ClientSize.Width, b.Right), b.Height);
+        using var br = new SolidBrush(RowBack(e.Item));
+        e.Graphics.FillRectangle(br, row);
+        if (Grid) { using var p = new Pen(Theme.Surface); e.Graphics.DrawLine(p, 0, b.Bottom - 1, row.Right, b.Bottom - 1); }
+        e.DrawDefault = false;
+    }
+
+    protected override void OnDrawSubItem(DrawListViewSubItemEventArgs e)
+    {
+        if (View != View.Details) { e.DrawDefault = true; return; }
+        var g = e.Graphics;
+        int col = e.ColumnIndex;
+        var cell = e.Bounds;
+        if (col == 0) cell = new Rectangle(cell.X, cell.Y, Columns[0].Width, cell.Height);
+        var sel = e.Item!.Selected;
+        var fg = sel && Focused ? Theme.Black : (e.Item.ForeColor == SystemColors.WindowText ? Theme.Text : e.Item.ForeColor);
+        int pad = (int)(4 * Dlu.Scale);
+        int x = cell.X + pad;
+        if (col == 0 && SmallImageList != null && e.Item.ImageIndex >= 0 && e.Item.ImageIndex < SmallImageList.Images.Count)
+        {
+            var sz = SmallImageList.ImageSize;
+            g.DrawImage(SmallImageList.Images[e.Item.ImageIndex], x, cell.Y + (cell.Height - sz.Height) / 2, sz.Width, sz.Height);
+            x += sz.Width + pad;
+        }
+        var tr = new Rectangle(x, cell.Y, Math.Max(0, cell.Right - x - pad), cell.Height);
+        var align = col < Columns.Count ? Columns[col].TextAlign : HorizontalAlignment.Left;
+        TextRenderer.DrawText(g, e.SubItem?.Text ?? "", Font, tr, fg, Flags(align));
+        if (Grid) { using var p = new Pen(Theme.Surface); g.DrawLine(p, cell.Right - 1, cell.Top, cell.Right - 1, cell.Bottom); }
+    }
+
+    private Color RowBack(ListViewItem it) => it.Selected ? (Focused ? Theme.Yellow : Theme.Hover) : BackColor;
+
+    private static TextFormatFlags Flags(HorizontalAlignment a) =>
+        TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine |
+        (a == HorizontalAlignment.Right ? TextFormatFlags.Right : a == HorizontalAlignment.Center ? TextFormatFlags.HorizontalCenter : TextFormatFlags.Left);
+
+    protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+    protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+}
+
+/// <summary>Koyu temalı ağaç: sarı seçim (odaktayken), gri seçim (odak yokken).</summary>
+public sealed class DarkTree : TreeView
+{
+    public DarkTree()
+    {
+        BackColor = Theme.Bg; ForeColor = Theme.Text; BorderStyle = BorderStyle.None;
+        DrawMode = TreeViewDrawMode.OwnerDrawText;
+        LineColor = Theme.Border;
+    }
+
+    
+
+    protected override void OnDrawNode(DrawTreeNodeEventArgs e)
+    {
+        if (e.Node == null || e.Bounds.IsEmpty) { e.DrawDefault = false; return; }
+        bool sel = (e.State & TreeNodeStates.Selected) != 0;
+        var back = sel ? (Focused ? Theme.Yellow : Theme.Hover) : BackColor;
+        var fg = sel && Focused ? Theme.Black : Theme.Text;
+        var r = Rectangle.Inflate(e.Bounds, 2, 0);
+        using (var br = new SolidBrush(back)) e.Graphics.FillRectangle(br, r);
+        TextRenderer.DrawText(e.Graphics, e.Node.Text, e.Node.NodeFont ?? Font, e.Bounds, fg,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+    }
+
+    protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+    protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+}
+
+/// <summary>Koyu açılır liste (yalnızca DropDownList): koyu alan, sarı seçim.</summary>
+public sealed class DarkCombo : ComboBox
+{
+    public DarkCombo()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        DrawMode = DrawMode.OwnerDrawFixed;
+        DropDownStyle = ComboBoxStyle.DropDownList;
+        BackColor = Theme.Field; ForeColor = Theme.Text;
+    }
+
+    protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+    protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        using (var br = new SolidBrush(Theme.Field)) g.FillRectangle(br, ClientRectangle);
+        using (var p = new Pen(Focused || DroppedDown ? Theme.Yellow : Theme.Border)) g.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
+        string txt = SelectedItem is { } si ? GetItemText(si) ?? "" : "";
+        int aw = (int)(16 * Dlu.Scale);
+        TextRenderer.DrawText(g, txt, Font, new Rectangle(4, 0, Width - aw - 6, Height), Enabled ? Theme.Text : Theme.Disabled,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        float cx = Width - aw / 2f - 1, cy = Height / 2f, s = 3.5f * Dlu.Scale;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var ap = new Pen(Enabled ? Theme.Yellow : Theme.Disabled, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+        g.DrawLines(ap, new[] { new PointF(cx - s, cy - s / 2), new PointF(cx, cy + s / 2), new PointF(cx + s, cy - s / 2) });
+    }
+
+    protected override void OnDrawItem(DrawItemEventArgs e)
+    {
+        bool sel = (e.State & DrawItemState.Selected) != 0 && (e.State & DrawItemState.ComboBoxEdit) == 0;
+        using (var br = new SolidBrush(sel ? Theme.Yellow : Theme.Field)) e.Graphics.FillRectangle(br, e.Bounds);
+        if (e.Index < 0) return;
+        var r = new Rectangle(e.Bounds.X + 3, e.Bounds.Y, e.Bounds.Width - 3, e.Bounds.Height);
+        TextRenderer.DrawText(e.Graphics, GetItemText(Items[e.Index]), Font, r, sel ? Theme.Black : Theme.Text,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
+}
+
+/// <summary>Koyu onay kutusu: koyu kutu, sarı işaret.</summary>
+public sealed class DarkCheck : CheckBox
+{
+    private bool _hot;
+    public DarkCheck()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { _hot = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hot = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+    protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Parent?.BackColor ?? Theme.Bg);
+        int box = (int)Math.Round(13 * Dlu.Scale);
+        int by = (Height - box) / 2;
+        var br = new Rectangle(0, by, box - 1, box - 1);
+        using (var f = new SolidBrush(Enabled ? Theme.Field : Theme.Bg)) g.FillRectangle(f, br);
+        using (var p = new Pen(!Enabled ? Theme.Border : (_hot || Focused) ? Theme.Yellow : Theme.TextDim)) g.DrawRectangle(p, br);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var mark = Enabled ? Theme.Yellow : Theme.Disabled;
+        if (CheckState == CheckState.Checked)
+        {
+            using var p = new Pen(mark, Math.Max(2f, 2f * Dlu.Scale)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            g.DrawLines(p, new[] { new PointF(br.X + box * 0.22f, by + box * 0.52f), new PointF(br.X + box * 0.42f, by + box * 0.72f), new PointF(br.X + box * 0.78f, by + box * 0.28f) });
+        }
+        else if (CheckState == CheckState.Indeterminate)
+        {
+            using var f = new SolidBrush(mark); g.FillRectangle(f, br.X + 3, by + 3, box - 7, box - 7);
+        }
+        var tr = new Rectangle(box + (int)(5 * Dlu.Scale), 0, Math.Max(0, Width - box - (int)(5 * Dlu.Scale)), Height);
+        TextRenderer.DrawText(g, Text, Font, tr, Enabled ? Theme.Text : Theme.Disabled,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.HidePrefix);
+    }
+}
+
+/// <summary>Koyu grup kutusu: ince gri çerçeve, sarı başlık.</summary>
+public sealed class DarkGroup : GroupBox
+{
+    public DarkGroup() { SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        var bg = Parent?.BackColor ?? Theme.Bg;
+        g.Clear(bg);
+        var sz = TextRenderer.MeasureText(g, Text, Font, Size.Empty, TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+        int top = sz.Height / 2;
+        using (var p = new Pen(Theme.Border))
+            g.DrawRectangle(p, 0, top, Width - 1, Height - top - 1);
+        int tx = (int)(7 * Dlu.Scale);
+        using (var br = new SolidBrush(bg)) g.FillRectangle(br, tx - 2, 0, sz.Width + 4, sz.Height);
+        TextRenderer.DrawText(g, Text, Font, new Point(tx, 0), Theme.Yellow, TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+    }
+}
+
+/// <summary>Koyu sekmeli denetim: sarı üst çizgili seçili sekme.</summary>
+public sealed class DarkTabs : TabControl
+{
+    public DarkTabs()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Theme.Bg);
+        var page = DisplayRectangle; page.Inflate(3, 3);
+        using (var p = new Pen(Theme.Border)) g.DrawRectangle(p, page.X, page.Y, page.Width - 1, page.Height - 1);
+        for (int i = 0; i < TabCount; i++)
+        {
+            var r = GetTabRect(i);
+            bool sel = i == SelectedIndex;
+            using (var br = new SolidBrush(sel ? Theme.Surface : Theme.Bg)) g.FillRectangle(br, r);
+            using (var p = new Pen(Theme.Border)) { g.DrawLine(p, r.Left, r.Top, r.Left, r.Bottom); g.DrawLine(p, r.Right - 1, r.Top, r.Right - 1, r.Bottom); g.DrawLine(p, r.Left, r.Top, r.Right, r.Top); }
+            if (sel) { using var br = new SolidBrush(Theme.Yellow); g.FillRectangle(br, r.Left, r.Top, r.Width, 3); }
+            TextRenderer.DrawText(g, TabPages[i].Text, Font, r, sel ? Theme.Yellow : Theme.TextDim,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+        }
+    }
+}
+
+/// <summary>Düz, sarı dolgulu ilerleme çubuğu.</summary>
+public sealed class DarkProgress : ProgressBar
+{
+    public DarkProgress() { SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        var r = new Rectangle(0, 0, Width - 1, Height - 1);
+        using (var br = new SolidBrush(Theme.Field)) g.FillRectangle(br, r);
+        double f = Maximum > Minimum ? (double)(Value - Minimum) / (Maximum - Minimum) : 0;
+        int w = (int)Math.Round((r.Width - 1) * Math.Clamp(f, 0, 1));
+        if (w > 0) { using var br = new SolidBrush(Theme.Yellow); g.FillRectangle(br, 1, 1, w, r.Height - 1); }
+        using var p = new Pen(Theme.Border);
+        g.DrawRectangle(p, r);
+    }
 }
 
 public sealed class ThemeRenderer : ToolStripProfessionalRenderer
 {
     public ThemeRenderer() : base(new ThemeColors()) { RoundedEdges = false; }
-    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { }
+
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+    {
+        if (e.ToolStrip is ToolStripDropDown)
+        {
+            using var p = new Pen(Theme.Border);
+            e.Graphics.DrawRectangle(p, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1);
+        }
+    }
+
+    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+    {
+        var fc = e.Item.ForeColor;
+        e.TextColor = !e.Item.Enabled ? Theme.Disabled
+            : (fc != SystemColors.ControlText && fc != Color.Empty && fc != Theme.Text) ? fc
+            : Theme.Text;
+        base.OnRenderItemText(e);
+    }
+
+    protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+    {
+        e.ArrowColor = e.Item?.Enabled == false ? Theme.Disabled : Theme.Text;
+        base.OnRenderArrow(e);
+    }
+
     protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
     {
         using var p = new Pen(Theme.Border);
         if (e.Vertical) { int x = e.Item.Width / 2; e.Graphics.DrawLine(p, x, 4, x, e.Item.Height - 4); }
-        else { int y = e.Item.Height / 2; e.Graphics.DrawLine(p, 28, y, e.Item.Width - 4, y); }
+        else { int y = e.Item.Height / 2; e.Graphics.DrawLine(p, 4, y, e.Item.Width - 4, y); }
     }
 }

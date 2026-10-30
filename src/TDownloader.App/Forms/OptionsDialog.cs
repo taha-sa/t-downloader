@@ -37,15 +37,15 @@ public sealed class OptionsDialog : DluForm
         StartPosition = FormStartPosition.CenterParent;
         SetClientDlu(268, 257);
 
-        var tabs = Add(new TabControl(), 5, 5, 258, 229);
+        var tabs = Add(new DarkTabs(), 5, 5, 258, 229);
         TabPage Page(string t) { var p = new TabPage(t) { UseVisualStyleBackColor = true }; tabs.TabPages.Add(p); return p; }
         T Put<T>(Control parent, T c, double x, double y, double w, double h) where T : Control { c.Bounds = Dlu.R(x, y, w, h); parent.Controls.Add(c); return c; }
 
         // --- Genel
         var g = Page("Genel");
-        _tray = Put(g, new CheckBox { Text = "Pencereyi kapatınca sistem tepsisine küçült", AutoEllipsis = true }, 10, 12, 230, 11);
-        _clip = Put(g, new CheckBox { Text = "Panodaki indirilebilir bağlantıları izle ve sor", AutoEllipsis = true }, 10, 28, 230, 11);
-        _showInfo = Put(g, new CheckBox { Text = "Tarayıcıdan gelen indirmelerde \"Dosya bilgisi\" penceresini göster", AutoEllipsis = true }, 10, 44, 238, 11);
+        _tray = Put(g, new DarkCheck { Text = "Pencereyi kapatınca sistem tepsisine küçült", AutoEllipsis = true }, 10, 12, 230, 11);
+        _clip = Put(g, new DarkCheck { Text = "Panodaki indirilebilir bağlantıları izle ve sor", AutoEllipsis = true }, 10, 28, 230, 11);
+        _showInfo = Put(g, new DarkCheck { Text = "Tarayıcıdan gelen indirmelerde \"Dosya bilgisi\" penceresini göster", AutoEllipsis = true }, 10, 44, 238, 11);
         Put(g, new Label { Text = "Veri klasörü:" }, 10, 70, 80, 10);
         Put(g, new TextBox { Text = dataFolder, ReadOnly = true }, 10, 82, 232, 14);
 
@@ -63,18 +63,18 @@ public sealed class OptionsDialog : DluForm
         var k = Page("Kayıt Yeri");
         Put(k, new Label { Text = "Ana kayıt klasörü:" }, 10, 8, 120, 10);
         _root = Put(k, new TextBox(), 10, 20, 206, 14);
-        var rb = Put(k, new Button { Text = "...", FlatStyle = FlatStyle.System }, 221, 20, 20, 14);
+        var rb = Put(k, new Button { Text = "...", }, 221, 20, 20, 14);
         Put(k, new Label { Text = "Kategori klasörleri (boşsa ana klasör altında kategori adı):" }, 10, 42, 232, 10);
         _cats = Put(k, new BufferedListView { View = View.Details, FullRowSelect = true, HideSelection = false, MultiSelect = false }, 10, 54, 232, 80);
         _cats.Columns.Add("Kategori", Dlu.X(60));
         _cats.Columns.Add("Klasör", Dlu.X(165));
         _catFolder = Put(k, new TextBox(), 10, 140, 156, 14);
-        var cb = Put(k, new Button { Text = "...", FlatStyle = FlatStyle.System }, 170, 140, 20, 14);
-        var cr = Put(k, new Button { Text = "Varsayılan", FlatStyle = FlatStyle.System }, 194, 140, 48, 14);
+        var cb = Put(k, new Button { Text = "...", }, 170, 140, 20, 14);
+        var cr = Put(k, new Button { Text = "Varsayılan", }, 194, 140, 48, 14);
 
         // --- Tarayıcı yakalama
         var b = Page("Tarayıcı Yakalama");
-        _capture = Put(b, new CheckBox { Text = "Tarayıcı indirmelerini yakala", AutoEllipsis = true }, 10, 10, 230, 11);
+        _capture = Put(b, new DarkCheck { Text = "Tarayıcı indirmelerini yakala", AutoEllipsis = true }, 10, 10, 230, 11);
         Put(b, new Label { Text = "En küçük dosya boyutu (KB):" }, 10, 30, 130, 10);
         _minKb = Put(b, new NumericUpDown { Minimum = 0, Maximum = 10_000_000 }, 150, 28, 70, 14);
         Put(b, new Label { Text = "Yakalanacak dosya türleri (boşlukla ayırın):" }, 10, 48, 232, 10);
@@ -84,17 +84,17 @@ public sealed class OptionsDialog : DluForm
 
         // --- Video
         var v = Page("Video");
-        _showVideoBtn = Put(v, new CheckBox { Text = "Videoların üstünde \"Bu videoyu indir\" düğmesini göster", AutoEllipsis = true }, 10, 8, 238, 11);
+        _showVideoBtn = Put(v, new DarkCheck { Text = "Videoların üstünde \"Bu videoyu indir\" düğmesini göster", AutoEllipsis = true }, 10, 8, 238, 11);
         Put(v, new Label { Text = "yt-dlp yolu (boşsa otomatik aranır):" }, 10, 26, 232, 10);
         _ytPath = Put(v, new TextBox(), 10, 37, 206, 14);
-        var yb = Put(v, new Button { Text = "...", FlatStyle = FlatStyle.System }, 221, 37, 20, 14);
+        var yb = Put(v, new Button { Text = "...", }, 221, 37, 20, 14);
         _ytState = Put(v, new Label { AutoEllipsis = true }, 10, 53, 232, 10);
         Put(v, new Label { Text = "ffmpeg yolu veya klasörü (boşsa otomatik aranır):" }, 10, 68, 232, 10);
         _ffPath = Put(v, new TextBox(), 10, 79, 206, 14);
-        var fb = Put(v, new Button { Text = "...", FlatStyle = FlatStyle.System }, 221, 79, 20, 14);
+        var fb = Put(v, new Button { Text = "...", }, 221, 79, 20, 14);
         _ffState = Put(v, new Label { AutoEllipsis = true }, 10, 95, 232, 10);
         Put(v, new Label { Text = "Varsayılan kalite:" }, 10, 112, 80, 10);
-        _quality = Put(v, new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }, 90, 110, 80, 14);
+        _quality = Put(v, new DarkCombo { DropDownStyle = ComboBoxStyle.DropDownList }, 90, 110, 80, 14);
         foreach (var q in Qualities) _quality.Items.Add(q.Text);
         var link = Put(v, new LinkLabel { Text = "yt-dlp indirme sayfası (github.com/yt-dlp/yt-dlp/releases)" }, 10, 132, 232, 10);
         link.LinkClicked += (_, _) => OpenUrl("https://github.com/yt-dlp/yt-dlp/releases");
@@ -147,9 +147,9 @@ public sealed class OptionsDialog : DluForm
         var yt = Core.Video.ToolLocator.Find("yt-dlp", _ytPath.Text, paths.ToolsDir, AppContext.BaseDirectory);
         var ff = Core.Video.ToolLocator.Find("ffmpeg", _ffPath.Text, paths.ToolsDir, AppContext.BaseDirectory);
         _ytState.Text = yt != null ? "Bulundu: " + yt : "yt-dlp bulunamadı — kurulum bilgisi için aşağıdaki bağlantıya bakın";
-        _ytState.ForeColor = yt != null ? Color.SeaGreen : Color.Firebrick;
+        _ytState.ForeColor = yt != null ? Theme.Ok : Theme.Danger;
         _ffState.Text = ff != null ? "Bulundu: " + ff : "ffmpeg bulunamadı (video+ses birleştirme için gerekir)";
-        _ffState.ForeColor = ff != null ? Color.SeaGreen : Color.Firebrick;
+        _ffState.ForeColor = ff != null ? Theme.Ok : Theme.Danger;
     }
 
     private string? PickFolder(string start)

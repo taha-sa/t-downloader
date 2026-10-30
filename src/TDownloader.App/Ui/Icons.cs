@@ -27,10 +27,10 @@ public static class Icons
         }
     }
 
-    static Pen N(float w = 2f) => new(Theme.Navy, w) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
-    static Pen T(float w = 2.2f) => new(Theme.Teal, w) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
-    static SolidBrush NB => new(Theme.Navy);
-    static SolidBrush TB => new(Theme.Teal);
+    static Pen N(float w = 2f) => new(Theme.IconLine, w) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+    static Pen T(float w = 2.2f) => new(Theme.Yellow, w) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+    static SolidBrush NB => new(Theme.IconLine);
+    static SolidBrush TB => new(Theme.Yellow);
 
     static void Draw(Graphics g, string name)
     {
@@ -87,7 +87,7 @@ public static class Icons
                 using (var p = T(2.6f)) g.DrawLine(p, 12, 10.5f, 12, 17);
                 break;
             case "folder":
-                g.FillPolygon(new SolidBrush(Theme.NavyLight), new PointF[] { new(2, 6), new(9, 6), new(11, 8.5f), new(22, 8.5f), new(22, 20), new(2, 20) });
+                g.FillPolygon(new SolidBrush(Theme.YellowDark), new PointF[] { new(2, 6), new(9, 6), new(11, 8.5f), new(22, 8.5f), new(22, 20), new(2, 20) });
                 g.FillRectangle(TB, 2, 11, 20, 9);
                 break;
             case "unfinished":
@@ -96,7 +96,7 @@ public static class Icons
                 break;
             case "finished":
                 g.FillEllipse(TB, 2.5f, 2.5f, 19, 19);
-                using (var p = new Pen(Color.White, 2.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                using (var p = new Pen(Theme.Black, 2.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
                     g.DrawLines(p, new PointF[] { new(7, 12.5f), new(10.5f, 16), new(17, 8.5f) });
                 break;
             case "queues":
@@ -108,16 +108,16 @@ public static class Icons
                 g.FillRectangle(NB, 3, 16, 18, 4);
                 break;
             case "app":
-                using (var path = Rounded(1, 1, 22, 22, 5))
-                using (var br = new LinearGradientBrush(new RectangleF(0, 0, 24, 24), Theme.NavyLight, Theme.Navy, 90f))
+                using (var path = Rounded(0, 0, 24, 24, 5.25f))
+                using (var br = new SolidBrush(Theme.Yellow))
                     g.FillPath(br, path);
-                using (var p = new Pen(Theme.Teal, 3.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                g.ScaleTransform(24f / 128f, 24f / 128f);
                 {
-                    g.DrawLine(p, 12, 4.5f, 12, 14.5f);
-                    g.DrawLines(p, new PointF[] { new(7.5f, 10.5f), new(12, 15), new(16.5f, 10.5f) });
+                    var gl = new PointF[] { new(18, 20), new(110, 20), new(110, 46), new(78, 46), new(78, 70), new(102, 70), new(64, 109), new(26, 70), new(50, 70), new(50, 46), new(18, 46) };
+                    using var br = new SolidBrush(Theme.Black);
+                    using var pn = new Pen(Theme.Black, 6f) { LineJoin = LineJoin.Round };
+                    g.FillPolygon(br, gl); g.DrawPolygon(pn, gl);
                 }
-                using (var p = new Pen(Color.White, 2.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                    g.DrawLine(p, 5.5f, 19f, 18.5f, 19f);
                 break;
         }
     }
@@ -151,7 +151,7 @@ public static class Icons
         }
         g.FillPolygon(NB, pts.ToArray());
         g.FillEllipse(TB, 8, 8, 8, 8);
-        g.FillEllipse(Brushes.White, 10.4f, 10.4f, 3.2f, 3.2f);
+        g.FillEllipse(new SolidBrush(Theme.Surface), 10.4f, 10.4f, 3.2f, 3.2f);
     }
 
     static void DrawList(Graphics g)
@@ -176,14 +176,30 @@ public static class Icons
     [DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr h);
 
     private static Icon? _app;
+    private static Stream? Res() => typeof(Icons).Assembly.GetManifestResourceStream("logo.ico");
+
+    /// <summary>Pencere simgesi: gömülü logo.ico (çok katmanlı); bulunamazsa kodla çizilen yedek.</summary>
     public static Icon AppIcon()
     {
         if (_app != null) return _app;
-        using var bmp = Get("app", 32);
+        try { using var s = Res(); if (s != null) return _app = new Icon(s); } catch (Exception) { }
+        return _app = FromBitmap(32);
+    }
+
+    /// <summary>Sistem tepsisi simgesi: küçük simge boyutuna en yakın katman.</summary>
+    public static Icon TrayIcon()
+    {
+        try { using var s = Res(); if (s != null) return new Icon(s, SystemInformation.SmallIconSize); } catch (Exception) { }
+        return FromBitmap(SystemInformation.SmallIconSize.Width);
+    }
+
+    private static Icon FromBitmap(int size)
+    {
+        using var bmp = Get("app", size);
         var h = bmp.GetHicon();
         using var tmp = Icon.FromHandle(h);
-        _app = (Icon)tmp.Clone();
+        var ic = (Icon)tmp.Clone();
         DestroyIcon(h);
-        return _app;
+        return ic;
     }
 }

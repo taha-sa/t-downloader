@@ -37,12 +37,12 @@ public sealed class FileInfoDialog : DluForm
         MakeLabel("&URL:", 7, 5, 55, 10);
         _url = Add(new TextBox { Text = url }, 64, 3, 244, 14);
         MakeLabel("&Kategori:", 7, 24, 55, 10);
-        _cat = Add(new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }, 64, 22, 116, 64);
+        _cat = Add(new DarkCombo { DropDownStyle = ComboBoxStyle.DropDownList }, 64, 22, 116, 64);
         _cat.Items.AddRange(Categories.All);
         MakeLabel("Kayıt &yeri:", 7, 41, 55, 10);
         _save = Add(new TextBox(), 64, 39, 223, 14);
         var browse = MakeButton("...", 292, 39, 16, 14);
-        _remember = Add(new CheckBox { AutoEllipsis = true }, 64, 57, 244, 11);
+        _remember = Add(new DarkCheck { AutoEllipsis = true }, 64, 57, 244, 11);
         MakeLabel("Boyut:", 7, 74, 55, 10);
         _size = MakeLabel("", 64, 74, 244, 10);
         MakeLabel("&Açıklama:", 7, 93, 55, 10);

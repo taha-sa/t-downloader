@@ -3,12 +3,14 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
+    <ApplicationIcon>../../assets/logo/logo.ico</ApplicationIcon>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>TDownloader</AssemblyName>
     <RootNamespace>TDownloader.App</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../assets/logo/logo.ico" LogicalName="logo.ico" />
     <ProjectReference Include="..\TDownloader.Core\TDownloader.Core.csproj" />
   </ItemGroup>
 </Project>

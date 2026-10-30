@@ -1,5 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="28" fill="#1f6feb"/>
-  <path d="M54 26h20v40h18L64 100 36 66h18z" fill="#fff"/>
-  <rect x="32" y="103" width="64" height="8" rx="3" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="T-Downloader">
+  <rect width="128" height="128" rx="28" fill="#ffc107"/>
+  <path d="M18 20 L110 20 L110 46 L78 46 L78 70 L102 70 L64 109 L26 70 L50 70 L50 46 L18 46 Z" fill="#111111" stroke="#111111" stroke-width="6" stroke-linejoin="round"/>
 </svg>

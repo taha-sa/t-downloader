@@ -34,8 +34,8 @@ public sealed class SegmentBar : Control
     {
         var g = e.Graphics;
         var r = ClientRectangle; r.Width -= 1; r.Height -= 1;
-        using (var bg = new SolidBrush(Color.FromArgb(0xE6, 0xEB, 0xF2))) g.FillRectangle(bg, r);
-        if (_all) { using var b = new SolidBrush(Theme.Teal); g.FillRectangle(b, r); }
+        using (var bg = new SolidBrush(Theme.Field)) g.FillRectangle(bg, r);
+        if (_all) { using var b = new SolidBrush(Theme.Yellow); g.FillRectangle(b, r); }
         else
         {
             int i = 0;
@@ -81,7 +81,7 @@ public sealed class ProgressDialog : DluForm
         _fullHeight = ClientSize.Height;
         _shortHeight = Dlu.Y(146);
 
-        var grp = Add(new GroupBox { Text = "İndirme durumu" }, 7, 3, 338, 104);
+        var grp = Add(new DarkGroup { Text = "İndirme durumu" }, 7, 3, 338, 104);
         _url = new Label { AutoEllipsis = true, Bounds = new Rectangle(Dlu.X(6), Dlu.Y(11), Dlu.X(325), Dlu.Y(10)) };
         grp.Controls.Add(_url);
         string[] names = { "Durum", "Dosya boyutu", "İndirilen", "Aktarım hızı", "Kalan süre", "Devam edebilir" };
@@ -95,13 +95,13 @@ public sealed class ProgressDialog : DluForm
         }
         (_status, _size, _done, _speed, _eta, _resume) = (vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
 
-        _bar = Add(new ProgressBar { Minimum = 0, Maximum = 1000 }, 7, 111, 338, 10);
+        _bar = Add(new DarkProgress { Minimum = 0, Maximum = 1000 }, 7, 111, 338, 10);
         _toggle = MakeButton("<< Detayları gizle", 15, 126, 93, 15);
         _pause = MakeButton("Duraklat", 203, 126, 56, 15);
         _cancel = MakeButton("İptal", 277, 126, 50, 15);
         _connCaption = MakeLabel("Bağlantılara göre başlangıç konumları ve indirme ilerlemesi", 7, 144, 338, 9);
         _seg = Add(new SegmentBar(), 7, 155, 338, 10);
-        _list = Add(new BufferedListView { View = View.Details, FullRowSelect = true, GridLines = true, HeaderStyle = ColumnHeaderStyle.Nonclickable }, 7, 169, 338, 77);
+        _list = Add(new BufferedListView { View = View.Details, FullRowSelect = true, Grid = true, HeaderStyle = ColumnHeaderStyle.Nonclickable }, 7, 169, 338, 77);
         _list.Columns.Add("N.", Dlu.X(24));
         _list.Columns.Add("İndirilen", Dlu.X(100));
         _list.Columns.Add("Bilgi", Dlu.X(200));
@@ -193,7 +193,7 @@ public sealed class ProgressDialog : DluForm
                 ConnectionState.Failed => "Başarısız",
                 _ => "Boşta"
             };
-            li.ForeColor = c.State == ConnectionState.Failed ? Color.Firebrick : SystemColors.WindowText;
+            li.ForeColor = c.State == ConnectionState.Failed ? Theme.Danger : Theme.Text;
         }
         _list.EndUpdate();
     }
