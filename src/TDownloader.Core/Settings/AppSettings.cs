@@ -45,6 +45,18 @@ public sealed class AppSettings
     public bool ShowFileInfoOnCapture { get; set; } = true;
     public SchedulerSettings Scheduler { get; set; } = new();
 
+    // ---- Video (yt-dlp) ----
+    /// <summary>Videoların üstünde "Bu videoyu indir" düğmesini göster.</summary>
+    public bool ShowVideoButton { get; set; } = true;
+    /// <summary>yt-dlp.exe yolu (boşsa otomatik aranır).</summary>
+    public string YtDlpPath { get; set; } = "";
+    /// <summary>ffmpeg.exe yolu veya klasörü (boşsa otomatik aranır).</summary>
+    public string FfmpegPath { get; set; } = "";
+    /// <summary>"best" | "1080" | "720" | "480" | "360"</summary>
+    public string DefaultVideoQuality { get; set; } = "best";
+    /// <summary>Site (host) → sürükleyerek verilen düğme ofseti (px).</summary>
+    public Dictionary<string, ButtonOffset> VideoButtonOffsets { get; set; } = new();
+
     public int EffectiveConnections => Math.Clamp(Connections, 1, 32);
 
     public static AppSettings Load(string path)
@@ -60,6 +72,12 @@ public sealed class AppSettings
 
     public void Save(string path) =>
         JsonDefaults.WriteAtomic(path, JsonSerializer.Serialize(this, JsonDefaults.Indented));
+}
+
+public sealed class ButtonOffset
+{
+    public int X { get; set; }
+    public int Y { get; set; }
 }
 
 public sealed class SchedulerSettings

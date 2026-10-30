@@ -23,7 +23,7 @@ public sealed class DownloadManager : IAsyncDisposable
 {
     private sealed class Active
     {
-        public required DownloadEngine Engine { get; init; }
+        public required Action Stop { get; init; }
         public required Task Task { get; init; }
     }
 
@@ -40,6 +40,8 @@ public sealed class DownloadManager : IAsyncDisposable
     public RateLimiter Limiter { get; } = new();
     /// <summary>Test/ince ayar için motor seçenekleri üzerinde son söz (bağlantı sayısı ayarlardan gelir).</summary>
     public Action<EngineOptions>? ConfigureEngine { get; set; }
+    /// <summary>Kind == External olan öğeleri yürüten bileşen (yt-dlp).</summary>
+    public IExternalRunner? ExternalRunner { get; set; }
 
     public event EventHandler<DownloadItem>? ItemAdded;
     public event EventHandler<DownloadItem>? ItemRemoved;
@@ -156,6 +158,31 @@ public sealed class DownloadManager : IAsyncDisposable
         return item;
     }
 
+    /// <summary>yt-dlp gibi harici süreçle indirilecek öğe ekler (http/https sayfa veya akış adresi).</summary>
+    public DownloadItem AddExternal(AddExternalRequest req)
+    {
+        if (!Uri.TryCreate(req.Url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+            throw new ArgumentException("Geçersiz URL (yalnızca http/https).", nameof(req));
+        var name = SanitizeFileName(string.IsNullOrWhiteSpace(req.FileName) ? "video.mp4" : req.FileName);
+        var category = Categories.FromFileName(name);
+        var folder = !string.IsNullOrWhiteSpace(req.SaveFolder) ? req.SaveFolder! : FolderForCategory(category);
+        var item = new DownloadItem
+        {
+            Url = req.Url, FileName = name, Category = category, Referrer = req.Referrer, Description = req.Description,
+            Kind = DownloadKind.External, ExternalFormat = req.Format, Status = DownloadStatus.Paused,
+        };
+        lock (_gate)
+        {
+            item.SavePath = UniquePath(folder, name);
+            item.FileName = Path.GetFileName(item.SavePath);
+            _items.Add(item);
+        }
+        ItemAdded?.Invoke(this, item);
+        RequestSave();
+        if (req.StartNow) Start(item.Id);
+        return item;
+    }
+
     public string FolderForCategory(string category)
     {
         if (Settings.CategoryFolders.TryGetValue(category, out var f) && !string.IsNullOrWhiteSpace(f)) return f;
@@ -202,7 +229,7 @@ public sealed class DownloadManager : IAsyncDisposable
             if (item == null) return;
             _active.TryGetValue(id, out act);
         }
-        if (act != null) { act.Engine.Pause(); await act.Task.ConfigureAwait(false); }
+        if (act != null) { act.Stop(); await act.Task.ConfigureAwait(false); }
         lock (_gate) _items.Remove(item);
         try { var d = Path.Combine(Paths.DwnlDataDir, id); if (Directory.Exists(d)) Directory.Delete(d, true); } catch { }
         if (deleteFile)
@@ -247,7 +274,7 @@ public sealed class DownloadManager : IAsyncDisposable
             else if (item.Status == DownloadStatus.Queued) item.Status = DownloadStatus.Paused;
             else return;
         }
-        if (act != null) act.Engine.Pause();
+        if (act != null) act.Stop();
         else { ItemChanged?.Invoke(this, item); RequestSave(); }
     }
 
@@ -275,6 +302,7 @@ public sealed class DownloadManager : IAsyncDisposable
     // _gate altında çağrılır
     private void Launch(DownloadItem item)
     {
+        if (item.Kind == DownloadKind.External) { LaunchExternal(item); return; }
         var opt = new EngineOptions { Connections = Settings.EffectiveConnections };
         ConfigureEngine?.Invoke(opt);
         var engine = new DownloadEngine(item, Paths.DwnlDataDir, opt, Limiter, _http);
@@ -292,7 +320,67 @@ public sealed class DownloadManager : IAsyncDisposable
             else if (result == DownloadStatus.Failed) DownloadFailed?.Invoke(this, item);
             ProcessQueue();
         });
-        _active[item.Id] = new Active { Engine = engine, Task = task };
+        _active[item.Id] = new Active { Stop = engine.Pause, Task = task };
+    }
+
+    // _gate altında çağrılır
+    private void LaunchExternal(DownloadItem item)
+    {
+        var cts = new CancellationTokenSource();
+        var runner = ExternalRunner;
+        item.Status = DownloadStatus.Downloading;
+        item.Error = null;
+        item.LastTryAt = DateTime.Now;
+        var task = Task.Run(async () =>
+        {
+            ItemChanged?.Invoke(this, item);
+            ExternalResult? res = null;
+            bool canceled = false;
+            try
+            {
+                if (runner == null) res = new ExternalResult(false, "Video indirici (yt-dlp) yapılandırılmamış.", null);
+                else
+                    res = await runner.RunAsync(item, p =>
+                    {
+                        item.Downloaded = p.Downloaded;
+                        if (p.Total > 0) item.TotalSize = p.Total;
+                        item.SpeedBytesPerSec = p.SpeedBytesPerSec;
+                        ProgressChanged?.Invoke(this, new DownloadProgress
+                        {
+                            Id = item.Id, Downloaded = p.Downloaded, TotalSize = p.Total > 0 ? p.Total : item.TotalSize,
+                            SpeedBytesPerSec = p.SpeedBytesPerSec,
+                            Eta = p.EtaSeconds is double e && e >= 0 && e < 8_640_000 ? TimeSpan.FromSeconds(e) : null,
+                        });
+                    }, cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { canceled = true; }
+            catch (Exception ex) { res = new ExternalResult(false, ex.Message, null); }
+
+            item.SpeedBytesPerSec = 0;
+            if (canceled || (res is { Success: false } && cts.IsCancellationRequested)) item.Status = DownloadStatus.Paused;
+            else if (res is { Success: true })
+            {
+                if (!string.IsNullOrWhiteSpace(res.FinalPath) && File.Exists(res.FinalPath))
+                {
+                    item.SavePath = res.FinalPath;
+                    item.FileName = Path.GetFileName(res.FinalPath);
+                    item.Category = Categories.FromFileName(item.FileName);
+                    try { item.TotalSize = new FileInfo(res.FinalPath).Length; } catch (IOException) { }
+                }
+                if (item.TotalSize > 0) item.Downloaded = item.TotalSize;
+                item.Status = DownloadStatus.Completed;
+            }
+            else { item.Error = res?.Error ?? "Bilinmeyen hata."; item.Status = DownloadStatus.Failed; }
+
+            lock (_gate) _active.Remove(item.Id);
+            cts.Dispose();
+            ItemChanged?.Invoke(this, item);
+            RequestSave();
+            if (item.Status == DownloadStatus.Completed) DownloadCompleted?.Invoke(this, item);
+            else if (item.Status == DownloadStatus.Failed) DownloadFailed?.Invoke(this, item);
+            ProcessQueue();
+        });
+        _active[item.Id] = new Active { Stop = () => { try { cts.Cancel(); } catch (ObjectDisposedException) { } }, Task = task };
     }
 
     /// <summary>Tüm aktifleri duraklatır, durumları diske yazar. Uygulama kapanırken çağrılmalı.</summary>
@@ -300,7 +388,7 @@ public sealed class DownloadManager : IAsyncDisposable
     {
         List<Active> acts;
         lock (_gate) { _disposed = true; acts = _active.Values.ToList(); }
-        foreach (var a in acts) a.Engine.Pause();
+        foreach (var a in acts) a.Stop();
         await Task.WhenAll(acts.Select(a => a.Task)).ConfigureAwait(false);
         lock (_gate)
             foreach (var i in _items)

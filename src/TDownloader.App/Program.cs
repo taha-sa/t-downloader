@@ -33,9 +33,13 @@ internal static class Program
         var manager = new DownloadManager(paths, settings);
         manager.Load();
 
+        var yt = new Core.Video.YtDlpClient(() => manager.Settings, paths);
+        manager.ExternalRunner = yt;
         var svc = new AppServices { Manager = manager, Paths = paths };
         var form = new MainForm(svc, background);
         svc.Main = form;
+        svc.Media = new VideoOverlayMediaSink(yt);
+        svc.Media.Attach(svc);
         var ipc = new IpcCoordinator(svc);
         ipc.Start();
 

@@ -19,6 +19,11 @@ public sealed class OptionsDialog : DluForm
     private readonly CheckBox _capture;
     private readonly NumericUpDown _minKb;
     private readonly TextBox _types, _excluded;
+    private readonly CheckBox _showVideoBtn;
+    private readonly TextBox _ytPath, _ffPath;
+    private readonly ComboBox _quality;
+    private readonly Label _ytState, _ffState;
+    private static readonly (string Key, string Text)[] Qualities = { ("best", "En yüksek"), ("1080", "1080p"), ("720", "720p"), ("480", "480p"), ("360", "360p") };
 
     public AppSettings Result => _s;
 
@@ -77,6 +82,30 @@ public sealed class OptionsDialog : DluForm
         Put(b, new Label { Text = "Yakalanmayacak siteler (her satıra bir tane):" }, 10, 116, 232, 10);
         _excluded = Put(b, new TextBox { Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true }, 10, 128, 232, 60);
 
+        // --- Video
+        var v = Page("Video");
+        _showVideoBtn = Put(v, new CheckBox { Text = "Videoların üstünde \"Bu videoyu indir\" düğmesini göster", AutoEllipsis = true }, 10, 8, 238, 11);
+        Put(v, new Label { Text = "yt-dlp yolu (boşsa otomatik aranır):" }, 10, 26, 232, 10);
+        _ytPath = Put(v, new TextBox(), 10, 37, 206, 14);
+        var yb = Put(v, new Button { Text = "...", FlatStyle = FlatStyle.System }, 221, 37, 20, 14);
+        _ytState = Put(v, new Label { AutoEllipsis = true }, 10, 53, 232, 10);
+        Put(v, new Label { Text = "ffmpeg yolu veya klasörü (boşsa otomatik aranır):" }, 10, 68, 232, 10);
+        _ffPath = Put(v, new TextBox(), 10, 79, 206, 14);
+        var fb = Put(v, new Button { Text = "...", FlatStyle = FlatStyle.System }, 221, 79, 20, 14);
+        _ffState = Put(v, new Label { AutoEllipsis = true }, 10, 95, 232, 10);
+        Put(v, new Label { Text = "Varsayılan kalite:" }, 10, 112, 80, 10);
+        _quality = Put(v, new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList }, 90, 110, 80, 14);
+        foreach (var q in Qualities) _quality.Items.Add(q.Text);
+        var link = Put(v, new LinkLabel { Text = "yt-dlp indirme sayfası (github.com/yt-dlp/yt-dlp/releases)" }, 10, 132, 232, 10);
+        link.LinkClicked += (_, _) => OpenUrl("https://github.com/yt-dlp/yt-dlp/releases");
+        var link2 = Put(v, new LinkLabel { Text = "ffmpeg derlemeleri (gyan.dev/ffmpeg/builds)" }, 10, 146, 232, 10);
+        link2.LinkClicked += (_, _) => OpenUrl("https://www.gyan.dev/ffmpeg/builds/");
+        Put(v, new Label { Text = "Arama sırası: buradaki yol, %APPDATA%/T-Downloader/tools, uygulama klasörü/tools, PATH. T-Downloader bu araçları kendisi indirmez veya kurmaz; DRM korumalı içerik desteklenmez.", AutoSize = false }, 10, 164, 232, 40);
+        yb.Click += (_, _) => { var f = PickFile(_ytPath.Text, "yt-dlp|yt-dlp*.exe|Tüm exe|*.exe"); if (f != null) _ytPath.Text = f; };
+        fb.Click += (_, _) => { var f = PickFile(_ffPath.Text, "ffmpeg|ffmpeg*.exe|Tüm exe|*.exe"); if (f != null) _ffPath.Text = f; };
+        _ytPath.TextChanged += (_, _) => UpdateToolState();
+        _ffPath.TextChanged += (_, _) => UpdateToolState();
+
         var ok = MakeButton("Tamam", 105, 238, 50, 14, DialogResult.OK);
         var cancel = MakeButton("İptal", 159, 238, 50, 14, DialogResult.Cancel);
         var apply2 = MakeButton("Uygula", 213, 238, 50, 14);
@@ -100,6 +129,29 @@ public sealed class OptionsDialog : DluForm
         _catFolder.Text = folder.Trim();
     }
 
+    private static void OpenUrl(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+    }
+
+    private string? PickFile(string current, string filter)
+    {
+        using var ofd = new OpenFileDialog { Filter = filter, CheckFileExists = true, FileName = File.Exists(current) ? current : "" };
+        return ofd.ShowDialog(this) == DialogResult.OK ? ofd.FileName : null;
+    }
+
+    private void UpdateToolState()
+    {
+        var paths = AppPaths.Default;
+        var yt = Core.Video.ToolLocator.Find("yt-dlp", _ytPath.Text, paths.ToolsDir, AppContext.BaseDirectory);
+        var ff = Core.Video.ToolLocator.Find("ffmpeg", _ffPath.Text, paths.ToolsDir, AppContext.BaseDirectory);
+        _ytState.Text = yt != null ? "Bulundu: " + yt : "yt-dlp bulunamadı — kurulum bilgisi için aşağıdaki bağlantıya bakın";
+        _ytState.ForeColor = yt != null ? Color.SeaGreen : Color.Firebrick;
+        _ffState.Text = ff != null ? "Bulundu: " + ff : "ffmpeg bulunamadı (video+ses birleştirme için gerekir)";
+        _ffState.ForeColor = ff != null ? Color.SeaGreen : Color.Firebrick;
+    }
+
     private string? PickFolder(string start)
     {
         using var fb = new FolderBrowserDialog { SelectedPath = Directory.Exists(start) ? start : "", Description = "Klasör seçin" };
@@ -121,6 +173,12 @@ public sealed class OptionsDialog : DluForm
         _minKb.Value = Math.Clamp(_s.MinFileSizeKb, 0, 10_000_000);
         _types.Text = string.Join(" ", _s.FileTypes);
         _excluded.Text = string.Join(Environment.NewLine, _s.ExcludedSites);
+        _showVideoBtn.Checked = _s.ShowVideoButton;
+        _ytPath.Text = _s.YtDlpPath;
+        _ffPath.Text = _s.FfmpegPath;
+        int qi = Array.FindIndex(Qualities, q => q.Key == _s.DefaultVideoQuality);
+        _quality.SelectedIndex = qi < 0 ? 0 : qi;
+        UpdateToolState();
     }
 
     private void Collect()
@@ -139,6 +197,10 @@ public sealed class OptionsDialog : DluForm
         _s.MinFileSizeKb = (int)_minKb.Value;
         _s.FileTypes = _types.Text.Split(new[] { ' ', ',', ';', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.TrimStart('.').ToLowerInvariant()).Distinct().ToList();
+        _s.ShowVideoButton = _showVideoBtn.Checked;
+        _s.YtDlpPath = _ytPath.Text.Trim();
+        _s.FfmpegPath = _ffPath.Text.Trim();
+        _s.DefaultVideoQuality = Qualities[Math.Max(0, _quality.SelectedIndex)].Key;
         _s.ExcludedSites = _excluded.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
     }

@@ -37,6 +37,8 @@ public interface IAppServices
     /// <summary>Bağlı tarayıcı eklentilerine mesaj yayınlar (ör. hideButton).</summary>
     Task SendToExtensionAsync(IpcMessage message);
     /// <summary>"Dosya bilgisi" diyaloğunu açar; kullanıcı kabul ederse indirmeyi ekler ve true döner.</summary>
+    /// <summary>Tepsi balonu ile kısa bildirim gösterir (UI thread dışından çağrılabilir).</summary>
+    void Notify(string title, string message);
     Task<bool> PromptDownloadAsync(string url, string? referrer = null, string? cookies = null, string? userAgent = null,
         string? fileName = null, long fileSize = -1);
 }
@@ -53,6 +55,8 @@ public sealed class AppServices : IAppServices
     public ISynchronizeInvoke UiThread => Main ?? throw new InvalidOperationException("Ana pencere yok.");
 
     public Task SendToExtensionAsync(IpcMessage message) => Ipc?.BroadcastAsync(message) ?? Task.CompletedTask;
+
+    public void Notify(string title, string message) => Main?.Notify(title, message);
 
     public Task<bool> PromptDownloadAsync(string url, string? referrer = null, string? cookies = null, string? userAgent = null,
         string? fileName = null, long fileSize = -1)

@@ -10,8 +10,13 @@ public sealed class AppPaths
 
     public AppPaths(string root) { Root = root; }
 
-    public static AppPaths Default { get; } = new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "T-Downloader"));
+    /// <summary>Araçların (yt-dlp, ffmpeg) aranacağı veri klasörü altı.</summary>
+    public string ToolsDir => Path.Combine(Root, "tools");
+
+    /// <summary>TDOWNLOADER_DATA_DIR ortam değişkeni verilmişse (test/yalıtım) o klasör kullanılır.</summary>
+    public static AppPaths Default { get; } = new(
+        Environment.GetEnvironmentVariable("TDOWNLOADER_DATA_DIR") is { Length: > 0 } o ? o :
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "T-Downloader"));
 
     public static string DefaultSaveFolder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "T-Downloader");

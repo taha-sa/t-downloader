@@ -4,6 +4,9 @@ namespace TDownloader.Core.Downloads;
 
 public enum DownloadStatus { Queued, Downloading, Paused, Completed, Failed }
 
+/// <summary>Http = kendi motorumuz; External = harici süreç (yt-dlp) ile indirilen öğe.</summary>
+public enum DownloadKind { Http, External }
+
 public sealed class DownloadItem
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -23,6 +26,10 @@ public sealed class DownloadItem
     public string? Cookie { get; set; }
     public string? UserAgent { get; set; }
     public string? Error { get; set; }
+    /// <summary>İndirme türü; eski downloads.json dosyalarında yoksa Http.</summary>
+    public DownloadKind Kind { get; set; } = DownloadKind.Http;
+    /// <summary>External için yt-dlp -f biçim seçicisi.</summary>
+    public string? ExternalFormat { get; set; }
 
     /// <summary>Anlık hız (bayt/sn); kalıcı değil.</summary>
     [JsonIgnore] public double SpeedBytesPerSec { get; set; }

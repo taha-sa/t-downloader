@@ -121,6 +121,8 @@ public sealed class MainForm : Form
         base.SetVisibleCore(value);
     }
 
+    public void Notify(string title, string message) => UiPost(() => _tray.ShowBalloonTip(3000, title, message, ToolTipIcon.Info));
+
     public void ShowMain()
     {
         _startHidden = false;
@@ -584,6 +586,7 @@ public sealed class MainForm : Form
 
     private void OpenProgress(DownloadItem item)
     {
+        if (item.Kind == DownloadKind.External) return;   // yt-dlp öğeleri ana listede izlenir
         if (_dialogs.TryGetValue(item.Id, out var ex)) { ex.Show(); ex.Activate(); return; }
         var d = new ProgressDialog(_mgr, item);
         _dialogs[item.Id] = d;
