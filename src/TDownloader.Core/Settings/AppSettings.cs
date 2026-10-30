@@ -24,6 +24,27 @@ public sealed class AppSettings
         "mp4","mkv","avi","mov","wmv","webm","flv","m4v"
     };
 
+
+    // ---- Arayüz (App) ayarları: eski settings.json dosyalarıyla uyumlu, eksikse varsayılan ----
+    /// <summary>Sütun anahtarı → genişlik (px).</summary>
+    public Dictionary<string, int> ColumnWidths { get; set; } = new();
+    /// <summary>Sütun anahtarlarının görüntü sırası.</summary>
+    public List<string> ColumnOrder { get; set; } = new();
+    public bool ShowCategories { get; set; } = true;
+    public int CategoriesWidth { get; set; } = 138;
+    public int WindowLeft { get; set; } = int.MinValue;
+    public int WindowTop { get; set; } = int.MinValue;
+    public int WindowWidth { get; set; } = 0;
+    public int WindowHeight { get; set; } = 0;
+    public bool WindowMaximized { get; set; }
+    /// <summary>Pencereyi kapatınca tepsiye küçült.</summary>
+    public bool MinimizeToTrayOnClose { get; set; } = true;
+    /// <summary>Panodaki indirilebilir bağlantıları izle (varsayılan kapalı).</summary>
+    public bool ClipboardMonitor { get; set; }
+    /// <summary>Tarayıcıdan gelen indirmede "Dosya bilgisi" penceresini göster.</summary>
+    public bool ShowFileInfoOnCapture { get; set; } = true;
+    public SchedulerSettings Scheduler { get; set; } = new();
+
     public int EffectiveConnections => Math.Clamp(Connections, 1, 32);
 
     public static AppSettings Load(string path)
@@ -39,4 +60,15 @@ public sealed class AppSettings
 
     public void Save(string path) =>
         JsonDefaults.WriteAtomic(path, JsonSerializer.Serialize(this, JsonDefaults.Indented));
+}
+
+public sealed class SchedulerSettings
+{
+    public bool Enabled { get; set; }
+    /// <summary>"HH:mm"</summary>
+    public string StartTime { get; set; } = "02:00";
+    /// <summary>System.DayOfWeek sayı değerleri (0 = Pazar).</summary>
+    public List<int> Days { get; set; } = new() { 0, 1, 2, 3, 4, 5, 6 };
+    /// <summary>"none" | "notify" | "exit"</summary>
+    public string OnFinished { get; set; } = "notify";
 }
