@@ -1,0 +1,87 @@
+using System.Net;
+
+namespace TDownloader.Core.Downloads;
+
+public sealed class EngineOptions
+{
+    /// <summary>Bağlantı sayısı (1–32).</summary>
+    public int Connections { get; set; } = 8;
+    /// <summary>Dinamik bölmede en küçük parça (varsayılan 1 MB).</summary>
+    public long MinSplitSize { get; set; } = 1024 * 1024;
+    /// <summary>Bağlantı başına art arda hata sonrası vazgeçme sayısı (ilerleme olunca sayaç sıfırlanır).</summary>
+    public int MaxRetries { get; set; } = 5;
+    public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
+    public TimeSpan ReadTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    public TimeSpan ProgressInterval { get; set; } = TimeSpan.FromMilliseconds(250);
+    public TimeSpan StateSaveInterval { get; set; } = TimeSpan.FromSeconds(1);
+    public int BufferSize { get; set; } = 64 * 1024;
+}
+
+public enum ConnectionState { Idle, Connecting, Receiving, Retrying, Done, Failed }
+
+public sealed class ConnectionProgress
+{
+    public int Index { get; init; }
+    public ConnectionState State { get; init; }
+    /// <summary>Bağlantının şu an üstlendiği parça [SegmentStart, SegmentEnd) ve içindeki konum.</summary>
+    public long SegmentStart { get; init; }
+    public long SegmentEnd { get; init; }
+    public long Position { get; init; }
+    public double SpeedBytesPerSec { get; init; }
+    public int Retries { get; init; }
+}
+
+public sealed class DownloadProgress
+{
+    public string Id { get; init; } = "";
+    public long Downloaded { get; init; }
+    /// <summary>Bilinmiyorsa -1.</summary>
+    public long TotalSize { get; init; }
+    public double SpeedBytesPerSec { get; init; }
+    public TimeSpan? Eta { get; init; }
+    public IReadOnlyList<ConnectionProgress> Connections { get; init; } = Array.Empty<ConnectionProgress>();
+}
+
+public sealed class SegmentSplitEventArgs : EventArgs
+{
+    public long SplitAt { get; init; }
+    public long SegmentEnd { get; init; }
+    public int ConnectionIndex { get; init; }
+}
+
+internal sealed class NonRetryableException : Exception
+{
+    public NonRetryableException(string m) : base(m) { }
+}
+
+internal sealed class SegmentState { public long Start { get; set; } public long End { get; set; } public long Position { get; set; } }
+
+internal sealed class EngineState
+{
+    public string Url { get; set; } = "";
+    public long TotalSize { get; set; }
+    public bool AcceptRanges { get; set; }
+    public string? ETag { get; set; }
+    public List<SegmentState> Segments { get; set; } = new();
+}
+
+public static class EngineHttp
+{
+    private static readonly Lazy<HttpClient> _shared = new(Create);
+    public static HttpClient Shared => _shared.Value;
+
+    public static HttpClient Create()
+    {
+        var h = new SocketsHttpHandler
+        {
+            AutomaticDecompression = DecompressionMethods.None,
+            UseCookies = false,
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = 10,
+            MaxConnectionsPerServer = 64,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            ConnectTimeout = TimeSpan.FromSeconds(30),
+        };
+        return new HttpClient(h, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
+    }
+}
