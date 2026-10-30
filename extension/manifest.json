@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "T-Downloader",
   "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA/NLa/sIIG8WNg86Gi6y3TkRPE48Lh/f7k1CfjH5ss4eMPb7xeVwZT7GT6EvTGrpsndQiNTM6GSV4/tDaTix05Hyw5qTBeOPYQVcNwyrhBsnbRWCqMF7kcixBWb3oX7EM8g2pX3BkibEvTXXJcNLYvZ3F+LBBnB46GnT26i1jvoHOm7ppHxSCf4hFLYLYZot4lsgjOcnu9J400lEy7qkljHWw5omA8GFlFeHA1dAYA5VldnOqbOKA/6lUlfCUi6upXuPsi8AHbvFk8v5KgH6LNIQsNbvhy1b83enujNLnT0ZrtQPCnE5g1kkVWPjH66GkcSxHR41vPbImafYyQhRytwIDAQAB",
   "description": "T-Downloader masaüstü uygulamasıyla indirmeleri ve videoları yakalar.",
   "minimum_chrome_version": "110",
   "permissions": [
