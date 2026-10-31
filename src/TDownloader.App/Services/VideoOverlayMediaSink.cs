@@ -94,11 +94,24 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         if (_tabId == tabId) { _tabId = -1; _raw = null; HideWin(); }
     });
 
-    public void OnQualitiesCancel(string requestId) => Post(() => CancelRunning(requestId));
+    // İptal, istek kaydı oluşmadan önce gelebilir (App'te Task.Run -> Post gecikmesi): kimlik "iptal edildi" kümesine yazılır, istek başında bakılır (A15).
+    private readonly HashSet<string> _cancelledEarly = new();
+    private readonly Queue<string> _cancelledOrder = new();
 
+    public void OnQualitiesCancel(string requestId) => Post(() =>
+    {
+        if (_running.ContainsKey(requestId)) { CancelRunning(requestId); return; }
+        if (_cancelledEarly.Add(requestId))
+        {
+            _cancelledOrder.Enqueue(requestId);
+            while (_cancelledOrder.Count > 100) _cancelledEarly.Remove(_cancelledOrder.Dequeue());
+        }
+    });
+
+    // Kayıt SİLİNMEZ: GetQualitiesAsync'in finally'si kaydı siler ve Cts'yi dispose eder (A15: iptal sonrası Dispose sızıntısı).
     private void CancelRunning(string requestId)
     {
-        if (_running.Remove(requestId, out var r)) { try { r.Cts.Cancel(); } catch (ObjectDisposedException) { } }
+        if (_running.TryGetValue(requestId, out var r)) { try { r.Cts.Cancel(); } catch (ObjectDisposedException) { } }
     }
 
     // Eklenti saniyede onlarca konum mesajı gönderebilir; UI thread'ine yalnızca sekme başına en sonuncusu gider.
@@ -289,8 +302,9 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     }
 
     /// <summary>Öğenin kendi başlıkları; yoksa sayfa adresi Referer olur.</summary>
-    public static MediaContext ContextOf(MediaItem i, string? page) =>
-        new(string.IsNullOrWhiteSpace(i.Referer) ? page : i.Referer, i.Origin, i.Cookies, i.UserAgent);
+    public static MediaContext ContextOf(MediaItem i, string? page) => MediaContexts.ContextOf(i, page);
+    public static MediaContext ForSource(MediaContext ctx, string? url) => MediaContexts.ForSource(ctx, url);
+    public static string Scrub(string? text) => MediaContexts.Scrub(text);
 
     /// <summary>
     /// Önbellekteki (veya yeni başlatılan) kalite bilgisi görevi. HLS akışları önce master playlist'ten doğrudan okunur
@@ -299,6 +313,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     private Task<VideoInfo> InfoFor(string source, MediaContext ctx, bool hls, string? title, CancellationToken waiter = default) =>
         _info.GetOrStart(QualityCacheKey.For(source), async ct =>
         {
+            ctx = ForSource(ctx, source);
             if (hls)
             {
                 try { return await _hls.GetInfoAsync(source, ctx, title, ct).ConfigureAwait(false); }
@@ -465,10 +480,11 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             {
                 var cts = new CancellationTokenSource();
                 _running[q.RequestId] = (q.TabId, cts);
+                if (_cancelledEarly.Remove(q.RequestId)) cts.Cancel();      // iptal istekten önce gelmişti
                 var tab = Tab(q.TabId);
                 // Çerezler medya mesajlarıyla gelmez; düğme tıklanınca tek seferde (origin -> başlık) gelir ve öğelere uygulanır.
                 if (q.Cookies is { Count: > 0 })
-                    foreach (var fk in tab.Frames.Keys.ToList()) tab.Frames[fk] = MediaCookies.Apply(tab.Frames[fk], q.Cookies);
+                    foreach (var fk in tab.Frames.Keys.ToList()) tab.Frames[fk] = MediaCookies.Apply(tab.Frames[fk], q.Cookies, q.CookieHosts);
                 if (!string.IsNullOrEmpty(q.PageUrl)) tab.PageUrl = q.PageUrl;
                 if (!string.IsNullOrEmpty(q.PageTitle)) tab.PageTitle = q.PageTitle;
                 var s = Resolve(tab, q.FrameId);
@@ -536,7 +552,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             try
             {
                 bool fresh = !_info.Contains(key);
-                var info = await _info.GetOrStart(key, _ => _hls.GetInfoSetAsync(cands, ctx, pageTitle, probeMaster: true, l => Mlog.Write("  " + l)), reqCt).ConfigureAwait(false);
+                var info = await _info.GetOrStart(key, ct => _hls.GetInfoSetAsync(cands, ctx, pageTitle, probeMaster: true, l => Mlog.Write("  " + l), ct), reqCt).ConfigureAwait(false);
                 if (!fresh) Mlog.Write("  (kalite listesi önbellekten)");
                 if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
                 streamOpts.AddRange(info.Options.Where(o => !o.Other));
@@ -546,7 +562,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             catch (Exception ex) when (ex is HlsException or HttpRequestException or OperationCanceledException or UriFormatException)
             {
                 reqCt.ThrowIfCancellationRequested();
-                Mlog.Write("  hls-set başarısız: " + ex.Message);
+                Mlog.Write("  hls-set başarısız: " + Scrub(ex.Message));
                 // yt-dlp'ye düş (varsa): en yeni akış adresiyle
                 if (_yt.FindYtDlp() == null) { error = "Akış okunamadı: " + ex.Message; code = "error"; }
                 else
@@ -617,7 +633,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
 
         if (entries.Count == 0)
         {
-            Mlog.Write($"RESULT fail code={code ?? "no_media"} err={error ?? "-"}");
+            Mlog.Write($"RESULT fail code={code ?? "no_media"} err={Scrub(error)}");
             return Fail(q.RequestId, error ?? "Bu sayfada indirilebilir medya bulunamadı.", code ?? "no_media");
         }
         Mlog.Write($"RESULT ok n={infos.Count} [{string.Join(" | ", infos.Select(i => i.Kind + ":" + i.Label))}]");
@@ -664,13 +680,14 @@ public sealed class VideoOverlayMediaSink : IMediaSink
 
     private void DownloadDirect(MediaItem item, string? page, string? title)
     {
-        _ = _svc!.PromptDownloadAsync(item.Url, string.IsNullOrWhiteSpace(item.Referer) ? page : item.Referer, item.Cookies, item.UserAgent, DirectName(item, title));
+        // force:true: video düğmesinden gelen indirme HER ZAMAN onay penceresi gösterir ("capture sonrası dosya bilgisi" kapalı olsa bile sessiz indirme yok; A2).
+        _ = _svc!.PromptDownloadAsync(item.Url, string.IsNullOrWhiteSpace(item.Referer) ? page : item.Referer, ForSource(ContextOf(item, page), item.Url).Cookies, item.UserAgent, DirectName(item, title), force: true);
     }
 
     private void StartQuality(string source, string? referer, MediaContext ctx, string title, QualityOption opt)
     {
         // İndirme başlamadan "Dosya İndirme Bilgisi" penceresi açılır (IDM gibi).
-        _ = _svc!.PromptExternalAsync(source, ctx.Referer ?? referer, title, opt, ctx);
+        _ = _svc!.PromptExternalAsync(source, ctx.Referer ?? referer, title, opt, ForSource(ctx, source));
     }
 
     // ------------------------------------------------------------ bilgi kutuları

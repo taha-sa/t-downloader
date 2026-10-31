@@ -18,6 +18,9 @@ public sealed class UpdateGate
     public void Reset() => _last = long.MinValue;
 }
 
+/// <summary>Bir dosyanın Geri Dönüşüm Kutusu'na gönderilme sonucu.</summary>
+public enum RecycleOutcome { Recycled, Missing, Skipped, Failed }
+
 /// <summary>"Diskten sil" için silinecek dosya özeti ve onay metni.</summary>
 public static class DiskDeletePlan
 {
@@ -36,7 +39,21 @@ public static class DiskDeletePlan
     }
 
     public static string ConfirmText(int count, long totalBytes) =>
-        $"{count} dosya diskten silinecek (toplam {Fmt.Size(totalBytes)}). Dosyalar Geri Dönüşüm Kutusu'na gönderilecek. Emin misiniz?";
+        $"{count} dosya diskten silinecek (toplam {Fmt.Size(totalBytes)}). Dosyalar Geri Dönüşüm Kutusu'na gönderilecek; kutuya gönderilemeyen dosya için ayrıca sorulur (sessizce kalıcı silinmez). Emin misiniz?";
+
+    /// <summary>
+    /// SHFileOperation sonucu: kod 0 ve iptal yok -> dosya gitti (Recycled; hâlâ duruyorsa Failed). Kullanıcı kalıcı silme uyarısını
+    /// reddettiyse (aborted) dosya yerinde kalır -> Skipped. Diğer kodlar Failed.
+    /// </summary>
+    public static RecycleOutcome Interpret(int code, bool aborted, bool existsAfter)
+    {
+        if (aborted || code == 0x75 || code == 0x4C7) return existsAfter ? RecycleOutcome.Skipped : RecycleOutcome.Recycled;
+        if (code != 0) return RecycleOutcome.Failed;
+        return existsAfter ? RecycleOutcome.Failed : RecycleOutcome.Recycled;
+    }
+
+    public static string SkippedSummary(int skipped) =>
+        $"{skipped} dosya Geri Dönüşüm Kutusu'na gönderilemediği ve kalıcı silme onaylanmadığı için diskte bırakıldı (listeden kaldırıldı).";
 
     public static string ErrorSummary(int failed, string? firstError) =>
         $"{failed} dosya Geri Dönüşüm Kutusu'na gönderilemedi." + (string.IsNullOrEmpty(firstError) ? "" : "\n" + firstError);

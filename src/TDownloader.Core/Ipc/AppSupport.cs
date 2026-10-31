@@ -142,10 +142,25 @@ public static class MediaCookies
         return null;
     }
 
-    public static List<MediaItem> Apply(List<MediaItem> items, Dictionary<string, string>? byOrigin)
+    /// <summary>
+    /// Çerezleri öğelere uygular. <paramref name="hostOf"/> (eklentinin bildirdiği "çerezin okunduğu host") verilmişse, çerez yalnızca
+    /// o host'taki öğeye yazılır; bildirilen host ile öğenin host'u uyuşmazsa uygulanmaz.
+    /// </summary>
+    public static List<MediaItem> Apply(List<MediaItem> items, Dictionary<string, string>? byOrigin, Dictionary<string, string>? hostOf = null)
     {
         if (byOrigin == null || byOrigin.Count == 0) return items;
-        return items.Select(i => string.IsNullOrEmpty(i.Cookies) && For(byOrigin, i.Url) is { } c ? i with { Cookies = c } : i).ToList();
+        return items.Select(i => string.IsNullOrEmpty(i.Cookies) && For(byOrigin, i.Url) is { } c && HostMatches(hostOf, i.Url) ? i with { Cookies = c } : i).ToList();
+    }
+
+    private static bool HostMatches(Dictionary<string, string>? hostOf, string url)
+    {
+        if (hostOf == null || hostOf.Count == 0) return true;      // eski eklenti: yalnızca origin eşleşmesi
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return false;
+        var origin = u.GetLeftPart(UriPartial.Authority);
+        foreach (var kv in hostOf)
+            if (string.Equals(kv.Key, origin, StringComparison.OrdinalIgnoreCase))
+                return string.Equals(kv.Value?.Trim().TrimEnd('.'), u.Host, StringComparison.OrdinalIgnoreCase);
+        return false;                                              // host bildirilmemiş origin'e çerez yazılmaz
     }
 }
 
@@ -227,5 +242,81 @@ public static class StaCall
         bool joined = th.Join(timeoutMs);
         result = joined && done ? value : default;
         return joined && done;
+    }
+}
+
+/// <summary>
+/// Onay penceresi tekilleştirmesi (aynı bağlantı için ikinci pencere açılmaz). Anahtar: URL. Tekilleştirme zaman penceresiyle
+/// DEĞİL durumla yapılır: bekleyen/gösterilen pencere varken tekrar gelen aynı URL atlanır (kuyruk ne kadar uzun olursa olsun);
+/// pencere kapanınca talep bırakılır. İptal ("İptal") talebi hemen siler: kullanıcı aynı bağlantıya tekrar tıklarsa yeniden sorulur.
+/// Yalnızca BAŞARIYLA eklenen indirmeler kısa süre (<see cref="Window"/>) hatırlanır (tarayıcının çift gönderimi için).
+/// </summary>
+public sealed class PromptClaims
+{
+    private readonly Dictionary<string, DateTime> _done = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _active = new(StringComparer.Ordinal);
+    private readonly object _lock = new();
+    private readonly Func<DateTime> _now;
+
+    public TimeSpan Window { get; init; } = TimeSpan.FromSeconds(15);
+    public int MaxRemembered { get; init; } = 500;
+
+    public PromptClaims(Func<DateTime>? now = null) { _now = now ?? (() => DateTime.UtcNow); }
+
+    /// <summary>true = bu isteğin penceresi gösterilmeli. false = aynı URL için pencere zaten bekliyor/açık ya da az önce eklendi.</summary>
+    public bool TryClaim(string url)
+    {
+        lock (_lock)
+        {
+            var now = _now();
+            foreach (var k in _done.Where(p => now - p.Value > Window).Select(p => p.Key).ToList()) _done.Remove(k);
+            if (_active.Contains(url) || _done.ContainsKey(url)) return false;
+            _active.Add(url);
+            return true;
+        }
+    }
+
+    /// <summary>Pencere kapandı. added=false (İptal/hata) ise talep hemen bırakılır; true ise kısa süre hatırlanır.</summary>
+    public void Complete(string url, bool added)
+    {
+        lock (_lock)
+        {
+            _active.Remove(url);
+            if (added)
+            {
+                _done[url] = _now();
+                BoundedDictionary.TrimOldest(_done, MaxRemembered, v => v);
+            }
+        }
+    }
+
+    public int ActiveCount { get { lock (_lock) return _active.Count; } }
+}
+
+/// <summary>Medya bağlamı güvenlik yardımcıları (UI'dan bağımsız, test edilebilir): çerez yalnızca alındığı host'a gider (A1), günlükte URL imzası kalmaz (A11).</summary>
+public static class MediaContexts
+{
+    public static string HostOf(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host.ToLowerInvariant() : "";
+
+    /// <summary>
+    /// Öğenin başlıkları; yoksa sayfa adresi Referer olur. Öğenin çerezi öğenin KENDİ adresi için okunmuştur (eklenti getAll({url})),
+    /// bu yüzden CookieHost = öğenin host'u; Core çerezi yalnızca bu host'a (ve alt alan adlarına) gönderir.
+    /// </summary>
+    public static Video.MediaContext ContextOf(MediaItem i, string? page) =>
+        new(string.IsNullOrWhiteSpace(i.Referer) ? page : i.Referer, i.Origin, i.Cookies, i.UserAgent,
+            !string.IsNullOrEmpty(i.Cookies) && HostOf(i.Url) is { Length: > 0 } h ? h : null);
+
+    /// <summary>Bağlam çerezi <paramref name="url"/>'nin host'una uygulanamıyorsa çerezsiz kopya döner (başka host'a çerez gitmesin).</summary>
+    public static Video.MediaContext ForSource(Video.MediaContext ctx, string? url) =>
+        string.IsNullOrEmpty(ctx.Cookies) || ctx.CookieAppliesTo(HostOf(url)) ? ctx : ctx with { Cookies = null, CookieHost = null };
+
+    private static readonly System.Text.RegularExpressions.Regex UrlRx = new(@"https?://[^\s'""<>]+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Günlüğe yazılacak serbest metindeki (hata iletisi, yt-dlp çıktısı) URL'ler host+yola indirilir: imza/token/sorgu yazılmaz.</summary>
+    public static string Scrub(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "-";
+        var s = UrlRx.Replace(text, m => Util.MediaLog.Sanitize(m.Value)).Replace('\r', ' ').Replace('\n', ' ');
+        return s.Length > 300 ? s[..299] + "…" : s;
     }
 }

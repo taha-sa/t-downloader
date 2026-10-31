@@ -187,7 +187,7 @@ public sealed class MainForm : Form
             new ToolStripSeparator(),
             Mi("&Tarayıcı eklentisi klasörünü aç", OpenExtensionFolder, Keys.None, "addon"),
             new ToolStripSeparator(),
-            Mi("Çı&kış", ExitApp),
+            Mi("Çı&kış", ExitAppByUser),
         });
 
         var file = new ToolStripMenuItem("&Dosya");
@@ -383,7 +383,7 @@ public sealed class MainForm : Form
         m.Items.Add(Mi("&URL Ekle...", () => { ShowMain(); AddUrl(); }, Keys.None, "add"));
         m.Items.Add(Mi("&Tümünü Durdur", _mgr.PauseAll, Keys.None, "stopall"));
         m.Items.Add(new ToolStripSeparator());
-        m.Items.Add(Mi("Çı&kış", ExitApp));
+        m.Items.Add(Mi("Çı&kış", ExitAppByUser));
         var n = new NotifyIcon { Icon = Icons.TrayIcon(), Text = "T-Downloader", ContextMenuStrip = m, Visible = true };
         n.DoubleClick += (_, _) => ShowMain();
         return n;
@@ -478,7 +478,8 @@ public sealed class MainForm : Form
         Set(0, it.FileName);
         Set(1, it.Status is DownloadStatus.Queued or DownloadStatus.Downloading ? "•" : "");
         Set(2, it.TotalSize > 0 ? Fmt.Size(it.TotalSize) : "");
-        Set(3, StatusText(it, true));
+        // Birleştirme/dönüştürme aşaması ("Birleştiriliyor %40") varsa yüzde yerine o gösterilir (A14).
+        Set(3, active && p?.Phase is { Length: > 0 } phase ? phase : StatusText(it, true));
         // Hız / kalan süre metni satır başına en fazla saniyede 1 güncellenir; yüzde/boyut her turda.
         if (!active) { _textGates.Remove(it.Id); Set(4, ""); Set(5, ""); }
         else
@@ -620,38 +621,34 @@ public sealed class MainForm : Form
     /// Tarayıcı/video/pano/URL Ekle yolu: "Dosya İndirme Bilgisi" penceresi açılır; kullanıcı onaylamadan indirme başlamaz.
     /// true = eklendi (başlat veya daha sonra), false = iptal. UI thread dışından da çağrılabilir.
     /// </summary>
-    // Aynı bağlantı için bekleyen/az önce sorulmuş pencere varsa ikincisi açılmaz (tarayıcı tekrar gönderebilir).
-    private readonly Dictionary<string, DateTime> _recentPrompts = new(StringComparer.Ordinal);
-    private static readonly TimeSpan PromptDedupWindow = TimeSpan.FromSeconds(15);
+    // Aynı bağlantı için BEKLEYEN/AÇIK pencere varsa ikincisi açılmaz (tarayıcı tekrar gönderebilir). Tekilleştirme durumla yapılır
+    // (kuyruk ne kadar uzun olursa olsun); pencere İptal ile kapanınca talep hemen bırakılır: aynı bağlantıya tekrar tıklanınca yeniden sorulur (A4).
+    private readonly PromptClaims _claims = new();
 
-    private bool TryClaimPrompt(string url)
-    {
-        lock (_recentPrompts)
-        {
-            var now = DateTime.UtcNow;
-            foreach (var k in _recentPrompts.Where(p => now - p.Value > PromptDedupWindow).Select(p => p.Key).ToList())
-                _recentPrompts.Remove(k);
-            if (_recentPrompts.ContainsKey(url)) return false;
-            _recentPrompts[url] = now;
-            BoundedDictionary.TrimOldest(_recentPrompts, 500, v => v);   // sınırsız büyümesin
-            return true;
-        }
-    }
+    /// <summary>Onay bekleyen/açık indirme penceresi sayısı (çıkışta uyarı için).</summary>
+    public int PendingPromptCount => _claims.ActiveCount;
 
     public async Task<bool> PromptDownloadAsync(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize, bool force = false)
     {
         if (!IsHttp(url)) return false;
-        if (!force && !TryClaimPrompt(url)) return false;
-        return await RunPromptAsync(() =>
+        bool claimed = false;
+        if (!force) { if (!_claims.TryClaim(url)) return false; claimed = true; }
+        bool added = false;
+        try
         {
-            if (!force && !_mgr.Settings.ShowFileInfoOnCapture)
+            added = await RunPromptAsync(() =>
             {
-                var item = _mgr.Add(new AddDownloadRequest(url, fileName, null, referrer, cookies, userAgent, null, fileSize, true));
-                OpenProgress(item);
-                return true;
-            }
-            return ShowFileInfo(url, referrer, cookies, userAgent, fileName, fileSize);
-        });
+                if (!force && !_mgr.Settings.ShowFileInfoOnCapture)
+                {
+                    var item = _mgr.Add(new AddDownloadRequest(url, fileName, null, referrer, cookies, userAgent, null, fileSize, true));
+                    OpenProgress(item);
+                    return true;
+                }
+                return ShowFileInfo(url, referrer, cookies, userAgent, fileName, fileSize);
+            });
+            return added;
+        }
+        finally { if (claimed) _claims.Complete(url, added); }
     }
 
     /// <summary>yt-dlp (External) indirmesi: kalite seçildikten sonra aynı pencereyi gösterir.</summary>
@@ -666,7 +663,7 @@ public sealed class MainForm : Form
             if (r is not (DialogResult.Yes or DialogResult.No)) return false;
             try
             {
-                _mgr.AddExternal(new AddExternalRequest(dlg.Url, dlg.FileName, opt.Format, dlg.SaveFolder, referer, dlg.Description, dlg.StartNow, ctx?.Cookies, ctx?.UserAgent, ctx?.EffectiveOrigin));
+                _mgr.AddExternal(new AddExternalRequest(dlg.Url, dlg.FileName, opt.Format, dlg.SaveFolder, referer, dlg.Description, dlg.StartNow, ctx?.Cookies, ctx?.UserAgent, ctx?.EffectiveOrigin, ctx?.CookieHost));
                 return true;
             }
             catch (ArgumentException ex)
@@ -751,29 +748,20 @@ public sealed class MainForm : Form
             var targets = sel.Select(i => (i.Id, Path: i.SavePath)).ToList();
             long total = await Task.Run(() => DiskDeletePlan.TotalExistingSize(targets.Select(t => t.Path)));
             if (MessageBox.Show(this, DiskDeletePlan.ConfirmText(targets.Count, total), "Diskten Sil", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-            int failed = 0; string? firstError = null;
+            int failed = 0, skipped = 0; string? firstError = null;
+            var owner = Handle;
             foreach (var (id, path) in targets)
             {
                 await _mgr.RemoveAsync(id, false);   // süren indirmeyi durdurur, geçici parçaları temizler
                 if (string.IsNullOrEmpty(path)) continue;
-                var err = await Task.Run(() => RecycleFile(path));
-                if (err != null) { failed++; firstError ??= err; }
+                var res = await Task.Run(() => (Outcome: RecycleBin.Send(path, owner, out var err), Err: err));
+                if (res.Outcome == RecycleOutcome.Failed) { failed++; firstError ??= res.Err; }
+                else if (res.Outcome == RecycleOutcome.Skipped) skipped++;
             }
+            if (skipped > 0) MessageBox.Show(this, DiskDeletePlan.SkippedSummary(skipped), "Diskten Sil", MessageBoxButtons.OK, MessageBoxIcon.Information);
             if (failed > 0) MessageBox.Show(this, DiskDeletePlan.ErrorSummary(failed, firstError), "Diskten Sil", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally { _diskDeleting = false; }
-    }
-
-    /// <summary>Dosya yoksa sessizce geçer; başarısızlıkta hata metnini döner.</summary>
-    private static string? RecycleFile(string path)
-    {
-        try
-        {
-            if (!File.Exists(path)) return null;
-            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-            return null;
-        }
-        catch (Exception ex) { return ex.Message; }
     }
 
     private async void DeleteCompleted()
@@ -918,6 +906,15 @@ public sealed class MainForm : Form
     {
         _exiting = true;
         Close();
+    }
+
+    /// <summary>Kullanıcı çıkışı: onay bekleyen tarayıcı indirmeleri varsa uyarır (tarayıcı kopyası zaten silindi; çıkışta bu istekler kaybolur) (A13).</summary>
+    private void ExitAppByUser()
+    {
+        int n = PendingPromptCount;
+        if (n > 0 && MessageBox.Show(this, $"{n} indirme onay penceresi bekliyor. Şimdi çıkarsanız bu indirmeler kaybolur (tarayıcı kopyaları silinmişti).\n\nYine de çıkılsın mı?",
+                "Çıkış", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        ExitApp();
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)

@@ -51,7 +51,7 @@ public interface IAppServices
     Task SendToExtensionAsync(IpcMessage message);
     /// <summary>"Dosya İndirme Bilgisi" penceresini açar; kullanıcı kabul ederse indirmeyi ekler ve true döner.</summary>
     Task<bool> PromptDownloadAsync(string url, string? referrer = null, string? cookies = null, string? userAgent = null,
-        string? fileName = null, long fileSize = -1);
+        string? fileName = null, long fileSize = -1, bool force = false);
     /// <summary>yt-dlp kalite seçimi sonrası aynı pencereyi açar; onaylanırsa External indirme ekler.</summary>
     Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option, TDownloader.Core.Video.MediaContext? ctx = null);
 }
@@ -70,8 +70,8 @@ public sealed class AppServices : IAppServices
     public Task SendToExtensionAsync(IpcMessage message) => Ipc?.BroadcastAsync(message) ?? Task.CompletedTask;
 
     public Task<bool> PromptDownloadAsync(string url, string? referrer = null, string? cookies = null, string? userAgent = null,
-        string? fileName = null, long fileSize = -1)
-        => Main?.PromptDownloadAsync(url, referrer, cookies, userAgent, fileName, fileSize) ?? Task.FromResult(false);
+        string? fileName = null, long fileSize = -1, bool force = false)
+        => Main?.PromptDownloadAsync(url, referrer, cookies, userAgent, fileName, fileSize, force) ?? Task.FromResult(false);
 
     public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option, TDownloader.Core.Video.MediaContext? ctx = null)
         => Main?.PromptExternalAsync(source, referer, title, option, ctx) ?? Task.FromResult(false);

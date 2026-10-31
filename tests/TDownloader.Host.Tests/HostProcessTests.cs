@@ -133,6 +133,67 @@ public class HostProcessTests
         finally { try { Directory.Delete(dir, true); } catch { } }
     }
 
+    private static string MakeFakeApp(out string dir, out string marker)
+    {
+        dir = Path.Combine(Path.GetTempPath(), "tdl-fakeapp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        marker = Path.Combine(dir, "launched.txt");
+        var fake = Path.Combine(dir, "FakeApp.cmd");
+        File.WriteAllText(fake, $"@echo %* > \"{marker}\"\r\n");
+        return fake;
+    }
+
+    [Fact]
+    public async Task NoApp_PingMediaTabClosedEtc_NeverLaunchApp()
+    {
+        // A5: kullanıcı tepsiden "Çıkış" yaptıktan sonra sekme kapatmak / video sayfası açmak App'i geri getirmemeli.
+        var pipe = "TDownloader.Ipc.Test." + Guid.NewGuid().ToString("N");
+        var fake = MakeFakeApp(out var dir, out var marker);
+        try
+        {
+            using var host = new HostProc(pipe, fake, startTimeoutMs: 800);
+            await host.Send(new PingMessage());
+            await host.Send(new MediaMessage(1, 0, "https://p/", "T", new()));
+            await host.Send(new TabClosedMessage(1));
+            await host.Send(new QualitiesCancelMessage("q1"));
+            await host.Send(new QualitySelectMessage("s", 0));
+            await host.Send(new VideoGeometryMessage(1, 1, true, false, new(0, 0, 1, 1), 1, new(1, 1), new(0, 0, 1, 1), null, null));
+
+            // Host hepsini işledi (günlükte 6 "düşürüldü") ve App başlatılmadı.
+            Assert.True(SpinWait.SpinUntil(() => File.Exists(host.LogPath) && SafeRead(host.LogPath).Split("düşürüldü").Length - 1 >= 6, 10000),
+                "Host mesajları işlemedi: " + SafeRead(host.LogPath));
+            await Task.Delay(700);
+            Assert.False(File.Exists(marker), "Kullanıcı eylemi olmayan mesaj App'i başlattı.");
+            Assert.DoesNotContain("App başlatılıyor", SafeRead(host.LogPath));
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
+    [Fact]
+    public async Task NoApp_Qualities_LaunchesApp_AndAnswersImmediatelyWithError()
+    {
+        // A6: App'e ulaşılamazsa düğme menüsü 100 sn beklemesin; A5: qualities kullanıcı eylemidir, App başlatılır.
+        var pipe = "TDownloader.Ipc.Test." + Guid.NewGuid().ToString("N");
+        var fake = MakeFakeApp(out var dir, out var marker);
+        try
+        {
+            using var host = new HostProc(pipe, fake, startTimeoutMs: 800);
+            await host.Send(new QualitiesMessage("rq1", 3, 0, "https://p/", "T", null, null));
+            var reply = Assert.IsType<QualitiesResultMessage>(await host.Receive(8000));
+            Assert.Equal("rq1", reply.RequestId);
+            Assert.False(reply.Ok);
+            Assert.False(string.IsNullOrWhiteSpace(reply.Error));
+            Assert.True(SpinWait.SpinUntil(() => File.Exists(marker), 5000), "qualities App'i başlatmadı.");
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
+    private static string SafeRead(string path)
+    {
+        try { using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); using var r = new StreamReader(fs); return r.ReadToEnd(); }
+        catch (IOException) { return ""; }
+    }
+
     [Fact]
     public async Task NoApp_MissingExe_DoesNotHang_RejectsDownload()
     {

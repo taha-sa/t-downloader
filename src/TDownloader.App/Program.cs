@@ -25,7 +25,7 @@ internal static class Program
                 try { using var ev = EventWaitHandle.OpenExisting(ShowEventName); ev.Set(); } catch (Exception) { }
 
                 // Kullanıcıya "zaten açık" uyarısı (görünmez TopMost sahip form ile en üstte).
-                Application.EnableVisualStyles();
+                ApplicationConfiguration.Initialize();   // yüksek DPI + görsel stiller (ana yolla aynı) (A28)
                 using var owner = new Form
                 {
                     TopMost = true,

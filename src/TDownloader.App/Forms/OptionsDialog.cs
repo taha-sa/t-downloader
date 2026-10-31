@@ -190,9 +190,10 @@ public sealed class OptionsDialog : DluForm
         _s.MaxConcurrentDownloads = (int)_concurrent.Value;
         _s.SpeedLimitKBps = (int)_limit.Value;
         if (!string.IsNullOrWhiteSpace(_root.Text)) _s.SaveFolder = _root.Text.Trim();
-        _s.CategoryFolders = new();
+        var catFolders = new Dictionary<string, string>();   // doldurulup sonra atanır: canlı ayar nesnesi yarım durumda görünmez (A26)
         foreach (ListViewItem li in _cats.Items)
-            if (!string.IsNullOrWhiteSpace(li.SubItems[1].Text)) _s.CategoryFolders[li.Text] = li.SubItems[1].Text;
+            if (!string.IsNullOrWhiteSpace(li.SubItems[1].Text)) catFolders[li.Text] = li.SubItems[1].Text;
+        _s.CategoryFolders = catFolders;
         _s.BrowserCaptureEnabled = _capture.Checked;
         _s.MinFileSizeKb = (int)_minKb.Value;
         _s.FileTypes = _types.Text.Split(new[] { ' ', ',', ';', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)

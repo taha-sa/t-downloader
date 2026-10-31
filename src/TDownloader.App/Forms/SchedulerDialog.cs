@@ -75,7 +75,7 @@ public sealed class SchedulerDialog : DluForm
     {
         var sc = _s.Scheduler;
         sc.Enabled = _enable.Checked;
-        sc.StartTime = _time.Value.ToString("HH:mm");
+        sc.StartTime = _time.Value.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
         sc.Days = DayList.Where((d, i) => _days[i].Checked).Select(d => d.Dow).ToList();
         sc.OnFinished = _finish.SelectedIndex switch { 2 => "exit", 1 => "notify", _ => "none" };
         _apply(_s);

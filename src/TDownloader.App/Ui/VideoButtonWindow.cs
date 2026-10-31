@@ -242,7 +242,7 @@ public sealed class VideoButtonWindow : Form
             using (var br = new LinearGradientBrush(new RectangleF(0, 0, L.W, L.H), top, bottom, LinearGradientMode.Vertical))
                 g.FillPath(br, path);
             // sağ bölüm ("?" ve "X") hafif koyu zemin
-            var clip = g.Clip;
+            using var clip = g.Clip;
             g.SetClip(new RectangleF(L.DividerX, 0, L.W - L.DividerX, L.H));
             using (var br = new SolidBrush(Color.FromArgb(0xB0, Theme.Black))) g.FillPath(br, path);
             g.Clip = clip;

@@ -51,9 +51,13 @@ public sealed record VideoGeometryMessage(
     int TabId, int WindowId, bool Visible, bool Fullscreen, RectInfo Rect, double DevicePixelRatio,
     SizeInfo Viewport, WindowRectInfo BrowserWindow, string? PageUrl, string? PageTitle) : IpcMessage;
 
-/// <summary>Sayfa içi düğme kalite listesi ister (eklenti -> App). Src: videonun currentSrc'si (http/https ise).</summary>
+/// <summary>
+/// Sayfa içi düğme kalite listesi ister (eklenti -> App). Src: videonun currentSrc'si (http/https ise).
+/// Cookies: origin -> çerez başlığı; her çerez o origin'in kendi adresi için okunmuştur. CookieHosts: origin -> çerezin okunduğu host.
+/// App çerezi YALNIZCA o host'a (ve alt alan adlarına) gönderir; oynatıcı (Players) adresleri için çerez okunmaz.
+/// </summary>
 public sealed record QualitiesMessage(string RequestId, int TabId, int FrameId, string? PageUrl, string? PageTitle, string? FrameUrl, string? Src,
-    List<PlayerSource>? Players = null, Dictionary<string, string>? Cookies = null) : IpcMessage;
+    List<PlayerSource>? Players = null, Dictionary<string, string>? Cookies = null, Dictionary<string, string>? CookieHosts = null) : IpcMessage;
 
 /// <summary>Kalite listesi isteğini iptal eder (menü kapandı/sekme değişti); App yt-dlp sürecini öldürür (eklenti -> App).</summary>
 public sealed record QualitiesCancelMessage(string RequestId) : IpcMessage;

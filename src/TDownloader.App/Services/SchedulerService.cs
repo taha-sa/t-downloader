@@ -29,7 +29,7 @@ public sealed class SchedulerService : IDisposable
     {
         var s = _svc.Settings.Scheduler;
         var now = nowOverride ?? DateTime.Now;
-        if (s.Enabled && TimeSpan.TryParse(s.StartTime, out var t) && s.Days.Contains((int)now.DayOfWeek)
+        if (s.Enabled && TimeSpan.TryParse(s.StartTime, System.Globalization.CultureInfo.InvariantCulture, out var t) && s.Days.Contains((int)now.DayOfWeek)
             && now.Hour == t.Hours && now.Minute == t.Minutes)
         {
             var key = now.ToString("yyyyMMddHHmm");
