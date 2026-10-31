@@ -179,7 +179,7 @@ public class HlsClientTests : IDisposable
     public HlsClientTests() { Directory.CreateDirectory(_tmp); }
     public void Dispose() { _s.Dispose(); try { Directory.Delete(_tmp, true); } catch { } }
 
-    private static readonly MediaContext Ctx = new("https://player.film.test/embed/42", null, "sid=abc", "TestUA/9");
+    private static readonly MediaContext Ctx = new("https://player.film.test/embed/42", null, "sid=abc", "TestUA/9", "127.0.0.1");
 
     private void Variant(string path, byte[][] segs, string? keyLine = null, string? absHost = null)
     {
@@ -348,7 +348,10 @@ public class YtDlpContextArgsTests
         var a = YtDlpClient.BuildDownloadArgs("https://cdn.test/m.m3u8", "best", @"C:\o\a.%(ext)s", null, null, ctx);
         Assert.Equal("https://player.film.test/embed/1", a[a.IndexOf("--referer") + 1]);
         Assert.Contains("Origin:https://player.film.test", a);
-        Assert.Contains("Cookie:a=1; b=2", a);
+        Assert.DoesNotContain(a, x => x.Contains("a=1"));              // çerez komut satırında YOK (C8)
+        Assert.DoesNotContain("--add-header", a.Where(x => x.StartsWith("Cookie", StringComparison.OrdinalIgnoreCase)));
+        var withJar = YtDlpClient.BuildDownloadArgs("https://cdn.test/m.m3u8", "best", "o", null, null, ctx, false, @"C:	\ck.txt");
+        Assert.Equal(@"C:	\ck.txt", withJar[withJar.IndexOf("--cookies") + 1]);
         Assert.Equal("UA/1", a[a.IndexOf("--user-agent") + 1]);
         Assert.Contains("--concurrent-fragments", a); Assert.Contains("--retries", a);
         Assert.Equal("--", a[^2]); Assert.Equal("https://cdn.test/m.m3u8", a[^1]);

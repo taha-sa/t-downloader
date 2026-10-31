@@ -25,6 +25,8 @@ public sealed class DownloadItem
     public string? Referrer { get; set; }
     /// <summary>Yalnızca bellekte tutulur; downloads.json'a YAZILMAZ (oturum çerezleri diske düşmesin).</summary>
     [JsonIgnore] public string? Cookie { get; set; }
+    /// <summary>Çerezin alındığı host; yalnızca bu host'a (ve alt alanlarına) çerez gönderilir. Kalıcı yazılmaz.</summary>
+    [JsonIgnore] public string? CookieHost { get; set; }
     public string? UserAgent { get; set; }
     /// <summary>Akış istekleri için Origin başlığı (iframe oynatıcı sayfasının origin'i); yoksa Referrer'dan türetilir.</summary>
     public string? Origin { get; set; }

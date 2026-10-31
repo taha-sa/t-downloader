@@ -14,7 +14,7 @@ public sealed class VideoRunner : IExternalRunner
 
     public VideoRunner(YtDlpClient yt, HlsClient? hls = null) { _yt = yt; _hls = hls ?? new HlsClient(); }
 
-    public static MediaContext ContextOf(DownloadItem item) => new(item.Referrer, item.Origin, item.Cookie, item.UserAgent);
+    public static MediaContext ContextOf(DownloadItem item) => new(item.Referrer, item.Origin, item.Cookie, item.UserAgent, item.CookieHost);
 
     public async Task<ExternalResult> RunAsync(DownloadItem item, Action<ExternalProgress> report, CancellationToken ct)
     {
@@ -52,7 +52,7 @@ public sealed class VideoRunner : IExternalRunner
         var fallback = new DownloadItem
         {
             Id = item.Id, Url = item.Url, SavePath = item.SavePath, Referrer = item.Referrer, Origin = item.Origin,
-            Cookie = item.Cookie, UserAgent = item.UserAgent, Kind = DownloadKind.External,
+            Cookie = item.Cookie, CookieHost = item.CookieHost, UserAgent = item.UserAgent, Kind = DownloadKind.External,
             ExternalFormat = height > 0 ? $"bv*[height<={height}]+ba/b[height<={height}]/b" : "bv*+ba/b",
         };
         var res = await _yt.RunAsync(fallback, report, ct).ConfigureAwait(false);

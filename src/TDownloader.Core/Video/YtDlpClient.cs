@@ -36,25 +36,26 @@ public sealed class YtDlpClient : IExternalRunner
     // ---------------------------------------------------------------- argümanlar (test edilebilir)
 
     /// <summary>Referer/Origin/Cookie/User-Agent'ı yt-dlp bağımsız değişkenlerine çevirir (OpenDM'deki http_headers karşılığı).</summary>
-    public static void AddContextArgs(List<string> a, string? referer, MediaContext? ctx)
+    public static void AddContextArgs(List<string> a, string? referer, MediaContext? ctx, string? cookieFile = null)
     {
         string? refr = !string.IsNullOrWhiteSpace(ctx?.Referer) ? ctx!.Referer : referer;
         if (!string.IsNullOrWhiteSpace(refr)) { a.Add("--referer"); a.Add(refr); }
         var origin = ctx != null ? ctx.EffectiveOrigin : (Uri.TryCreate(referer, UriKind.Absolute, out var u) ? u.GetLeftPart(UriPartial.Authority) : null);
         if (!string.IsNullOrWhiteSpace(origin)) { a.Add("--add-header"); a.Add("Origin:" + origin); }
-        if (!string.IsNullOrWhiteSpace(ctx?.Cookies)) { a.Add("--add-header"); a.Add("Cookie:" + ctx!.Cookies); }
+        // Çerez ASLA komut satırında taşınmaz (süreç listesinde görünür): geçici Netscape dosyası (<see cref="CookieJarFile"/>).
+        if (!string.IsNullOrWhiteSpace(cookieFile)) { a.Add("--cookies"); a.Add(cookieFile); }
         if (!string.IsNullOrWhiteSpace(ctx?.UserAgent)) { a.Add("--user-agent"); a.Add(ctx!.UserAgent); }
     }
 
-    public static List<string> BuildInfoArgs(string url, string? referer, MediaContext? ctx = null)
+    public static List<string> BuildInfoArgs(string url, string? referer, MediaContext? ctx = null, string? cookieFile = null)
     {
         var a = new List<string> { "-J", "--no-playlist", "--no-warnings", "--no-colors", "--socket-timeout", "20", "--retries", "3" };
-        AddContextArgs(a, referer, ctx);
+        AddContextArgs(a, referer, ctx, cookieFile);
         a.Add("--"); a.Add(url);
         return a;
     }
 
-    public static List<string> BuildDownloadArgs(string url, string format, string outputTemplate, string? referer, string? ffmpeg, MediaContext? ctx = null, bool progressDelta = false)
+    public static List<string> BuildDownloadArgs(string url, string format, string outputTemplate, string? referer, string? ffmpeg, MediaContext? ctx = null, bool progressDelta = false, string? cookieFile = null)
     {
         var a = new List<string>
         {
@@ -66,7 +67,7 @@ public sealed class YtDlpClient : IExternalRunner
         a.AddRange(new[] { "--retries", "10", "--fragment-retries", "10", "--concurrent-fragments", "4", "--socket-timeout", "30" });
         if (progressDelta) { a.Add("--progress-delta"); a.Add("0.25"); }
         if (!string.IsNullOrWhiteSpace(ffmpeg)) { a.Add("--ffmpeg-location"); a.Add(ffmpeg); }
-        AddContextArgs(a, referer, ctx);
+        AddContextArgs(a, referer, ctx, cookieFile);
         a.Add("--"); a.Add(url);
         return a;
     }
@@ -90,7 +91,8 @@ public sealed class YtDlpClient : IExternalRunner
     public async Task<VideoInfo> GetInfoAsync(string url, string? referer, CancellationToken ct = default, MediaContext? ctx = null)
     {
         var exe = FindYtDlp() ?? throw new YtDlpNotFoundException();
-        using var p = new Process { StartInfo = Psi(exe, BuildInfoArgs(url, referer, ctx)) };
+        using var jar = CookieJarFile.Create(ctx);   // iş bitince silinir
+        using var p = new Process { StartInfo = Psi(exe, BuildInfoArgs(url, referer, ctx, jar?.Path)) };
         try { p.Start(); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         { throw new YtDlpException("yt-dlp başlatılamadı: " + ex.Message); }
@@ -123,7 +125,9 @@ public sealed class YtDlpClient : IExternalRunner
         var dir = Path.GetDirectoryName(item.SavePath)!;
         Directory.CreateDirectory(dir);
         string template = Path.Combine(dir, Path.GetFileNameWithoutExtension(item.SavePath)) + ".%(ext)s";
-        var args = BuildDownloadArgs(item.Url, item.ExternalFormat ?? "bv*+ba/b", template, item.Referrer, FindFfmpeg(), VideoRunner.ContextOf(item), SupportsProgressDelta(exe));
+        var mctx = VideoRunner.ContextOf(item);
+        using var jar = CookieJarFile.Create(mctx);   // iş bitince silinir
+        var args = BuildDownloadArgs(item.Url, item.ExternalFormat ?? "bv*+ba/b", template, item.Referrer, FindFfmpeg(), mctx, SupportsProgressDelta(exe), jar?.Path);
         using var p = new Process { StartInfo = Psi(exe, args) };
         var err = new StringBuilder();
         string? finalPath = null;

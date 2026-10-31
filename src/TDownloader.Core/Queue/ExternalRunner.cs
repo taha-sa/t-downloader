@@ -23,4 +23,5 @@ public sealed record AddExternalRequest(
     bool StartNow = true,
     string? Cookie = null,
     string? UserAgent = null,
-    string? Origin = null);
+    string? Origin = null,
+    string? CookieHost = null);

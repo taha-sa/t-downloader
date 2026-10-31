@@ -72,3 +72,94 @@ public class HlsCoreFixTests : IDisposable
         Assert.True(Directory.GetFiles(work, "*.seg").Length > 0, "inmiş parçalar korunmalı");
     }
 }
+
+/// <summary>A1 (Core) / C8: çerez yalnızca çerezin alındığı host'a gider; yt-dlp'ye geçici dosyayla verilir.</summary>
+public class CookieScopeTests : IDisposable
+{
+    private readonly HlsTestServer _s = new();
+    private readonly string _tmp = Path.Combine(Path.GetTempPath(), "tdl-ck-" + Guid.NewGuid().ToString("N")[..8]);
+    public CookieScopeTests() { Directory.CreateDirectory(_tmp); }
+    public void Dispose() { _s.Dispose(); try { Directory.Delete(_tmp, true); } catch { } }
+
+    [Theory]
+    [InlineData("film.test", "film.test", true)]
+    [InlineData("film.test", "cdn.film.test", true)]
+    [InlineData(".film.test", "FILM.test", true)]
+    [InlineData("film.test", "evilfilm.test", false)]
+    [InlineData("film.test", "film.test.evil.com", false)]
+    [InlineData(null, "film.test", false)]
+    [InlineData("", "film.test", false)]
+    [InlineData("127.0.0.1", "127.0.0.1", true)]
+    public void CookieAppliesTo_DomainMatch(string? cookieHost, string reqHost, bool expected)
+    {
+        var ctx = new MediaContext(null, null, "sid=1", null, cookieHost);
+        Assert.Equal(expected, ctx.CookieAppliesTo(reqHost));
+        using var req = new HttpRequestMessage(HttpMethod.Get, "http://" + reqHost + "/x");
+        ctx.Apply(req);
+        Assert.Equal(expected, req.Headers.Contains("Cookie"));
+    }
+
+    private void PublishWithKey(string dir)
+    {
+        // Parçalar ve anahtar localhost (başka host) adresinde; playlist 127.0.0.1'de.
+        var sb = new StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n");
+        var key = new byte[16];
+        _s.Bin($"/{dir}/key.bin", key, "application/octet-stream");
+        sb.Append($"#EXT-X-KEY:METHOD=AES-128,URI=\"{_s.AltBase}/{dir}/key.bin\"\n");
+        for (int i = 0; i < 3; i++)
+        {
+            using var aes = System.Security.Cryptography.Aes.Create(); aes.Key = key;
+            _s.Bin($"/{dir}/s{i}.ts", aes.EncryptCbc(HlsTestServer.Ts(20, i + 1), HlsClient.SequenceIv(i), System.Security.Cryptography.PaddingMode.PKCS7));
+            sb.Append("#EXTINF:4.0,\n").Append($"{_s.AltBase}/{dir}/s{i}.ts\n");
+        }
+        sb.Append("#EXT-X-ENDLIST\n");
+        _s.Text($"/{dir}/index.m3u8", sb.ToString());
+    }
+
+    private async Task Run(string dir, string? cookieHost)
+    {
+        PublishWithKey(dir);
+        var ctx = new MediaContext(null, null, "sid=abc", null, cookieHost);
+        await new HlsClient().DownloadAsync($"{_s.Base}/{dir}/index.m3u8", null, ctx, Path.Combine(_tmp, dir, "f"),
+            new HlsClient.Options(null, WorkDir: Path.Combine(_tmp, "w-" + dir)), _ => { }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task SegmentAndKeyOnOtherHost_GetNoCookie_SameHostGetsIt()
+    {
+        await Run("c1", "127.0.0.1");
+        lock (_s.Log)
+        {
+            Assert.All(_s.Log.Where(e => e.Host == "127.0.0.1"), e => Assert.Equal("sid=abc", e.Cookie));          // playlist: aynı host
+            var other = _s.Log.Where(e => e.Host == "localhost").ToList();
+            Assert.Contains(other, e => e.Path.EndsWith("key.bin"));
+            Assert.Contains(other, e => e.Path.EndsWith(".ts"));
+            Assert.All(other, e => Assert.Null(e.Cookie));                                                          // anahtar + parça: başka host
+        }
+    }
+
+    [Fact]
+    public async Task EmptyCookieHost_NeverSendsCookie()
+    {
+        await Run("c2", null);
+        lock (_s.Log) Assert.All(_s.Log, e => Assert.Null(e.Cookie));
+    }
+
+    [Fact]
+    public void CookieJarFile_NetscapeFormat_OnlyWithHost_AndDeletedOnDispose()
+    {
+        Assert.Null(CookieJarFile.Create(new MediaContext(null, null, "a=1", null, null)));
+        Assert.Null(CookieJarFile.Create(new MediaContext(null, null, null, null, "film.test")));
+        string path;
+        using (var jar = CookieJarFile.Create(new MediaContext(null, null, "a=1; b=x y", null, "film.test"))!)
+        {
+            path = jar.Path;
+            Assert.StartsWith(Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), path);
+            var lines = File.ReadAllLines(path);
+            Assert.Equal("# Netscape HTTP Cookie File", lines[0]);
+            Assert.Equal(".film.test\tTRUE\t/\tFALSE\t2147483647\ta\t1", lines[1]);
+            Assert.Equal(".film.test\tTRUE\t/\tFALSE\t2147483647\tb\tx y", lines[2]);
+        }
+        Assert.False(File.Exists(path));
+    }
+}

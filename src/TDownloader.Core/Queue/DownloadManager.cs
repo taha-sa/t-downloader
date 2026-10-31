@@ -197,7 +197,7 @@ public sealed class DownloadManager : IAsyncDisposable
         {
             Url = req.Url, FileName = name, Category = category, Referrer = req.Referrer, Description = req.Description,
             Kind = DownloadKind.External, ExternalFormat = req.Format, Status = DownloadStatus.Paused,
-            Cookie = req.Cookie, UserAgent = req.UserAgent, Origin = req.Origin,
+            Cookie = req.Cookie, CookieHost = req.CookieHost, UserAgent = req.UserAgent, Origin = req.Origin,
         };
         lock (_gate)
         {

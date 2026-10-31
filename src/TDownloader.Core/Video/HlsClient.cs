@@ -66,7 +66,7 @@ public sealed class HlsClient
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            ctx.Apply(req, new Uri(url).Host);
+            ctx.Apply(req);
             using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) throw new HlsException($"Sunucu playlist'i vermedi (HTTP {(int)resp.StatusCode}).", false, (int)resp.StatusCode);
             var bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
@@ -135,7 +135,7 @@ public sealed class HlsClient
         cts.CancelAfter(TimeSpan.FromSeconds(8));
         using (var head = new HttpRequestMessage(HttpMethod.Head, url))
         {
-            ctx.Apply(head, new Uri(url).Host);
+            ctx.Apply(head);
             try
             {
                 using var r = await _http.SendAsync(head, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
@@ -144,7 +144,7 @@ public sealed class HlsClient
             catch (HttpRequestException) { }
         }
         using var get = new HttpRequestMessage(HttpMethod.Get, url);
-        ctx.Apply(get, new Uri(url).Host);
+        ctx.Apply(get);
         get.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
         using var resp = await _http.SendAsync(get, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode) return -1;
@@ -523,7 +523,7 @@ public sealed class HlsClient
 
         var keyCache = new Dictionary<string, byte[]>();
         var keyLock = new SemaphoreSlim(1, 1);
-        string cookieHost = new Uri(mediaUrl).Host;
+        // Çerez sınırı ctx.CookieHost'tur (çerezin alındığı host); isteğin kendi host'undan türetilmez.
 
         // Parça adresleri imzalı olabilir: 401/403'te playlist yenilenir, yeni adresler bu dizide durur.
         var segs = media.Segments.ToArray();
@@ -561,7 +561,7 @@ public sealed class HlsClient
                 string cacheFile = Path.Combine(workDir, "key-" + HlsStateStore.ShortHash(uri) + ".key");
                 try
                 {
-                    k = await FetchBytesAsync(uri, ctx, cookieHost, 0, -1, opt, tk).ConfigureAwait(false);
+                    k = await FetchBytesAsync(uri, ctx, 0, -1, opt, tk).ConfigureAwait(false);
                     if (k.Length != 16) throw new HlsException("AES anahtarı geçersiz (" + k.Length + " bayt).");
                     if (opt.WorkDir != null) { try { File.WriteAllBytes(cacheFile, k); } catch (IOException) { } }
                 }
@@ -576,7 +576,7 @@ public sealed class HlsClient
 
         async Task<byte[]> Fetch(HlsSegment s, CancellationToken tk, Action<long>? onBytes)
         {
-            var data = await FetchBytesAsync(s.Url, ctx, cookieHost, s.ByteOffset, s.ByteLength, opt, tk, onBytes).ConfigureAwait(false);
+            var data = await FetchBytesAsync(s.Url, ctx, s.ByteOffset, s.ByteLength, opt, tk, onBytes).ConfigureAwait(false);
             if (s.Key is { Method: "AES-128" } key && key.Uri != null)
             {
                 var k = await GetKey(key.Uri, tk).ConfigureAwait(false);
@@ -606,7 +606,7 @@ public sealed class HlsClient
         string initFile = Path.Combine(workDir, prefix + "init.map");
         if (media.Map != null && !(File.Exists(initFile) && new FileInfo(initFile).Length > 0))
         {
-            var init = await FetchBytesAsync(media.Map.Url, ctx, cookieHost, media.Map.ByteOffset, media.Map.ByteLength, opt, ct).ConfigureAwait(false);
+            var init = await FetchBytesAsync(media.Map.Url, ctx, media.Map.ByteOffset, media.Map.ByteLength, opt, ct).ConfigureAwait(false);
             await HlsStateStore.WriteAtomicAsync(initFile, init, ct).ConfigureAwait(false);
         }
 
@@ -723,7 +723,7 @@ public sealed class HlsClient
         await src.CopyToAsync(dest, 1 << 16, ct).ConfigureAwait(false);
     }
 
-    private async Task<byte[]> FetchBytesAsync(string url, MediaContext ctx, string cookieHost, long offset, long length, Options opt, CancellationToken ct, Action<long>? onBytes = null)
+    private async Task<byte[]> FetchBytesAsync(string url, MediaContext ctx, long offset, long length, Options opt, CancellationToken ct, Action<long>? onBytes = null)
     {
         int attempt = 0;
         var delay = opt.RetryDelay ?? TimeSpan.FromMilliseconds(500);
@@ -735,7 +735,7 @@ public sealed class HlsClient
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 cts.CancelAfter(TimeSpan.FromSeconds(60));
                 using var req = new HttpRequestMessage(HttpMethod.Get, url);
-                ctx.Apply(req, cookieHost);
+                ctx.Apply(req);
                 if (length > 0) req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(offset, offset + length - 1);
                 using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
