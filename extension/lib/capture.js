@@ -48,9 +48,24 @@ export async function sendDownload(info) {
 
 const safe = async (fn) => { try { await fn(); } catch { /* indirme zaten bitmiş olabilir */ } };
 
+// Tarayıcı açılışta geçmişi yüklerken onCreated eski indirmeler için de tetiklenebilir.
+// Yalnızca şu an başlayan indirmeler yakalanır; aynı indirme iki kez sorulmaz.
+const MAX_AGE_MS = 30 * 1000;
+const seen = new Set();
+export function isFreshDownload(item, now = Date.now()) {
+  if (item.state && item.state !== "in_progress") return false;
+  const started = Date.parse(item.startTime || "");
+  if (Number.isFinite(started) && now - started > MAX_AGE_MS) return false;
+  if (seen.has(item.id)) return false;
+  seen.add(item.id);
+  if (seen.size > 500) seen.delete(seen.values().next().value);
+  return true;
+}
+
 export async function onDownloadCreated(item) {
   const url = item.finalUrl || item.url || "";
   if (!url || NON_HTTP.test(url)) return;                 // blob:/data: -> tarayıcıda kalsın
+  if (!isFreshDownload(item)) return;                     // geçmişten gelen/tekrarlanan kayıt
   if (bypass.delete(item.url)) return;
   if (isAltActive()) return;                              // Alt basılı -> tarayıcıda kalsın
   await settings.ready;

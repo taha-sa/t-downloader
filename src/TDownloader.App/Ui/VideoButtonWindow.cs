@@ -148,7 +148,8 @@ public sealed class VideoButtonWindow : Form
     }
 
     /// <summary>Kompakt olmayan tam panel genişliği.</summary>
-    public int FullWidth => ComputeLayout(false).W;
+    private int _fullWidth = -1;
+    public int FullWidth => _fullWidth >= 0 ? _fullWidth : (_fullWidth = ComputeLayout(false).W);
 
     // ------------------------------------------------------------ çizim
 

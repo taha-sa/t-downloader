@@ -558,9 +558,27 @@ public sealed class MainForm : Form
     /// Tarayıcı/video/pano/URL Ekle yolu: "Dosya İndirme Bilgisi" penceresi açılır; kullanıcı onaylamadan indirme başlamaz.
     /// true = eklendi (başlat veya daha sonra), false = iptal. UI thread dışından da çağrılabilir.
     /// </summary>
+    // Aynı bağlantı için bekleyen/az önce sorulmuş pencere varsa ikincisi açılmaz (tarayıcı tekrar gönderebilir).
+    private readonly Dictionary<string, DateTime> _recentPrompts = new(StringComparer.Ordinal);
+    private static readonly TimeSpan PromptDedupWindow = TimeSpan.FromSeconds(15);
+
+    private bool TryClaimPrompt(string url)
+    {
+        lock (_recentPrompts)
+        {
+            var now = DateTime.UtcNow;
+            foreach (var k in _recentPrompts.Where(p => now - p.Value > PromptDedupWindow).Select(p => p.Key).ToList())
+                _recentPrompts.Remove(k);
+            if (_recentPrompts.ContainsKey(url)) return false;
+            _recentPrompts[url] = now;
+            return true;
+        }
+    }
+
     public async Task<bool> PromptDownloadAsync(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize, bool force = false)
     {
         if (!IsHttp(url)) return false;
+        if (!force && !TryClaimPrompt(url)) return false;
         return await RunPromptAsync(() =>
         {
             if (!force && !_mgr.Settings.ShowFileInfoOnCapture)

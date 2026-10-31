@@ -9,3 +9,4 @@ TestResults/
 *.pem
 dev-extension-key*
 dist/
+dist-new/

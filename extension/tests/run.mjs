@@ -110,7 +110,8 @@ await test("decideCapture", () => {
 
 // ---- yakalama akışı ----
 native.connect();
-const item = (o = {}) => ({ id: 7, url: "https://dl.test/f/setup.zip", finalUrl: "https://dl.test/f/setup.zip", referrer: "https://dl.test/", filename: "", mime: "application/zip", totalBytes: 2_000_000, ...o });
+let nextId = 7;
+const item = (o = {}) => ({ id: nextId++, url: "https://dl.test/f/setup.zip", finalUrl: "https://dl.test/f/setup.zip", referrer: "https://dl.test/", filename: "", mime: "application/zip", totalBytes: 2_000_000, ...o });
 
 await test("download kabul -> mesaj şeması, cancel+erase", async () => {
   sent.length = 0; calls.length = 0; hostBehavior = "accept";
@@ -132,6 +133,19 @@ await test("zaman aşımı -> resume", async () => {
   sent.length = 0; calls.length = 0; hostBehavior = "silent"; capture.opts.timeoutMs = 80;
   await capture.onDownloadCreated(item());
   assert.deepEqual(calls.map((c) => c[0]), ["pause", "resume"]);
+});
+await test("geçmişten gelen / tekrarlanan indirme -> dokunulmaz", async () => {
+  sent.length = 0; calls.length = 0; hostBehavior = "accept";
+  const old = new Date(Date.now() - 3600_000).toISOString();
+  await capture.onDownloadCreated(item({ state: "complete", startTime: old }));
+  await capture.onDownloadCreated(item({ state: "in_progress", startTime: old }));
+  await capture.onDownloadCreated(item({ state: "interrupted" }));
+  assert.equal(sent.filter((x) => x.type === "download").length, 0);
+  assert.equal(calls.length, 0);
+  const fresh = item({ state: "in_progress", startTime: new Date().toISOString() });
+  await capture.onDownloadCreated(fresh);
+  await capture.onDownloadCreated(fresh);               // aynı id ikinci kez
+  assert.equal(sent.filter((x) => x.type === "download").length, 1);
 });
 await test("blob:/data: ve Alt -> dokunulmaz", async () => {
   sent.length = 0; calls.length = 0; hostBehavior = "accept";

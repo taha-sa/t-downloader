@@ -55,7 +55,13 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         if (!string.IsNullOrEmpty(m.PageTitle)) t.PageTitle = m.PageTitle;
     });
 
-    public void OnVideoGeometry(VideoGeometryMessage g) => Post(() => Apply(g));
+    // Eklenti saniyede onlarca konum mesajı gönderebilir; UI thread'ine yalnızca sekme başına en sonuncusu gider.
+    private readonly TDownloader.Core.Util.LatestCoalescer<int, VideoGeometryMessage> _geo = new();
+
+    public void OnVideoGeometry(VideoGeometryMessage g)
+    {
+        if (_geo.Offer(g.TabId, g)) Post(() => { foreach (var m in _geo.Drain()) Apply(m); });
+    }
 
     public void Detach()
     {
@@ -104,6 +110,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             if (g.TabId == _tabId) { _raw = g; HideWin(); }
             return;
         }
+        if (g.TabId == _tabId && g == _raw && _win is { Visible: true }) return;   // aynı konum: yeniden çizme
         _tabId = g.TabId;
         _raw = g;
         Reposition();
