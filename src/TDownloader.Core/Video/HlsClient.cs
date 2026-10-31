@@ -315,7 +315,10 @@ public sealed class HlsClient
             string ffmpeg = opt.FfmpegPath != null ? FfmpegExe(opt.FfmpegPath) : "";
             if (opt.FfmpegPath != null)
             {
-                string final = outBase + ".mp4";
+                // Nihai ad ffmpeg'den ÖNCE belirlenir: kullanıcının mevcut dosyası asla ezilmez/silinmez (C4).
+                string final = Util.UniqueName.Path(outBase + ".mp4");
+                // ffmpeg geçici adla yazar; yalnızca başarıda atomik yeniden adlandırılır, iptal/hatada geçici dosya silinir (C3).
+                string partOut = final[..^4] + ".part.mp4";
                 double totalDur = prog.Snapshot().TotalDur;
                 Action<double> onTime = sec =>
                 {
@@ -327,23 +330,27 @@ public sealed class HlsClient
                 foreach (bool plain in new[] { false, true })
                 {
                     ct.ThrowIfCancellationRequested();
-                    var args = FfmpegArgs(videoRaw.path, audioRaw?.path, final, bsf: !plain && (!videoRaw.fmp4 || audioRaw != null), faststart: !plain);
-                    if (await RunFfmpegAsync(ffmpeg, args, onTime, ct).ConfigureAwait(false) && File.Exists(final) && new FileInfo(final).Length > 0)
+                    TryDelete(partOut);   // önceki yarım çalışmadan artık
+                    var args = FfmpegArgs(videoRaw.path, audioRaw?.path, partOut, bsf: !plain && (!videoRaw.fmp4 || audioRaw != null), faststart: !plain);
+                    bool ok;
+                    try { ok = await RunFfmpegAsync(ffmpeg, args, onTime, ct).ConfigureAwait(false); }
+                    catch { TryDelete(partOut); throw; }   // iptal/beklenmeyen hata: yarım çıktı bırakılmaz
+                    if (ok && File.Exists(partOut) && new FileInfo(partOut).Length > 0)
                     {
+                        final = MoveNoOverwrite(partOut, final);
                         // Ara dosyalar hemen silinir: kalıcı klasör silinene kadar diskte durmasınlar.
                         TryDelete(videoRaw.path);
                         if (audioRaw != null) TryDelete(audioRaw.Value.path);
                         success = true;
                         return final;
                     }
-                    TryDelete(final);
+                    TryDelete(partOut);
                 }
                 if (audioRaw != null)
                     throw new HlsException("ffmpeg ses ve görüntüyü birleştiremedi; sessiz video üretilmedi (inen parçalar korundu).");
             }
-            string raw = outBase + (videoRaw.fmp4 ? ".mp4" : ".ts");
-            if (File.Exists(raw)) File.Delete(raw);
-            File.Move(videoRaw.path, raw);
+            // Mevcut dosya silinmez/ezilmez: çakışırsa "ad (1).uzantı" (C4).
+            string raw = MoveNoOverwrite(videoRaw.path, Util.UniqueName.Path(outBase + (videoRaw.fmp4 ? ".mp4" : ".ts")));
             success = true;
             return raw;
         }
@@ -355,6 +362,16 @@ public sealed class HlsClient
                 try { Directory.Delete(tmpDir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
             else store.Save();
+        }
+    }
+
+    /// <summary>src'yi dest'e taşır; hedef bu arada oluştuysa (yarış) yeni benzersiz ad seçer, asla ezmez. Gerçek hedefi döner.</summary>
+    private static string MoveNoOverwrite(string src, string dest)
+    {
+        for (int i = 0; ; i++)
+        {
+            try { File.Move(src, dest, overwrite: false); return dest; }
+            catch (IOException) when (File.Exists(dest) && i < 100) { dest = Util.UniqueName.Path(dest); }
         }
     }
 
@@ -405,7 +422,13 @@ public sealed class HlsClient
             }, CancellationToken.None);
             _ = p.StandardError.ReadToEndAsync(ct);
             using var reg = ct.Register(() => { try { if (!p.HasExited) p.Kill(true); } catch (Exception) { } });
-            await p.WaitForExitAsync(ct).ConfigureAwait(false);
+            try { await p.WaitForExitAsync(ct).ConfigureAwait(false); }
+            catch (OperationCanceledException)
+            {
+                // Süreç tamamen kapanmadan çağıran geçici çıktıyı silmeye çalışırsa dosya kilitli kalır.
+                try { if (!p.HasExited) p.Kill(true); p.WaitForExit(5000); } catch (Exception) { }
+                throw;
+            }
             await outTask.ConfigureAwait(false);
             return p.ExitCode == 0;
         }

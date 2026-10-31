@@ -53,6 +53,59 @@ public class HlsCoreFixTests : IDisposable
             new HlsClient.Options(null, WorkDir: Path.Combine(_tmp, "w2")), _ => { }, cts.Token));
     }
 
+    // ------------------------------------------------------------ C3 / C4
+
+    [Fact]
+    public async Task C3C4_Ffmpeg_WritesPartName_ThenRenames_NeverOverwritesUserFile()
+    {
+        Publish("ff", 4);
+        string outDir = Path.Combine(_tmp, "o"); Directory.CreateDirectory(outDir);
+        File.WriteAllText(Path.Combine(outDir, "Film.mp4"), "KULLANICI");
+        string ff = FakeTool.Install(Path.Combine(_tmp, "fk"));
+        var res = await new HlsClient().DownloadAsync(Url("ff"), null, null, Path.Combine(outDir, "Film"),
+            new HlsClient.Options(ff, WorkDir: Path.Combine(_tmp, "w4")), _ => { }, CancellationToken.None);
+        Assert.Equal(Path.Combine(outDir, "Film (1).mp4"), res);
+        Assert.Equal("FAKE-FFMPEG-OUTPUT", File.ReadAllText(res));
+        Assert.Equal("KULLANICI", File.ReadAllText(Path.Combine(outDir, "Film.mp4")));
+        Assert.Empty(Directory.GetFiles(outDir, "*.part.mp4"));
+        string args = File.ReadAllText(Path.Combine(_tmp, "fk", "args.txt"));
+        Assert.Contains("Film (1).part.mp4", args);                 // ffmpeg doğrudan nihai adı değil, geçici adı yazar
+        Assert.DoesNotContain("\nFilm (1).mp4\n", args);
+    }
+
+    [Fact]
+    public async Task C3_CancelDuringFfmpeg_RemovesPartFile_AndLeavesNoFinal()
+    {
+        Publish("fc", 4);
+        string outDir = Path.Combine(_tmp, "o2"); Directory.CreateDirectory(outDir);
+        File.WriteAllText(Path.Combine(outDir, "Film.mp4"), "KULLANICI");
+        string ff = FakeTool.Install(Path.Combine(_tmp, "fk2"), "hang=1");
+        using var cts = new CancellationTokenSource();
+        var t = new HlsClient().DownloadAsync(Url("fc"), null, null, Path.Combine(outDir, "Film"),
+            new HlsClient.Options(ff, WorkDir: Path.Combine(_tmp, "w5")), _ => { }, cts.Token);
+        for (int i = 0; i < 200 && Directory.GetFiles(outDir, "*.part.mp4").Length == 0; i++) await Task.Delay(50);
+        Assert.Single(Directory.GetFiles(outDir, "*.part.mp4"));    // ffmpeg çalışırken geçici dosya var, nihai yok
+        Assert.False(File.Exists(Path.Combine(outDir, "Film (1).mp4")));
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => t);
+        Assert.Empty(Directory.GetFiles(outDir, "*.part.mp4"));
+        Assert.Equal(new[] { "Film.mp4" }, Directory.GetFiles(outDir).Select(Path.GetFileName).ToArray());
+        Assert.Equal("KULLANICI", File.ReadAllText(Path.Combine(outDir, "Film.mp4")));
+    }
+
+    [Fact]
+    public async Task C4_RawOutput_DoesNotDeleteExistingFile()
+    {
+        Publish("rw", 4);
+        string outDir = Path.Combine(_tmp, "o3"); Directory.CreateDirectory(outDir);
+        File.WriteAllText(Path.Combine(outDir, "Film.ts"), "KULLANICI");
+        var res = await new HlsClient().DownloadAsync(Url("rw"), null, null, Path.Combine(outDir, "Film"),
+            new HlsClient.Options(null, WorkDir: Path.Combine(_tmp, "w6")), _ => { }, CancellationToken.None);
+        Assert.Equal(Path.Combine(outDir, "Film (1).ts"), res);
+        Assert.Equal("KULLANICI", File.ReadAllText(Path.Combine(outDir, "Film.ts")));
+        Assert.Equal(4 * 20 * 188, new FileInfo(res).Length);
+    }
+
     // ------------------------------------------------------------ C1
 
     [Fact]
