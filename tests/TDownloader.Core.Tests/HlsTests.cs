@@ -19,6 +19,7 @@ public sealed class HlsTestServer : IDisposable
     public List<(string Path, string? Referer, string? Origin, string? Cookie, string Host, string? Range)> Log { get; } = new();
     public Func<string, bool>? Forbid { get; set; }
     public Func<string, bool>? Transient { get; set; }   // 500 döndür
+    public Func<string, int>? DelayMs { get; set; }       // yanıttan önce bekle (zaman aşımı testleri)
 
     public HlsTestServer()
     {
@@ -45,6 +46,7 @@ public sealed class HlsTestServer : IDisposable
                 lock (Log) Log.Add((path, c.Request.Headers["Referer"], c.Request.Headers["Origin"], c.Request.Headers["Cookie"], c.Request.Url.Host, c.Request.Headers["Range"]));
                 try
                 {
+                    if (DelayMs?.Invoke(path) is > 0 and var dly) Thread.Sleep(dly);
                     if (Transient?.Invoke(path) == true) { c.Response.StatusCode = 500; c.Response.Close(); return; }
                     if (Forbid?.Invoke(path) == true) { c.Response.StatusCode = 403; c.Response.Close(); return; }
                     if (!Routes.TryGetValue(path, out var r)) { c.Response.StatusCode = 404; c.Response.Close(); return; }

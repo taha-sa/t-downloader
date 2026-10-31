@@ -36,9 +36,10 @@ public sealed class VideoRunner : IExternalRunner
             TryDeleteEmpty(idDir);
             return new ExternalResult(true, null, path);
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (HlsException ex) when (ex.IsDrm || ex is HlsDiskSpaceException) { return new ExternalResult(false, ex.Message, null); }
-        catch (Exception ex) when (ex is HlsException or HttpRequestException or IOException or UriFormatException)
+        catch (Exception ex) when (ex is HlsException or HttpRequestException or IOException or UriFormatException
+                                       or OperationCanceledException or System.Security.Cryptography.CryptographicException or ArgumentException)
         {
             error = ex.Message;
             // İnmiş parça varsa yt-dlp'ye GEÇME (hepsini sıfırdan indirirdi): hata ver, parçalar korunur, yeniden başlatınca devam edilir.

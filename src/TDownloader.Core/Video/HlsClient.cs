@@ -31,8 +31,14 @@ public sealed class HlsClient
 {
     public const string FormatPrefix = "hls\t";
     private readonly HttpClient _http;
+    private readonly TimeSpan _playlistTimeout;
 
-    public HlsClient(HttpClient? http = null) { _http = http ?? EngineHttp.Shared; }
+    /// <param name="playlistTimeout">Playlist isteği başına zaman aşımı (varsayılan 20 sn; test için değiştirilebilir).</param>
+    public HlsClient(HttpClient? http = null, TimeSpan? playlistTimeout = null)
+    {
+        _http = http ?? EngineHttp.Shared;
+        _playlistTimeout = playlistTimeout ?? TimeSpan.FromSeconds(20);
+    }
 
     public static string MakeFormat(string variantUrl, string? audioUrl, int height) =>
         FormatPrefix + variantUrl + "\t" + (audioUrl ?? "") + "\t" + height.ToString(CultureInfo.InvariantCulture);
@@ -56,14 +62,22 @@ public sealed class HlsClient
     private async Task<string> GetTextAsync(string url, MediaContext ctx, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(TimeSpan.FromSeconds(20));
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        ctx.Apply(req, new Uri(url).Host);
-        using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode) throw new HlsException($"Sunucu playlist'i vermedi (HTTP {(int)resp.StatusCode}).", false, (int)resp.StatusCode);
-        var bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
-        if (bytes.Length > 8 * 1024 * 1024) throw new HlsException("Playlist beklenenden büyük.");
-        return Encoding.UTF8.GetString(bytes);
+        cts.CancelAfter(_playlistTimeout);
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            ctx.Apply(req, new Uri(url).Host);
+            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) throw new HlsException($"Sunucu playlist'i vermedi (HTTP {(int)resp.StatusCode}).", false, (int)resp.StatusCode);
+            var bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
+            if (bytes.Length > 8 * 1024 * 1024) throw new HlsException("Playlist beklenenden büyük.");
+            return Encoding.UTF8.GetString(bytes);
+        }
+        // İç zaman aşımı (dış iptal DEĞİL): çağıranın "kullanıcı duraklattı" sanmaması için gerçek hataya çevrilir.
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new HlsException("Sunucu playlist'e zamanında yanıt vermedi (zaman aşımı).");
+        }
     }
 
     // ---------------------------------------------------------------- kalite listesi
@@ -533,6 +547,7 @@ public sealed class HlsClient
                 }
                 catch (HlsException) { return false; }
                 catch (HttpRequestException) { return false; }
+                catch (OperationCanceledException) when (!tk.IsCancellationRequested) { return false; }   // iç zaman aşımı: yenileme başarısız
             }
             finally { refreshLock.Release(); }
         }
@@ -654,14 +669,23 @@ public sealed class HlsClient
                 }
                 catch (Exception ex)
                 {
-                    if (ex is not OperationCanceledException) Interlocked.CompareExchange(ref firstError, ex, null);
+                    // Yalnızca DIŞ iptal (kullanıcı) hata sayılmaz; iç kaynaklı iptal/zaman aşımı gerçek hatadır.
+                    if (!(ex is OperationCanceledException && ct.IsCancellationRequested)) Interlocked.CompareExchange(ref firstError, ex, null);
                     try { linked.Cancel(); } catch (ObjectDisposedException) { }
                 }
             }
             await Task.WhenAll(Enumerable.Range(0, Math.Min(par, missing.Count)).Select(_ => Task.Run(Worker))).ConfigureAwait(false);
             store.Save();
             ct.ThrowIfCancellationRequested();
-            if (firstError != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstError).Throw();
+            if (firstError != null)
+            {
+                // Zaman aşımı gibi iç iptaller HlsException'a çevrilir: çağıran "duraklatıldı" sanmasın.
+                if (firstError is OperationCanceledException) throw new HlsException("İndirme zaman aşımı nedeniyle durdu.", false, null);
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstError).Throw();
+            }
+            // Hata kaydı olmadan işçiler durduysa (bir iptal kaçtıysa) eksik parçalarla birleştirmeye ASLA geçilmez.
+            if (linked.IsCancellationRequested)
+                throw new HlsException("İndirme beklenmedik şekilde yarıda kesildi (eksik parça).");
         }
 
         // ---- sırayla birleştir: parça dosyaları birleştikçe silinir (disk tepesi ~2x yerine ~1x + son dosya)
