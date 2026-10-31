@@ -23,6 +23,22 @@ internal static class Program
             if (!background)
             {
                 try { using var ev = EventWaitHandle.OpenExisting(ShowEventName); ev.Set(); } catch (Exception) { }
+
+                // Kullanıcıya "zaten açık" uyarısı (görünmez TopMost sahip form ile en üstte).
+                Application.EnableVisualStyles();
+                using var owner = new Form
+                {
+                    TopMost = true,
+                    ShowInTaskbar = false,
+                    FormBorderStyle = FormBorderStyle.None,
+                    StartPosition = FormStartPosition.Manual,
+                    Location = new Point(-32000, -32000),
+                    Size = new Size(1, 1),
+                    Opacity = 0
+                };
+                owner.Show();
+                MessageBox.Show(owner, "T-Downloader zaten açık.", "T-Downloader",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             return;
         }
