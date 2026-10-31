@@ -5,7 +5,7 @@ namespace TDownloader.Core.Video;
 
 /// <summary>
 /// Video indirme yönlendiricisi: HLS kalite biçimi ("hls\t...") yt-dlp'siz, doğrudan HLS indiriciyle çalışır;
-/// başarısız olursa (DRM hariç) ve yt-dlp varsa yt-dlp'ye düşer. Diğer her şey yt-dlp'ye gider.
+/// başarısız olursa (DRM/disk dolu hariç) ve hiç parça inmediyse ve yt-dlp varsa yt-dlp'ye düşer; parça inmişse hata verir, parçalar korunur. Diğer her şey yt-dlp'ye gider.
 /// </summary>
 public sealed class VideoRunner : IExternalRunner
 {
@@ -37,10 +37,13 @@ public sealed class VideoRunner : IExternalRunner
             return new ExternalResult(true, null, path);
         }
         catch (OperationCanceledException) { throw; }
-        catch (HlsException ex) when (ex.IsDrm) { return new ExternalResult(false, ex.Message, null); }
+        catch (HlsException ex) when (ex.IsDrm || ex is HlsDiskSpaceException) { return new ExternalResult(false, ex.Message, null); }
         catch (Exception ex) when (ex is HlsException or HttpRequestException or IOException or UriFormatException)
         {
             error = ex.Message;
+            // İnmiş parça varsa yt-dlp'ye GEÇME (hepsini sıfırdan indirirdi): hata ver, parçalar korunur, yeniden başlatınca devam edilir.
+            if (HasDownloadedParts(hlsDir))
+                return new ExternalResult(false, error + " (inen parçalar korundu; yeniden başlatınca kaldığı yerden devam eder)", null);
         }
 
         // Doğrudan indirme olmadı: yt-dlp varsa aynı başlıklarla onu dene.
@@ -58,6 +61,17 @@ public sealed class VideoRunner : IExternalRunner
             TryDeleteEmpty(idDir);
         }
         return res;
+    }
+
+    /// <summary>HLS çalışma klasöründe inmiş parça (veya birleştirilmiş görüntü/ses) var mı?</summary>
+    internal static bool HasDownloadedParts(string hlsDir)
+    {
+        try
+        {
+            return Directory.Exists(hlsDir)
+                && (Directory.EnumerateFiles(hlsDir, "*.seg").Any() || Directory.EnumerateFiles(hlsDir, "merged.*").Any());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
 
     private static void TryDeleteEmpty(string dir)

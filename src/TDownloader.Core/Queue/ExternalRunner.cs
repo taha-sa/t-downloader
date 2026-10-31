@@ -2,7 +2,8 @@ using TDownloader.Core.Downloads;
 
 namespace TDownloader.Core.Queue;
 
-public sealed record ExternalProgress(long Downloaded, long Total, double SpeedBytesPerSec, double? EtaSeconds);
+/// <param name="Phase">İndirme bittikten sonraki aşama ("Birleştiriliyor %40", "Dönüştürülüyor %10"); indirme sürerken null.</param>
+public sealed record ExternalProgress(long Downloaded, long Total, double SpeedBytesPerSec, double? EtaSeconds, string? Phase = null);
 
 public sealed record ExternalResult(bool Success, string? Error, string? FinalPath);
 

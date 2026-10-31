@@ -7,10 +7,18 @@ using TDownloader.Core.Queue;
 
 namespace TDownloader.Core.Video;
 
-public sealed class HlsException : Exception
+public class HlsException : Exception
 {
     public bool IsDrm { get; }
-    public HlsException(string message, bool drm = false) : base(message) { IsDrm = drm; }
+    /// <summary>Hataya yol açan HTTP durum kodu (varsa); 401/403 imzalı adres süresi dolmuş olabileceğini gösterir.</summary>
+    public int? HttpStatus { get; }
+    public HlsException(string message, bool drm = false, int? httpStatus = null) : base(message) { IsDrm = drm; HttpStatus = httpStatus; }
+}
+
+/// <summary>Hedef/çalışma sürücüsünde yeterli boş alan yok. Başka yolla (yt-dlp) yeniden denemek anlamsızdır.</summary>
+public sealed class HlsDiskSpaceException : HlsException
+{
+    public HlsDiskSpaceException(string message) : base(message) { }
 }
 
 /// <summary>
@@ -51,7 +59,7 @@ public sealed class HlsClient
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         ctx.Apply(req, new Uri(url).Host);
         using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode) throw new HlsException($"Sunucu playlist'i vermedi (HTTP {(int)resp.StatusCode}).");
+        if (!resp.IsSuccessStatusCode) throw new HlsException($"Sunucu playlist'i vermedi (HTTP {(int)resp.StatusCode}).", false, (int)resp.StatusCode);
         var bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
         if (bytes.Length > 8 * 1024 * 1024) throw new HlsException("Playlist beklenenden büyük.");
         return Encoding.UTF8.GetString(bytes);
@@ -192,8 +200,9 @@ public sealed class HlsClient
     /// duraklat/yarıda kalma sonrası yalnızca eksik parçalar indirilir; yalnızca başarıda silinir. Verilmezse
     /// outBase + ".hlstmp" kullanılır ve her durumda silinir.</param>
     /// <param name="Log">İsteğe bağlı tanı günlüğü (devam/baştan başlama kararları).</param>
+    /// <param name="FreeSpace">İsteğe bağlı (test): yol → boş bayt (bilinmiyorsa -1). Verilmezse DriveInfo kullanılır.</param>
     public sealed record Options(string? FfmpegPath, int Parallel = 6, int Retries = 4, TimeSpan? RetryDelay = null,
-        string? WorkDir = null, Action<string>? Log = null);
+        string? WorkDir = null, Action<string>? Log = null, Func<string, long>? FreeSpace = null);
 
     private sealed class Progress
     {
@@ -211,6 +220,7 @@ public sealed class HlsClient
             if (bytes > 0) Report(0, 0);
         }
         public void AddBytes(long add) { lock (this) Bytes += add; }
+        public (long Bytes, double DoneDur, double TotalDur) Snapshot() { lock (this) return (Bytes, DoneDur, TotalDur); }
         public void Report(long add, double dur)
         {
             lock (this)
@@ -226,49 +236,73 @@ public sealed class HlsClient
                 _report(new ExternalProgress(Bytes, est, speed, eta));
             }
         }
+        /// <summary>İndirme bitti, birleştirme/dönüştürme sürüyor: çubuk %100'de kalır, Phase aşamayı söyler.</summary>
+        public void ReportPhase(string phase)
+        {
+            lock (this) _report(new ExternalProgress(Bytes, Bytes, 0, null, phase));
+        }
     }
 
     /// <summary>
     /// Format = <see cref="MakeFormat"/>. Çıktı: outBase + ".mp4" (ffmpeg varsa) veya ".ts"/".mp4" ham birleşim.
-    /// Dönen yol son dosyadır. Parçalar çalışma klasöründe ayrı dosyalar olarak durur (bkz. <see cref="Options.WorkDir"/>).
+    /// Dönen yol son dosyadır. Parçalar çalışma klasöründe ayrı dosyalar olarak durur (bkz. <see cref="Options.WorkDir"/>);
+    /// birleştirilirken tek tek silinir (disk tepesi ~2x). Ayrı ses izi inemezse hata verilir (sessiz film üretilmez).
     /// </summary>
     public async Task<string> DownloadAsync(string variantUrl, string? audioUrl, MediaContext? ctx, string outBase, Options opt,
         Action<ExternalProgress> report, CancellationToken ct)
     {
         ctx ??= MediaContext.Empty;
+        if (audioUrl != null && opt.FfmpegPath == null)
+            throw new HlsException("Bu video ses ve görüntüyü ayrı akışlarda sunuyor; birleştirmek için ffmpeg gerekli ama bulunamadı.");
         bool persistent = opt.WorkDir != null;
         string tmpDir = opt.WorkDir ?? (outBase + ".hlstmp");
+        if (Path.GetDirectoryName(Path.GetFullPath(outBase)) is { Length: > 0 } outDir) Directory.CreateDirectory(outDir);
         Directory.CreateDirectory(tmpDir);
         var prog = new Progress(report);
         var store = new HlsStateStore(tmpDir, variantUrl, audioUrl);
         bool success = false;
         try
         {
-            var videoRaw = await DownloadTrackAsync(variantUrl, ctx, tmpDir, "", opt, prog, store, ct, countTotals: true).ConfigureAwait(false);
+            var videoRaw = await DownloadTrackAsync(variantUrl, ctx, tmpDir, "", outBase, opt, prog, store, ct, countTotals: true).ConfigureAwait(false);
             (string path, bool fmp4)? audioRaw = null;
-            if (audioUrl != null && opt.FfmpegPath != null)
+            if (audioUrl != null)
             {
-                try { audioRaw = await DownloadTrackAsync(audioUrl, ctx, tmpDir, "a-", opt, prog, store, ct, countTotals: false).ConfigureAwait(false); }
-                catch (HlsException) { audioRaw = null; }   // ayrı ses alınamazsa görüntüyle yetin
+                try { audioRaw = await DownloadTrackAsync(audioUrl, ctx, tmpDir, "a-", outBase, opt, prog, store, ct, countTotals: false).ConfigureAwait(false); }
+                catch (HlsException ex) when (!ex.IsDrm && ex is not HlsDiskSpaceException)
+                {
+                    // Sessiz film üretme: ses izi inmediyse tüm indirme hata verir (inen parçalar korunur).
+                    throw new HlsException("Ses izi indirilemedi: " + ex.Message, false, ex.HttpStatus);
+                }
             }
 
             string ffmpeg = opt.FfmpegPath != null ? FfmpegExe(opt.FfmpegPath) : "";
             if (opt.FfmpegPath != null)
             {
                 string final = outBase + ".mp4";
-                var args = new List<string> { "-y", "-hide_banner", "-loglevel", "error", "-i", videoRaw.path };
-                if (audioRaw != null) { args.Add("-i"); args.Add(audioRaw.Value.path); }
-                args.AddRange(new[] { "-c", "copy" });
-                if (!videoRaw.fmp4 || audioRaw != null) { args.Add("-bsf:a"); args.Add("aac_adtstoasc"); }
-                if (audioRaw != null) { args.AddRange(new[] { "-map", "0:v:0?", "-map", "1:a:0?" }); }
-                args.AddRange(new[] { "-movflags", "+faststart", final });
-                if (await RunFfmpegAsync(ffmpeg, args, ct).ConfigureAwait(false) && File.Exists(final) && new FileInfo(final).Length > 0)
-                { success = true; return final; }
-                // ffmpeg başarısız (ör. ses bsf'i uymadı): ham birleşimi koru
-                if (File.Exists(final)) { try { File.Delete(final); } catch (IOException) { } }
-                args = new List<string> { "-y", "-hide_banner", "-loglevel", "error", "-i", videoRaw.path, "-c", "copy", final };
-                if (await RunFfmpegAsync(ffmpeg, args, ct).ConfigureAwait(false) && File.Exists(final) && new FileInfo(final).Length > 0)
-                { success = true; return final; }
+                double totalDur = prog.Snapshot().TotalDur;
+                Action<double> onTime = sec =>
+                {
+                    int pct = totalDur > 0 ? (int)Math.Clamp(sec / totalDur * 100, 0, 100) : 0;
+                    prog.ReportPhase($"Dönüştürülüyor %{pct}");
+                };
+                prog.ReportPhase("Dönüştürülüyor %0");
+                // 1. deneme: hızlı başlangıç (faststart) + gerekirse ADTS->ASC; 2. deneme: bitstream filtresiz, düz kopya.
+                foreach (bool plain in new[] { false, true })
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var args = FfmpegArgs(videoRaw.path, audioRaw?.path, final, bsf: !plain && (!videoRaw.fmp4 || audioRaw != null), faststart: !plain);
+                    if (await RunFfmpegAsync(ffmpeg, args, onTime, ct).ConfigureAwait(false) && File.Exists(final) && new FileInfo(final).Length > 0)
+                    {
+                        // Ara dosyalar hemen silinir: kalıcı klasör silinene kadar diskte durmasınlar.
+                        TryDelete(videoRaw.path);
+                        if (audioRaw != null) TryDelete(audioRaw.Value.path);
+                        success = true;
+                        return final;
+                    }
+                    TryDelete(final);
+                }
+                if (audioRaw != null)
+                    throw new HlsException("ffmpeg ses ve görüntüyü birleştiremedi; sessiz video üretilmedi (inen parçalar korundu).");
             }
             string raw = outBase + (videoRaw.fmp4 ? ".mp4" : ".ts");
             if (File.Exists(raw)) File.Delete(raw);
@@ -287,10 +321,27 @@ public sealed class HlsClient
         }
     }
 
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    private static List<string> FfmpegArgs(string video, string? audio, string final, bool bsf, bool faststart)
+    {
+        var args = new List<string> { "-y", "-hide_banner", "-loglevel", "error", "-progress", "pipe:1", "-nostats", "-i", video };
+        if (audio != null) { args.Add("-i"); args.Add(audio); }
+        args.AddRange(new[] { "-c", "copy" });
+        if (bsf) { args.Add("-bsf:a"); args.Add("aac_adtstoasc"); }
+        if (audio != null) args.AddRange(new[] { "-map", "0:v:0?", "-map", "1:a:0?" });
+        if (faststart) args.AddRange(new[] { "-movflags", "+faststart" });
+        args.Add(final);
+        return args;
+    }
+
     private static string FfmpegExe(string loc) =>
         Directory.Exists(loc) ? Path.Combine(loc, OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg") : loc;
 
-    private static async Task<bool> RunFfmpegAsync(string exe, List<string> args, CancellationToken ct)
+    private static async Task<bool> RunFfmpegAsync(string exe, List<string> args, Action<double>? onTime, CancellationToken ct)
     {
         var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true, RedirectStandardInput = true };
         foreach (var a in args) psi.ArgumentList.Add(a);
@@ -300,32 +351,93 @@ public sealed class HlsClient
             if (p == null) return false;
             Util.ProcessJob.Assign(p);   // uygulama çökerse ffmpeg yetim kalmasın
             try { p.StandardInput.Close(); } catch (IOException) { }
-            _ = p.StandardOutput.ReadToEndAsync(ct);
+            // -progress pipe:1 satırları: out_time_us=<mikrosaniye> (eski sürümlerde out_time_ms de mikrosaniye).
+            var outTask = Task.Run(async () =>
+            {
+                try
+                {
+                    string? line;
+                    while ((line = await p.StandardOutput.ReadLineAsync(ct).ConfigureAwait(false)) != null)
+                    {
+                        if ((line.StartsWith("out_time_us=", StringComparison.Ordinal) || line.StartsWith("out_time_ms=", StringComparison.Ordinal))
+                            && long.TryParse(line.AsSpan(line.IndexOf('=') + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out long us) && us >= 0)
+                            onTime?.Invoke(us / 1_000_000.0);
+                    }
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException) { }
+            }, CancellationToken.None);
             _ = p.StandardError.ReadToEndAsync(ct);
             using var reg = ct.Register(() => { try { if (!p.HasExited) p.Kill(true); } catch (Exception) { } });
             await p.WaitForExitAsync(ct).ConfigureAwait(false);
+            await outTask.ConfigureAwait(false);
             return p.ExitCode == 0;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { return false; }
     }
 
-    private async Task<(string path, bool fmp4)> DownloadTrackAsync(string playlistUrl, MediaContext ctx, string workDir, string prefix, Options opt,
+    // ---- boş alan
+
+    private static long DefaultFreeSpace(string path)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(path));
+            return string.IsNullOrEmpty(root) ? -1 : new DriveInfo(root).AvailableFreeSpace;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException) { return -1; }
+    }
+
+    private static string RootOf(string path)
+    {
+        try { return Path.GetPathRoot(Path.GetFullPath(path)) ?? ""; } catch (Exception ex) when (ex is ArgumentException or NotSupportedException) { return ""; }
+    }
+
+    private static string Mb(long b) => (b / 1048576.0).ToString("0", CultureInfo.InvariantCulture) + " MB";
+
+    /// <summary>
+    /// Hedef sürücüde boş alan kontrolü. estTotal: parçaların tahmini toplam boyutu, onDisk: şu an diskte olanı.
+    /// Çalışma sürücüsü kalan indirme (×1.1), hedef sürücü son dosya (×1.1) için; aynı sürücüyse ikisi toplanır.
+    /// Birleştirme parçaları tek tek sildiği için ek bir birleşik kopya payı gerekmez.
+    /// </summary>
+    private static void CheckSpace(Options opt, string workDir, string outBase, long estTotal, long onDisk, string stage)
+    {
+        if (estTotal <= 0) return;
+        var free = opt.FreeSpace ?? DefaultFreeSpace;
+        long needWork = (long)(Math.Max(0, estTotal - onDisk) * 1.1), needOut = (long)(estTotal * 1.1);
+        string outDir = Path.GetDirectoryName(Path.GetFullPath(outBase + ".x")) ?? outBase;
+        var checks = string.Equals(RootOf(workDir), RootOf(outDir), StringComparison.OrdinalIgnoreCase)
+            ? new[] { (workDir, needWork + needOut) }
+            : new[] { (workDir, needWork), (outDir, needOut) };
+        foreach (var (path, need) in checks)
+        {
+            long f = free(path);
+            if (f >= 0 && f < need)
+                throw new HlsDiskSpaceException($"Diskte yeterli boş alan yok ({stage}): {Mb(f)} boş, yaklaşık {Mb(need)} gerekli ({Path.GetPathRoot(Path.GetFullPath(path))}).");
+        }
+    }
+
+    private async Task<(string path, bool fmp4)> DownloadTrackAsync(string playlistUrl, MediaContext ctx, string workDir, string prefix, string outBase, Options opt,
         Progress prog, HlsStateStore store, CancellationToken ct, bool countTotals)
     {
         // Devamda playlist HER ZAMAN yeniden çekilir: imzalı eski segment URL'leri kullanılmaz.
-        string text = await GetTextAsync(playlistUrl, ctx, ct).ConfigureAwait(false);
-        if (!HlsParser.LooksLikeHls(text)) throw new HlsException("Adres bir HLS playlist'i değil.");
-        string mediaUrl = playlistUrl;
-        if (HlsParser.IsMaster(text))
+        async Task<(HlsMedia media, string mediaUrl)> LoadMediaAsync(CancellationToken tk)
         {
-            // Master verilmişse en yüksek kaliteyi al.
-            var m = HlsParser.ParseMaster(text, playlistUrl);
-            var best = m.Variants.OrderByDescending(v => v.Height).ThenByDescending(v => v.Bandwidth).FirstOrDefault()
-                ?? throw new HlsException("Master playlist'te kalite yok.");
-            mediaUrl = best.Url;
-            text = await GetTextAsync(mediaUrl, ctx, ct).ConfigureAwait(false);
+            string text = await GetTextAsync(playlistUrl, ctx, tk).ConfigureAwait(false);
+            if (!HlsParser.LooksLikeHls(text)) throw new HlsException("Adres bir HLS playlist'i değil.");
+            string url = playlistUrl;
+            if (HlsParser.IsMaster(text))
+            {
+                // Master verilmişse en yüksek kaliteyi al.
+                var m = HlsParser.ParseMaster(text, playlistUrl);
+                var best = m.Variants.OrderByDescending(v => v.Height).ThenByDescending(v => v.Bandwidth).FirstOrDefault()
+                    ?? throw new HlsException("Master playlist'te kalite yok.");
+                url = best.Url;
+                text = await GetTextAsync(url, ctx, tk).ConfigureAwait(false);
+            }
+            return (HlsParser.ParseMedia(text, url), url);
         }
-        var media = HlsParser.ParseMedia(text, mediaUrl);
+
+        var (media, mediaUrl) = await LoadMediaAsync(ct).ConfigureAwait(false);
         if (media.Segments.Count == 0) throw new HlsException("Playlist'te parça yok.");
         if (!media.EndList) throw new HlsException("Canlı yayınlar desteklenmiyor.");
         if (HlsParser.DrmReason(media) is { } drm) throw new HlsException("Bu içerik DRM korumalı olduğu için indirilemez (" + drm + ").", true);
@@ -338,10 +450,11 @@ public sealed class HlsClient
         // ---- önceki durumla karşılaştır
         var cur = HlsStateStore.Describe(prefix, playlistUrl, media, fmp4);
         var prev = store.TryLoadTrack(prefix);
+        bool sameList = false;
         if (prev != null)
         {
-            bool sameList = prev.Count == cur.Count && prev.DurationsHash == cur.DurationsHash && prev.Fmp4 == cur.Fmp4
-                            && prev.PlaylistUrl == cur.PlaylistUrl && prev.HasMap == cur.HasMap;
+            sameList = prev.Count == cur.Count && prev.DurationsHash == cur.DurationsHash && prev.Fmp4 == cur.Fmp4
+                       && prev.PlaylistUrl == cur.PlaylistUrl && prev.HasMap == cur.HasMap;
             if (!sameList)
             {
                 opt.Log?.Invoke($"HLS devam: playlist uyuşmuyor (parça {prev.Count}->{cur.Count}); önceki parçalar silindi, baştan başlanıyor.");
@@ -357,9 +470,49 @@ public sealed class HlsClient
         store.SetTrack(cur);
         store.Save();
 
+        string outPath = Path.Combine(workDir, prefix == "" ? "merged.v" : "merged.a");
+        string okPath = outPath + ".ok";
+        string marker = $"{cur.Count}|{cur.DurationsHash}|{(cur.Fmp4 ? 1 : 0)}";
+        // Önceki çalışmada birleştirme tamamlandıysa (parçalar birleştirilirken silindi) yeniden indirme/birleştirme yok.
+        if (sameList && File.Exists(outPath) && File.Exists(okPath) && TryReadText(okPath) == marker)
+        {
+            long len = new FileInfo(outPath).Length;
+            opt.Log?.Invoke("HLS devam: parçalar zaten birleştirilmiş; birleşik dosya kullanılıyor.");
+            if (countTotals) prog.Seed(len, media.TotalDuration); else prog.AddBytes(len);
+            store.SetCompleted(prefix, count);
+            return (outPath, fmp4);
+        }
+        TryDelete(okPath);
+
         var keyCache = new Dictionary<string, byte[]>();
         var keyLock = new SemaphoreSlim(1, 1);
         string cookieHost = new Uri(mediaUrl).Host;
+
+        // Parça adresleri imzalı olabilir: 401/403'te playlist yenilenir, yeni adresler bu dizide durur.
+        var segs = media.Segments.ToArray();
+        int generation = 0;
+        var refreshLock = new SemaphoreSlim(1, 1);
+
+        async Task<bool> RefreshAsync(int seenGeneration, CancellationToken tk)
+        {
+            await refreshLock.WaitAsync(tk).ConfigureAwait(false);
+            try
+            {
+                if (Volatile.Read(ref generation) != seenGeneration) return true;   // başka işçi yeniledi
+                try
+                {
+                    var (fresh, _) = await LoadMediaAsync(tk).ConfigureAwait(false);
+                    if (fresh.Segments.Count != count) return false;
+                    Volatile.Write(ref segs, fresh.Segments.ToArray());
+                    Interlocked.Increment(ref generation);
+                    opt.Log?.Invoke("HLS: parça 401/403 verdi; playlist yenilendi (imzalı adres), parça yeniden denenecek.");
+                    return true;
+                }
+                catch (HlsException) { return false; }
+                catch (HttpRequestException) { return false; }
+            }
+            finally { refreshLock.Release(); }
+        }
 
         async Task<byte[]> GetKey(string uri, CancellationToken tk)
         {
@@ -395,6 +548,22 @@ public sealed class HlsClient
             return fmp4 ? data : StripFakeHeader(data);
         }
 
+        async Task<byte[]> FetchSegment(int idx, CancellationToken tk)
+        {
+            int refreshes = 0;
+            while (true)
+            {
+                int gen = Volatile.Read(ref generation);
+                var seg = Volatile.Read(ref segs)[idx];
+                try { return await Fetch(seg, tk).ConfigureAwait(false); }
+                catch (HlsException ex) when (ex.HttpStatus is 401 or 403 && refreshes < 2)
+                {
+                    refreshes++;
+                    if (!await RefreshAsync(gen, tk).ConfigureAwait(false)) throw;
+                }
+            }
+        }
+
         // init segment (fMP4)
         string initFile = Path.Combine(workDir, prefix + "init.map");
         if (media.Map != null && !(File.Exists(initFile) && new FileInfo(initFile).Length > 0))
@@ -416,12 +585,20 @@ public sealed class HlsClient
         if (countTotals) prog.Seed(seedBytes, seedDur); else prog.AddBytes(seedBytes);
         store.SetCompleted(prefix, done);
 
+        // Başlarken boş alan: devamda tahmin hemen yapılabilir; yoksa ilk birkaç parçadan sonra (aşağıda).
+        int spaceChecked = 0;
+        if (countTotals && missing.Count > 0 && seedDur > 0 && media.TotalDuration > 0)
+        {
+            spaceChecked = 1;
+            CheckSpace(opt, workDir, outBase, (long)(seedBytes / seedDur * media.TotalDuration), seedBytes, "indirme başlarken");
+        }
+
         // ---- eksikleri sınırlı paralellikle indir
         if (missing.Count > 0)
         {
             int par = Math.Clamp(opt.Parallel, 1, 16);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            int cursor = -1;
+            int cursor = -1, finished = 0;
             Exception? firstError = null;
             async Task Worker()
             {
@@ -433,11 +610,18 @@ public sealed class HlsClient
                         if (k >= missing.Count) return;
                         linked.Token.ThrowIfCancellationRequested();
                         int idx = missing[k];
-                        var seg = media.Segments[idx];
-                        var data = await Fetch(seg, linked.Token).ConfigureAwait(false);
+                        var duration = Volatile.Read(ref segs)[idx].Duration;
+                        var data = await FetchSegment(idx, linked.Token).ConfigureAwait(false);
                         await HlsStateStore.WriteAtomicAsync(HlsStateStore.SegPath(workDir, prefix, idx), data, linked.Token).ConfigureAwait(false);
                         store.SegmentDone(prefix);
-                        if (countTotals) prog.Report(data.Length, seg.Duration); else prog.AddBytes(data.Length);
+                        if (countTotals) prog.Report(data.Length, duration); else prog.AddBytes(data.Length);
+                        if (countTotals && Volatile.Read(ref spaceChecked) == 0
+                            && Interlocked.Increment(ref finished) >= Math.Min(4, missing.Count)
+                            && Interlocked.CompareExchange(ref spaceChecked, 1, 0) == 0)
+                        {
+                            var (b, d, t) = prog.Snapshot();
+                            if (d > 0 && t > 0) CheckSpace(opt, workDir, outBase, (long)(b / d * t), b, "indirme");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -452,16 +636,33 @@ public sealed class HlsClient
             if (firstError != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstError).Throw();
         }
 
-        // ---- sırayla birleştir
-        string outPath = Path.Combine(workDir, prefix == "" ? "merged.v" : "merged.a");
+        // ---- sırayla birleştir: parça dosyaları birleştikçe silinir (disk tepesi ~2x yerine ~1x + son dosya)
+        long onDisk = 0;
+        for (int i = 0; i < count; i++) { var fi = new FileInfo(HlsStateStore.SegPath(workDir, prefix, i)); if (fi.Exists) onDisk += fi.Length; }
+        CheckSpace(opt, workDir, outBase, onDisk, onDisk, "birleştirmeden önce");
+        int lastPct = -1;
         using (var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write, FileShare.Read, 1 << 16))
         {
             if (media.Map != null) await CopyFileAsync(initFile, fs, ct).ConfigureAwait(false);
             for (int i = 0; i < count; i++)
-                await CopyFileAsync(HlsStateStore.SegPath(workDir, prefix, i), fs, ct).ConfigureAwait(false);
+            {
+                string sp = HlsStateStore.SegPath(workDir, prefix, i);
+                await CopyFileAsync(sp, fs, ct).ConfigureAwait(false);
+                TryDelete(sp);
+                int pct = (i + 1) * 100 / count;
+                if (pct != lastPct) { lastPct = pct; prog.ReportPhase($"Birleştiriliyor %{pct}"); }
+            }
             await fs.FlushAsync(ct).ConfigureAwait(false);
         }
+        // Birleşik dosya tamam: devamda (ffmpeg aşamasında duraklatılırsa) parçalar yeniden indirilmesin.
+        await File.WriteAllTextAsync(okPath, marker, CancellationToken.None).ConfigureAwait(false);   // iptal gelse bile işaretçi yazılsın
+        if (media.Map != null) TryDelete(initFile);
         return (outPath, fmp4);
+    }
+
+    private static string? TryReadText(string path)
+    {
+        try { return File.ReadAllText(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
     private static async Task CopyFileAsync(string path, Stream dest, CancellationToken ct)
@@ -476,6 +677,7 @@ public sealed class HlsClient
         var delay = opt.RetryDelay ?? TimeSpan.FromMilliseconds(500);
         while (true)
         {
+            TimeSpan? retryAfter = null;
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -487,8 +689,9 @@ public sealed class HlsClient
                 if (!resp.IsSuccessStatusCode)
                 {
                     int code = (int)resp.StatusCode;
-                    if (code is 401 or 403 or 404 or 410) throw new HlsException($"Sunucu parçayı vermedi (HTTP {code}).");
-                    throw new HttpRequestException($"HTTP {code}");
+                    // 401/403: imzalı adres süresi dolmuş olabilir (çağıran playlist'i yenileyip dener); 404/410: kalıcı.
+                    if (code is 401 or 403 or 404 or 410) throw new HlsException($"Sunucu parçayı vermedi (HTTP {code}).", false, code);
+                    throw HttpStatusException.From(resp);
                 }
                 return await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
             }
@@ -496,8 +699,12 @@ public sealed class HlsClient
             catch (HlsException) { throw; }
             catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
             {
+                if (ex is HttpStatusException hs) retryAfter = hs.RetryAfter;
                 if (++attempt > opt.Retries) throw new HlsException("Parça indirilemedi: " + ex.Message);
-                await Task.Delay(TimeSpan.FromMilliseconds(delay.TotalMilliseconds * attempt), ct).ConfigureAwait(false);
+                // Üstel bekleme (gecikme x 2^(deneme-1), en çok 30 sn) + jitter; Retry-After varsa alt sınır.
+                double ms = Math.Min(delay.TotalMilliseconds * Math.Pow(2, attempt - 1), 30_000) * (1.0 + Random.Shared.NextDouble() * 0.25);
+                if (retryAfter is { } ra) ms = Math.Max(ms, Math.Min(ra.TotalMilliseconds, 30_000));
+                await Task.Delay(TimeSpan.FromMilliseconds(ms), ct).ConfigureAwait(false);
             }
         }
     }

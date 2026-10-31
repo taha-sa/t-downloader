@@ -42,6 +42,8 @@ public sealed class DownloadProgress
     public double SpeedBytesPerSec { get; init; }
     public TimeSpan? Eta { get; init; }
     public IReadOnlyList<ConnectionProgress> Connections { get; init; } = Array.Empty<ConnectionProgress>();
+    /// <summary>Harici (HLS) indirmede indirme sonrası aşama ("Birleştiriliyor %40"); yoksa null.</summary>
+    public string? Phase { get; init; }
 }
 
 public sealed class SegmentSplitEventArgs : EventArgs

@@ -399,6 +399,7 @@ public sealed class DownloadManager : IAsyncDisposable
                             Id = item.Id, Downloaded = p.Downloaded, TotalSize = p.Total > 0 ? p.Total : item.TotalSize,
                             SpeedBytesPerSec = p.SpeedBytesPerSec,
                             Eta = p.EtaSeconds is double e && e >= 0 && e < 8_640_000 ? TimeSpan.FromSeconds(e) : null,
+                            Phase = p.Phase,
                         });
                     }, cts.Token).ConfigureAwait(false);
             }
