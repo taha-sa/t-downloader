@@ -74,6 +74,23 @@ const player = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "video/mp4", "Content-Length": st.size, "Accept-Ranges": "bytes" });
     return fs.createReadStream(movie).pipe(res);
   }
+  // Kalite senaryoları: sentetik VOD media playlist'leri (parçalar yok; çözünürlük URL'den okunur), master YOK.
+  if (u.pathname.startsWith("/q/")) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    if (u.pathname.endsWith(".m3u8")) {
+      const n = u.pathname.includes("/ad/") ? 1 : 20;
+      let t = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-MEDIA-SEQUENCE:0\n";
+      for (let i = 0; i < n; i++) t += `#EXTINF:10.0,\ns${i}.ts\n`;
+      res.writeHead(200, { "Content-Type": "application/vnd.apple.mpegurl" });
+      return res.end(t + "#EXT-X-ENDLIST\n");
+    }
+    res.writeHead(404); return res.end();
+  }
+  if (u.pathname === "/ist.mp4") {   // küçük "önizleme/reklam" dosyası (1 MB)
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.writeHead(200, { "Content-Type": "video/mp4", "Content-Length": 1000000 });
+    return res.end(Buffer.alloc(1000000));
+  }
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Set-Cookie": "sid=e2e-cookie; Path=/" });
   res.end(`<!doctype html><meta charset=utf-8><title>player</title><body style="margin:0;background:#000">
 <video id=v muted autoplay loop playsinline src="/movie.mp4" style="width:100%;height:100%;object-fit:contain"></video>
@@ -85,6 +102,39 @@ const player = http.createServer((req, res) => {
 
 // ---- film sitesi (üst sayfa) ----
 const film = http.createServer((req, res) => {
+  const P = `http://127.0.0.1:${ports.player}`;
+  if (req.url.startsWith("/jump")) {
+    // Yüklenirken video kutusunun boyutu/konumu 3 kez değişir (0, 250, 500 ms); son hâl 750 ms'de gelir. Her karede düğme durumu kaydedilir.
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    return res.end(`<!doctype html><meta charset=utf-8><title>Jump</title><body style="margin:0;height:3000px;background:#222">
+<div style="height:150px"></div><video id=v muted style="display:block;background:#345"></video>
+<script>
+  const v = document.getElementById("v"), set = (l, w, h) => { v.style.marginLeft = l + "px"; v.style.width = w + "px"; v.style.height = h + "px"; };
+  const t0 = performance.now(), steps = [[0, 40, 300, 170], [250, 700, 500, 280], [500, 10, 800, 450], [750, 150, 640, 360]];
+  window.__log = []; window.__ready = false;
+  for (const [t, l, w, h] of steps) setTimeout(() => set(l, w, h), t);
+  (function f() {
+    const o = document.getElementById("tdownloader-overlay"), b = o && o.shadowRoot.getElementById("btn");
+    if (b) { const vr = v.getBoundingClientRect(), br = b.getBoundingClientRect();
+      window.__log.push({ t: Math.round(performance.now() - t0), disp: b.style.display, vis: b.classList.contains("vis"), dx: Math.round(vr.right - br.right), dy: Math.round(br.top - vr.top), vw: Math.round(vr.width) }); }
+    if (performance.now() - t0 < 4000) requestAnimationFrame(f);
+  })();
+</script>`);
+  }
+  if (req.url.startsWith("/multi")) {
+    // multi: 3 kalite AYRI m3u8 ile yüklenir (master yok) + küçük ist.mp4.  multi2: yalnız 720 yüklenir, diğerleri Playerjs yapılandırmasında.
+    const two = req.url.startsWith("/multi2");
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    return res.end(`<!doctype html><meta charset=utf-8><title>Dizi Adı - 1. Bölüm</title><body style="margin:0;background:#222">
+<video id=v muted style="display:block;margin:40px 0 0 100px;width:800px;height:450px;background:#345"></video>
+<script>
+  function Playerjs(o) { window.__pjs = o; }
+  ${two ? `new Playerjs({ id: "player", file: "[1080p]${P}/q/1080/index.m3u8,[720p]${P}/q/720/index.m3u8,[480p]${P}/q/480/index.m3u8" });
+  fetch("${P}/q/720/index.m3u8");` : `for (const h of [1080, 720, 480]) fetch("${P}/q/" + h + "/index.m3u8");`}
+  fetch("${P}/q/ad/index.m3u8");
+  fetch("${P}/ist.mp4").then(r => r.arrayBuffer());
+</script>`);
+  }
   if (req.url.startsWith("/direct")) {
     // üst sayfada doğrudan <video> + uzun sayfa (kaydırma testi)
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });

@@ -3,6 +3,7 @@ using TDownloader.App.Ui;
 using TDownloader.Core.Ipc;
 using TDownloader.Core.Queue;
 using TDownloader.Core.Settings;
+using TDownloader.Core.Util;
 using TDownloader.Core.Video;
 
 namespace TDownloader.App.Services;
@@ -406,12 +407,36 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     private sealed record Selection(List<Entry> Entries, string Source, MediaContext Ctx, string Title, string? Page, string? Referer);
     private readonly Dictionary<string, Selection> _selections = new();
 
+    private MediaLog? _mlog;
+    private MediaLog Mlog => _mlog ??= new MediaLog(((_svc as AppServices)?.Paths ?? AppPaths.Default).MediaLogFile);
+
+    private Task<VideoInfo> Cached(string key, Func<Task<VideoInfo>> make)
+    {
+        var now = DateTime.UtcNow;
+        if (_info.TryGetValue(key, out var e) && now - e.At < InfoTtl && !e.Task.IsFaulted && !e.Task.IsCanceled) return e.Task;
+        foreach (var k in _info.Where(p => now - p.Value.At >= InfoTtl).Select(p => p.Key).ToList()) _info.Remove(k);
+        var t = Task.Run(make);
+        _info[key] = (now, t);
+        return t;
+    }
+
+    private static string MimeFromUrl(string url) => Path.GetExtension(url.Split('?', '#')[0]).ToLowerInvariant() switch
+    {
+        ".webm" => "video/webm", ".mkv" => "video/x-matroska", ".mov" => "video/quicktime", ".m4v" => "video/x-m4v", _ => "video/mp4",
+    };
+
+    /// <summary>Ana videoya ait olmayabilecek küçük/kısa doğrudan dosya mı? Boyut biliniyorsa &lt; 2 MB ya da ana kalitenin %5'inden küçük.</summary>
+    public static bool IsMinorFile(long size, long mainSize) =>
+        size > 0 && (size < 2L * 1024 * 1024 || (mainSize > 0 && size < mainSize * 0.05));
+
+    private sealed record Snap(List<(int Frame, MediaItem Item)> Items, List<MediaItem> Hls, string? FrameDoc);
+
     public async Task<QualitiesResultMessage> GetQualitiesAsync(QualitiesMessage q)
     {
         static QualitiesResultMessage Fail(string id, string msg, string code) => new(id, false, msg, code, null, null, null);
         if (_svc == null) return Fail(q.RequestId, "Uygulama hazır değil.", "error");
 
-        var tcs = new TaskCompletionSource<(Sources S, string? Title, string? Page)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<(Sources S, string? Title, string? Page, Snap Snap)>(TaskCreationOptions.RunContinuationsAsynchronously);
         Post(() =>
         {
             try
@@ -423,11 +448,25 @@ public sealed class VideoOverlayMediaSink : IMediaSink
                 // Video öğesi doğrudan http(s) dosyası oynatıyorsa (blob değil) ve listede yoksa ekle.
                 if (IsHttp(q.Src) && !HlsClient.LooksLikeHlsUrl(q.Src!) && !s.Direct.Any(d => d.Url == q.Src))
                     s.Direct.Insert(0, new MediaItem(q.Src!, "", "file", q.FrameUrl));
-                tcs.TrySetResult((s, tab.PageTitle, tab.PageUrl));
+                // Yakalanan TÜM HLS adresleri: düğmenin çerçevesindekiler; yoksa sekmedeki tümü. En yeni önce.
+                var all = tab.Frames.SelectMany(f => f.Value.Select(i => (Frame: f.Key, Item: i))).ToList();
+                var hlsAll = all.Where(x => x.Item.Kind == "hls" && IsHttp(x.Item.Url)).ToList();
+                var mine = hlsAll.Where(x => x.Frame == q.FrameId).ToList();
+                var hls = (mine.Count > 0 ? mine : hlsAll).Select(x => x.Item).DistinctBy(i => i.Url)
+                    .OrderByDescending(i => tab.Seen.GetValueOrDefault(i.Url)).ToList();
+                tcs.TrySetResult((s, tab.PageTitle, tab.PageUrl, new Snap(all, hls, q.FrameUrl)));
             }
             catch (Exception ex) { tcs.TrySetException(ex); }
         });
-        var (src, pageTitle, pageUrl) = await tcs.Task.ConfigureAwait(false);
+        var (src, pageTitle, pageUrl, snap) = await tcs.Task.ConfigureAwait(false);
+
+        // Tanı günlüğü: bu sekme/çerçeve için bilinenler (host+yol; sorgu/imza/çerez YOK).
+        var players = (q.Players ?? new()).Where(p => IsHttp(p.Url)).Take(40).ToList();
+        Mlog.Write($"CLICK tab={q.TabId} frame={q.FrameId} page={MediaLog.Sanitize(pageUrl)} frameDoc={MediaLog.Sanitize(q.FrameUrl)} captured={snap.Items.Count} hls={snap.Hls.Count} players={players.Count}");
+        foreach (var (frame, it) in snap.Items.Take(60))
+            Mlog.Write($"  item frame={frame} kind={it.Kind} mime={(string.IsNullOrEmpty(it.Mime) ? "-" : it.Mime)} size={(it.Size > 0 ? it.Size.ToString() : "-")} url={MediaLog.Sanitize(it.Url)}");
+        foreach (var p in players)
+            Mlog.Write($"  player label={(string.IsNullOrEmpty(p.Label) ? "-" : p.Label)} height={p.Height} url={MediaLog.Sanitize(p.Url)}");
 
         var entries = new List<Entry>();
         var infos = new List<QualityOptionInfo>();
@@ -435,8 +474,60 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         string? error = null, code = null;
         string? streamSource = src.Source;
         var ctx = src.Ctx;
+        var streamOpts = new List<QualityOption>();
+        var otherOpts = new List<QualityOption>();
+        string? hlsSource = null;
 
-        if (streamSource != null)
+        // Oynatıcıdan okunanlar: m3u8 -> HLS adayı; mp4 vb. -> etiketli doğrudan dosya
+        var cands = snap.Hls.Select(i => new HlsCandidate(i.Url)).ToList();
+        var fileHints = new Dictionary<string, PlayerSource>(StringComparer.Ordinal);
+        foreach (var p in players)
+        {
+            if (HlsClient.LooksLikeHlsUrl(p.Url)) cands.Add(new HlsCandidate(p.Url, p.Label, p.Height, true));
+            else
+            {
+                fileHints[p.Url] = p;
+                if (!src.Direct.Any(d => d.Url == p.Url))
+                    src.Direct.Add(new MediaItem(p.Url, MimeFromUrl(p.Url), "file", string.IsNullOrEmpty(q.FrameUrl) ? pageUrl : q.FrameUrl));
+            }
+        }
+
+        if (cands.Count > 0)
+        {
+            hlsSource = cands[0].Url;
+            ctx = snap.Hls.Count > 0 ? ContextOf(snap.Hls[0], pageUrl)
+                : new MediaContext(string.IsNullOrEmpty(q.FrameUrl) ? pageUrl : q.FrameUrl, null, null, null);
+            string key = "set|" + string.Join("|", cands.Select(c => c.Url));
+            try
+            {
+                bool fresh = !_info.ContainsKey(key);
+                var info = await Cached(key, () => _hls.GetInfoSetAsync(cands, ctx, pageTitle, probeMaster: true, l => Mlog.Write("  " + l))).ConfigureAwait(false);
+                if (!fresh) Mlog.Write("  (kalite listesi önbellekten)");
+                if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
+                streamOpts.AddRange(info.Options.Where(o => !o.Other));
+                otherOpts.AddRange(info.Options.Where(o => o.Other));
+            }
+            catch (HlsException ex) when (ex.IsDrm) { error = ex.Message; code = "error"; }
+            catch (Exception ex) when (ex is HlsException or HttpRequestException or OperationCanceledException or UriFormatException)
+            {
+                Mlog.Write("  hls-set başarısız: " + ex.Message);
+                // yt-dlp'ye düş (varsa): en yeni akış adresiyle
+                if (_yt.FindYtDlp() == null) { error = "Akış okunamadı: " + ex.Message; code = "error"; }
+                else
+                {
+                    try
+                    {
+                        var info = await InfoFor(cands[0].Url, ctx, true, pageTitle).ConfigureAwait(false);
+                        if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
+                        streamOpts.AddRange(info.Options);
+                    }
+                    catch (YtDlpException yex) { error = yex.Message; code = "error"; }
+                    catch (Exception yex) { error = yex.Message; code = "error"; }
+                }
+            }
+            streamSource = hlsSource;
+        }
+        else if (streamSource != null)
         {
             if (!src.Hls && _yt.FindYtDlp() == null) { error = "yt-dlp bulunamadı."; code = "no_ytdlp"; }
             else
@@ -445,27 +536,53 @@ public sealed class VideoOverlayMediaSink : IMediaSink
                 {
                     var info = await InfoFor(streamSource, ctx, src.Hls, pageTitle).ConfigureAwait(false);
                     if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
-                    int def = YtDlpParsing.PickDefault(info.Options, Settings.DefaultVideoQuality);
-                    for (int i = 0; i < info.Options.Count; i++)
-                    {
-                        var o = info.Options[i];
-                        entries.Add(new Entry(null, o));
-                        infos.Add(new QualityOptionInfo(o.Label, o.AudioOnly ? "audio" : "video", o.Height, o.Size, o.AudioOnly, i == def));
-                    }
+                    streamOpts.AddRange(info.Options);
                 }
                 catch (YtDlpNotFoundException) { error = "yt-dlp bulunamadı."; code = "no_ytdlp"; }
                 catch (YtDlpException ex) { error = ex.Message; code = "error"; }
                 catch (Exception ex) { error = ex.Message; code = "error"; }
             }
         }
-        foreach (var d in src.Direct)
+
+        int def = YtDlpParsing.PickDefault(streamOpts, Settings.DefaultVideoQuality);
+        for (int i = 0; i < streamOpts.Count; i++)
+        {
+            var o = streamOpts[i];
+            entries.Add(new Entry(null, o));
+            infos.Add(new QualityOptionInfo(o.Label, o.AudioOnly ? "audio" : "video", o.Height, o.Size, o.AudioOnly, i == def));
+        }
+        long mainSize = streamOpts.Count == 0 ? 0 : streamOpts.Max(o => o.Size);
+
+        // Doğrudan dosyalar: etiketli (oynatıcıdan) önce, sonra yakalananlar; küçük/kısa olanlar "Diğer dosyalar"a
+        var files = src.Direct.Select(d => (D: d, Hint: fileHints.GetValueOrDefault(d.Url)))
+            .OrderByDescending(x => x.Hint?.Height ?? 0).ToList();
+        var minor = new List<(MediaItem D, string Label)>();
+        foreach (var (d, hint) in files)
+        {
+            string label = hint != null && (!string.IsNullOrEmpty(hint.Label) || hint.Height > 0)
+                ? (string.IsNullOrEmpty(hint.Label) ? hint.Height + "p" : hint.Label) + " " + Path.GetExtension(d.Url.Split('?', '#')[0]).TrimStart('.').ToLowerInvariant()
+                : Shorten(DirectName(d, pageTitle), 48);
+            if (hint == null && IsMinorFile(d.Size, mainSize)) { minor.Add((d, label)); continue; }
+            entries.Add(new Entry(d, null));
+            infos.Add(new QualityOptionInfo(label.Trim(), "file", hint?.Height ?? 0, Math.Max(0, d.Size), false, infos.Count == 0));
+        }
+        foreach (var o in otherOpts)
+        {
+            entries.Add(new Entry(null, o));
+            infos.Add(new QualityOptionInfo(o.Label, "other", 0, o.Size, false, false));
+        }
+        foreach (var (d, label) in minor)
         {
             entries.Add(new Entry(d, null));
-            infos.Add(new QualityOptionInfo(Shorten(DirectName(d, pageTitle), 48), "file", 0, 0, false, infos.Count == 0));
+            infos.Add(new QualityOptionInfo(label, "other", 0, Math.Max(0, d.Size), false, false));
         }
 
         if (entries.Count == 0)
+        {
+            Mlog.Write($"RESULT fail code={code ?? "no_media"} err={error ?? "-"}");
             return Fail(q.RequestId, error ?? "Bu sayfada indirilebilir medya bulunamadı.", code ?? "no_media");
+        }
+        Mlog.Write($"RESULT ok n={infos.Count} [{string.Join(" | ", infos.Select(i => i.Kind + ":" + i.Label))}]");
 
         string id = Guid.NewGuid().ToString("N");
         var sel = new Selection(entries, streamSource ?? "", ctx, title, pageUrl, src.Referer);

@@ -51,6 +51,7 @@ Eklenti → App:
 - `{ "type":"qualities", "requestId", "tabId", "frameId", "pageUrl", "pageTitle", "frameUrl", "src" }` — sayfa içi düğme kalite listesi ister
   (`src`: `<video>` http(s) adresi, blob ise boş). App yanıtı: `{ "type":"qualitiesResult", "requestId", "ok", "error", "errorCode":"no_ytdlp|no_media|error",
   "title", "selectionId", "options":[{ "label","kind":"video|audio|file","height","size","audioOnly","isDefault" }] }`.
+  - Geriye uyumlu EK alanlar: `media.items[].size` (bilinen toplam bayt, yoksa -1); `qualities.players` = `[{ "url","label","height" }]` (düğme tıklanınca oynatıcı yapılandırmasından okunan kaynaklar, en fazla 40); `qualitiesResult.options[].kind` ayrıca `"other"` (Diğer dosyalar) olabilir.
 - `{ "type":"qualitySelect", "selectionId", "index" }` — menüden seçim; App IDM tarzı "Dosya İndirme Bilgisi" penceresini açar.
 - `{ "type":"videoGeometry", "tabId", "windowId", "visible", "fullscreen", "rect":{ "left","top","right","bottom" }, "devicePixelRatio", "viewport":{ "width","height" }, "browserWindow":{ "left","top","width","height" }, "pageUrl", "pageTitle" }`
 App → Eklenti:

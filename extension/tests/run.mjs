@@ -13,7 +13,7 @@ const T = { s: "string", n: "number", b: "boolean" };
 const SCHEMAS = {
   download: { type: "s", requestId: "s", url: "s", referrer: "s", cookies: "s", userAgent: "s", filename: "s", mime: "s", fileSize: "n" },
   media: { type: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", items: "a" },
-  qualities: { type: "s", requestId: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", src: "s" },
+  qualities: { type: "s", requestId: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", src: "s", players: "a" },
   qualitySelect: { type: "s", selectionId: "s", index: "n" },
   videoGeometry: {
     type: "s", tabId: "n", windowId: "n", visible: "b", fullscreen: "b", rect: "o",
@@ -32,7 +32,7 @@ function validate(msg) {
   }
   if (msg.type === "download") assert.equal(msg.type, "download");
   if (msg.type === "media") for (const i of msg.items) {
-    assert.deepEqual(Object.keys(i).sort(), ["cookies", "kind", "mime", "origin", "referer", "url", "userAgent"]);
+    assert.deepEqual(Object.keys(i).sort(), ["cookies", "kind", "mime", "origin", "referer", "size", "url", "userAgent"]);
     assert.ok(["hls", "dash", "file"].includes(i.kind));
   }
   if (msg.type === "videoGeometry") {
@@ -91,6 +91,7 @@ const media = await import(url("lib/media.js"));
 const geometry = await import(url("lib/geometry.js"));
 const proto = await import(url("lib/protocol.js"));
 const settings = await import(url("lib/settings.js"));
+const { readPlayers } = await import(url("lib/players.js"));
 
 capture.nameWait.totalMs = 150; capture.nameWait.stepMs = 30;
 let passed = 0;
@@ -368,9 +369,15 @@ await test("button.js: video seçimi ve düğme konumu", () => {
   assert.equal(b.qualifies(vid(900, 100), win), false);                 // garip oran
   assert.equal(b.qualifies(vid(640, 360, { _none: true }), win), false); // görünmez
   assert.equal(b.qualifies(vid(640, 360, { closest: () => ({}) }), win), false); // önizleme kartı
-  const p = b.buttonPos({ left: 100, top: 50, width: 640, height: 360 }, 160, 1000, 600);
-  assert.deepEqual(JSON.parse(JSON.stringify(p)), { left: 570, top: 60 });                          // videonun sağ üstü
-  assert.deepEqual(JSON.parse(JSON.stringify(b.buttonPos({ left: 900, top: -200, width: 640, height: 360 }, 160, 1000, 600))), { left: 836, top: 4 }); // ekrana sığar
+  const R = (left, top, w, h) => ({ left, top, width: w, height: h, right: left + w, bottom: top + h });
+  const p = b.buttonPos(R(100, 50, 640, 360), 160, 30, 1000, 600);
+  assert.deepEqual(JSON.parse(JSON.stringify(p)), { left: 572, top: 58, visible: true });           // videonun İÇİNDE sağ üst (10 px)
+  // clamp YOK: video yukarı kayınca düğme de aynı miktarda kayar, viewport'a yapışmaz
+  const up = b.buttonPos(R(100, -100, 640, 360), 160, 30, 1000, 600);
+  assert.equal(up.top, -92); assert.equal(up.left, 572);
+  assert.equal(b.buttonPos(R(100, -500, 640, 360), 160, 30, 1000, 600).visible, false);              // video tamamen ekran dışı
+  assert.equal(b.buttonPos(R(100, 700, 640, 360), 160, 30, 1000, 600).visible, false);               // altta
+  assert.equal(b.buttonPos(R(100, -345, 640, 360), 160, 30, 1000, 600).visible, false);             // video görünür ama düğme bölgesi üst kenarın dışında
   assert.equal(b.groupOf({ kind: "file" }), "Dosya");
   assert.equal(b.groupOf({ audioOnly: true }), "Sadece ses");
 });
@@ -397,6 +404,165 @@ await test("önceden alma yok: media mesajı ve düğme yüklemesi qualities gö
   // kaynakta tek gönderim noktası var: openMenu içinde; o da yalnızca düğme click işleyicisi + "Tekrar dene" çağırır
   assert.equal((src.match(/kind:\s*"qualities"/g) || []).length, 1);
   assert.equal((src.match(/openMenu\(\)/g) || []).length, 3);   // tanım + click + "Tekrar dene"
+});
+
+// ---- düğme: kaydırma / kararlılık / fade-in (sahte DOM + sahte zaman) ----
+function loadButton() {
+  const mkEl = () => {
+    const cls = new Set();
+    return { style: {}, classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), has: (c) => cls.has(c), contains: (c) => cls.has(c) }, offsetWidth: 160, offsetHeight: 22,
+      addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }), matches: () => false, set innerHTML(v) {}, scrollHeight: 100 };
+  };
+  const els = {};
+  const doc = {
+    createElement: () => { const e = mkEl(); e.attachShadow = () => ({ set innerHTML(v) {}, getElementById: (id) => (els[id] ??= mkEl()) }); return e; },
+    addEventListener() {}, documentElement: null, elementFromPoint: () => null, hidden: false, querySelectorAll: () => [],
+  };
+  const win = { innerWidth: 1000, innerHeight: 600, getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1", position: "static" }), addEventListener() {} };
+  win.top = win;
+  const sandbox = { window: win, document: doc, __TD_TEST__: {}, parseFloat, Math, setTimeout, clearTimeout, requestAnimationFrame: () => 0, addEventListener() {}, innerWidth: 1000, innerHeight: 600,
+    chrome: { runtime: { sendMessage() {}, onMessage: mkListener(), getURL: (p) => "chrome-extension://x/" + p } } };
+  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  vm.runInContext(readFileSync(join(root, "button.js"), "utf8"), sandbox);
+  return { b: sandbox.__TD_TEST__.button, sandbox, els };
+}
+const fakeVideo = (rect) => ({ tagName: "VIDEO", isConnected: true, closest: () => null, rect, getBoundingClientRect() { const r = this.rect; return { left: r.l, top: r.t, width: r.w, height: r.h, right: r.l + r.w, bottom: r.t + r.h }; } });
+
+await test("düğme: kaydırmada videoya göre sabit ofset, clamp yok, video ekran dışına çıkınca gizlenir", () => {
+  const { b, sandbox, els } = loadButton();
+  let now = 0; b.setClock(() => now);
+  const v = fakeVideo({ l: 100, t: 200, w: 640, h: 360 });
+  b.setTarget(v);
+  b.place(); now = 500; b.place();                       // kararlı -> görünür
+  const btn = els.btn;
+  assert.equal(btn.style.display, "flex");
+  assert.ok(btn.classList.has("vis"));
+  const off0 = [parseFloat(btn.style.left) - v.rect.l, parseFloat(btn.style.top) - v.rect.t];
+  assert.deepEqual(off0, [640 - 160 - 8, 8]);          // video içinde, sağ üst
+  for (const top of [150, 90, 30, -20, -200]) {          // sayfa aşağı kayar: video yukarı çıkar (scrollY artar)
+    sandbox.scrollY = 200 - top; v.rect.t = top; now += 16; b.place();
+    if (top === -200) break;
+    assert.equal(btn.style.display, "flex", `top=${top} görünür kalmalı`);
+    assert.deepEqual([parseFloat(btn.style.left) - v.rect.l, parseFloat(btn.style.top) - v.rect.t], off0, `top=${top} ofset sabit`);
+  }
+  assert.equal(btn.style.display, "none");               // top=-200: düğme bölgesi ekran dışı (-190+30 < 0)
+  assert.ok(!btn.classList.has("vis"));
+  v.rect.t = -400; now += 16; b.place();
+  assert.equal(btn.style.display, "none");               // video tamamen çıktı
+  sandbox.scrollY = 0; v.rect.t = 120; now += 16; b.place();
+  assert.equal(btn.style.display, "flex");               // geri gelince (aynı boyut) anında görünür
+});
+
+await test("düğme: kararsız rect'te görünmez, 400 ms kararlılıktan sonra fade-in ile görünür", () => {
+  const { b, els } = loadButton();
+  let now = 0; b.setClock(() => now);
+  const v = fakeVideo({ l: 0, t: 0, w: 300, h: 200 });
+  b.setTarget(v);
+  const btn = els.btn, step = (dt) => { now += dt; b.place(); return btn.style.display === "flex"; };
+  assert.equal(step(0), false);
+  v.rect = { l: 50, t: 10, w: 500, h: 300 }; assert.equal(step(100), false);   // oynatıcı yükleniyor: boyut/konum değişiyor
+  v.rect = { l: 10, t: 10, w: 800, h: 450 }; assert.equal(step(100), false);
+  v.rect = { l: 200, t: 60, w: 640, h: 360 }; assert.equal(step(100), false);  // son değişim
+  assert.equal(step(300), false);                         // 300 ms sabit: henüz yok
+  assert.equal(step(120), true);                          // 420 ms sabit -> görünür
+  assert.ok(btn.classList.has("vis"));                    // opaklık CSS geçişiyle (sınıf), konumda geçiş yok
+  assert.equal(parseFloat(btn.style.left), 200 + 640 - 160 - 8);
+  // yeterince büyük değil: asla görünmez
+  const { b: b2, els: e2 } = loadButton(); let n2 = 0; b2.setClock(() => n2);
+  b2.setTarget(fakeVideo({ l: 0, t: 0, w: 190, h: 150 })); b2.place(); n2 = 2000; b2.place();
+  assert.notEqual(e2.btn.style.display, "flex");
+});
+
+await test("düğme: görünürken büyük boyut değişimi (tam ekran/sinema) yeniden kararlılık bekler; küçük/konum değişimi anında", () => {
+  const { b, els } = loadButton();
+  let now = 0; b.setClock(() => now);
+  const v = fakeVideo({ l: 100, t: 100, w: 640, h: 360 });
+  b.setTarget(v); b.place(); now = 500; b.place();
+  assert.equal(els.btn.style.display, "flex");
+  v.rect = { l: 100, t: 100, w: 650, h: 366 }; now += 16; b.place();
+  assert.equal(els.btn.style.display, "flex");            // %2 değişim: takip
+  v.rect = { l: 0, t: 0, w: 1000, h: 560 }; now += 16; b.place();
+  assert.equal(els.btn.style.display, "none");            // sinema modu: gizle, bekle
+  now += 200; b.place(); assert.equal(els.btn.style.display, "none");
+  now += 250; b.place(); assert.equal(els.btn.style.display, "flex");
+  assert.equal(parseFloat(els.btn.style.left), 1000 - 160 - 8);
+});
+
+await test("stepTracker: kaydırma (sayfa koordinatı sabit) kararlılığı bozmaz", () => {
+  const { b } = loadButton();
+  const t = b.newTracker();
+  const at = (top, sy, now) => b.stepTracker(t, { left: 10, top, width: 640, height: 360 }, 0, sy, now);
+  assert.equal(at(100, 0, 0), false);
+  assert.equal(at(60, 40, 200), false);
+  assert.equal(at(20, 80, 450), true);                    // viewport'ta kaydı ama sayfada sabit: 450 ms kararlı
+});
+
+// ---- oynatıcı yapılandırması ayrıştırma ----
+const mkDoc = ({ scripts = [], sources = [], base = "https://film.test/izle/1" } = {}) => ({
+  baseURI: base,
+  querySelectorAll: (sel) => (sel.startsWith("script") ? scripts.map((t) => ({ textContent: t })) : sources.map((s) => ({ getAttribute: (n) => s[n] ?? null, currentSrc: s.src }))),
+});
+await test("players: Playerjs [1080p]url,[720p]url dizesi", () => {
+  const ex = {};
+  readPlayers({}, mkDoc(), ex);
+  const r = ex.parseList("[1080p]https://c.test/a/1080/index.m3u8,[720p]https://c.test/a/720/index.m3u8,[480p]//c.test/a/480/index.m3u8 or https://b.test/x.m3u8,[Auto]https://c.test/m.m3u8");
+  assert.deepEqual(r.map((x) => [x.label, x.height, x.url]), [
+    ["1080p", 1080, "https://c.test/a/1080/index.m3u8"], ["720p", 720, "https://c.test/a/720/index.m3u8"],
+    ["480p", 480, "https://c.test/a/480/index.m3u8"], ["Auto", 0, "https://c.test/m.m3u8"]]);
+  assert.equal(ex.heightOfLabel("1920x1080"), 1080);
+  assert.equal(ex.heightOfLabel("4K"), 2160);
+});
+await test("players: satır içi script (Playerjs file, sources[], çıplak m3u8)", () => {
+  const doc = mkDoc({ scripts: [
+    'var p = new Playerjs({id:"player", file:"[1080p]https:\\/\\/c.test\\/v\\/1080.m3u8,[720p]https:\\/\\/c.test\\/v\\/720.m3u8"});',
+    'jwplayer("x").setup({sources:[{file:"https://d.test/h.mp4",label:"360p"},{"file":"https://d.test/m.mp4","label":"480p"}]});',
+    'cfg = {"hls":"https:\\/\\/e.test\\/master.m3u8?t=1"}; var track = "https://e.test/sub.vtt";',
+  ] });
+  const r = readPlayers({}, doc);
+  const byUrl = Object.fromEntries(r.map((x) => [x.url, x]));
+  assert.equal(byUrl["https://c.test/v/1080.m3u8"].height, 1080);
+  assert.equal(byUrl["https://c.test/v/720.m3u8"].label, "720p");
+  assert.equal(byUrl["https://d.test/h.mp4"].height, 360);
+  assert.equal(byUrl["https://d.test/m.mp4"].label, "480p");
+  assert.ok(byUrl["https://e.test/master.m3u8?t=1"]);
+  assert.ok(!byUrl["https://e.test/sub.vtt"]);
+});
+await test("players: jwplayer sources, video.js currentSources, HLS.js levels, <source> öznitelikleri", () => {
+  const win = {
+    jwplayer: () => ({ getPlaylist: () => [{ sources: [{ file: "/hls/1080.m3u8", label: "1080p", type: "hls" }, { file: "https://j.test/720.mp4", label: "720p" }] }] }),
+    videojs: { getPlayers: () => ({ a: { currentSources: () => [{ src: "https://v.test/a.m3u8", type: "application/x-mpegURL", label: "Auto" }] } }) },
+    hls: { levels: [{ url: ["https://h.test/l/480.m3u8"], height: 480 }, { url: "https://h.test/l/360.m3u8", height: 360, name: "360p" }], loadSource() {} },
+  };
+  const doc = mkDoc({ sources: [{ src: "https://s.test/hd.mp4", size: "1080", type: "video/mp4" }, { src: "blob:https://x/abc" }, { src: "https://s.test/x.js" }] });
+  const r = readPlayers(win, doc);
+  const m = Object.fromEntries(r.map((x) => [x.url, x]));
+  assert.equal(m["https://film.test/hls/1080.m3u8"].height, 1080);
+  assert.equal(m["https://j.test/720.mp4"].height, 720);
+  assert.ok(m["https://v.test/a.m3u8"]);
+  assert.equal(m["https://h.test/l/480.m3u8"].height, 480);
+  assert.equal(m["https://h.test/l/360.m3u8"].label, "360p");
+  assert.equal(m["https://s.test/hd.mp4"].height, 1080);
+  assert.equal(r.length, 6);                              // blob: ve .js atıldı
+  JSON.stringify(r);                                      // düz veri (executeScript'ten döner)
+});
+await test("qualities mesajı: players alanı biçimi ve sınırı", () => {
+  const m = proto.buildQualities({ requestId: "q", tabId: 1, frameId: 0, players: [{ url: "https://a/1.m3u8", label: "1080p", height: 1080 }, { url: 5 }, null, ...Array(60).fill({ url: "https://a/x.mp4" })] });
+  validate(m);
+  assert.equal(m.players.length, 40);
+  assert.deepEqual(m.players[0], { url: "https://a/1.m3u8", label: "1080p", height: 1080 });
+});
+await test("media: 206 Content-Range toplam boyutu kullanılır; boyut mesajda gider; clearTab boş liste yollar", async () => {
+  sent.length = 0; media.opts.debounceMs = 20;
+  const h = (n, v) => ({ name: n, value: v });
+  media.onResponse({ tabId: 21, frameId: 0, url: "https://v.test/ist.mp4", statusCode: 206, responseHeaders: [h("Content-Type", "video/mp4"), h("Content-Length", "1000"), h("Content-Range", "bytes 0-999/734003200")] });
+  await sleep(80);
+  const m = sent.find((x) => x.type === "media" && x.tabId === 21);
+  validate(m);
+  assert.equal(m.items[0].size, 734003200);
+  sent.length = 0;
+  media.clearTab(21);                                      // sayfa değişince App'e boş liste gider
+  const e = sent.find((x) => x.type === "media" && x.tabId === 21);
+  assert.deepEqual(e && e.items, []);
 });
 
 console.log(`\n${passed} test geçti`);

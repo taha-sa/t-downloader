@@ -33,7 +33,7 @@ public sealed record DownloadResultMessage(string RequestId, bool Accepted) : Ip
 /// Sniff edilen medya. Referer/Origin/Cookies/UserAgent isteğe bağlıdır (eski eklentiler göndermez): iframe
 /// oynatıcıdaki akışlar için istek başlıklarını taşır.
 /// </summary>
-public sealed record MediaItem(string Url, string? Mime, string Kind, string? Referer = null, string? Origin = null, string? Cookies = null, string? UserAgent = null);
+public sealed record MediaItem(string Url, string? Mime, string Kind, string? Referer = null, string? Origin = null, string? Cookies = null, string? UserAgent = null, long Size = -1);
 
 public sealed record MediaMessage(int TabId, int FrameId, string? PageUrl, string? PageTitle, List<MediaItem> Items, string? FrameUrl = null) : IpcMessage;
 
@@ -46,9 +46,13 @@ public sealed record VideoGeometryMessage(
     SizeInfo Viewport, WindowRectInfo BrowserWindow, string? PageUrl, string? PageTitle) : IpcMessage;
 
 /// <summary>Sayfa içi düğme kalite listesi ister (eklenti -> App). Src: videonun currentSrc'si (http/https ise).</summary>
-public sealed record QualitiesMessage(string RequestId, int TabId, int FrameId, string? PageUrl, string? PageTitle, string? FrameUrl, string? Src) : IpcMessage;
+public sealed record QualitiesMessage(string RequestId, int TabId, int FrameId, string? PageUrl, string? PageTitle, string? FrameUrl, string? Src,
+    List<PlayerSource>? Players = null) : IpcMessage;
 
-/// <summary>Menüde gösterilen satır. Kind: "video" | "audio" | "file".</summary>
+/// <summary>Düğme tıklanınca eklentinin oynatıcı yapılandırmasından okuduğu kaynak (jwplayer/video.js/HLS.js/Playerjs/&lt;source&gt;).</summary>
+public sealed record PlayerSource(string Url, string? Label = null, int Height = 0);
+
+/// <summary>Menüde gösterilen satır. Kind: "video" | "audio" | "file" | "other" (Diğer dosyalar).</summary>
 public sealed record QualityOptionInfo(string Label, string Kind, int Height, long Size, bool AudioOnly, bool IsDefault);
 
 /// <summary>Kalite listesi yanıtı (App -> eklenti). ErrorCode: "no_ytdlp" | "no_media" | "error". SelectionId seçimde geri gönderilir.</summary>

@@ -33,7 +33,10 @@ export function onResponse(d) {
   if (d.tabId < 0 || d.statusCode >= 400 || d.statusCode === 204) return;
   const mime = header(d.responseHeaders, "content-type");
   const len = parseInt(header(d.responseHeaders, "content-length"), 10);
-  const kind = classifyMedia(d.url, mime, Number.isFinite(len) ? len : -1);
+  // 206 yanıtında Content-Length yalnızca parçadır; gerçek boyut Content-Range'in sonundadır ("bytes 0-99/12345").
+  const crTotal = parseInt((/\/(\d+)\s*$/.exec(header(d.responseHeaders, "content-range")) || [])[1], 10);
+  const size = Number.isFinite(crTotal) ? crTotal : Number.isFinite(len) ? len : -1;
+  const kind = classifyMedia(d.url, mime, size);
   const sent = sentHeaders.get(d.requestId);
   sentHeaders.delete(d.requestId);
   if (!kind) return;
@@ -46,7 +49,7 @@ export function onResponse(d) {
   // Referer: tarayıcının gönderdiği; yoksa isteği yapan belge (iframe) adresi; yoksa initiator origin'i.
   const referer = sent?.referer || frameUrl || (d.initiator ? d.initiator + "/" : "");
   const origin = sent?.origin || originOf(referer) || d.initiator || "";
-  g.items.set(d.url, { url: d.url, mime: mime.split(";")[0].trim(), kind, referer, origin });
+  g.items.set(d.url, { url: d.url, mime: mime.split(";")[0].trim(), kind, referer, origin, size });
   clearTimeout(timers.get(key));
   timers.set(key, setTimeout(() => flush(key), opts.debounceMs));
 }
@@ -73,9 +76,12 @@ async function flush(key) {
 }
 
 // Sekme yeni sayfaya gidince eski listeyi at.
+// App'e de boş liste bildirilir: eski sayfanın akışları yeni sayfanın kalite menüsüne karışmasın.
 export function clearTab(tabId) {
-  for (const [key, g] of groups) {
-    if (g.tabId === tabId) { groups.delete(key); clearTimeout(timers.get(key)); timers.delete(key); }
+  for (const [key, g] of [...groups]) {
+    if (g.tabId !== tabId) continue;
+    groups.delete(key); clearTimeout(timers.get(key)); timers.delete(key);
+    if (g.items.size > 0) native.send(buildMedia({ tabId, frameId: g.frameId, frameUrl: "", pageUrl: "", pageTitle: "", items: [] }));
   }
 }
 

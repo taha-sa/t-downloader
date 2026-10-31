@@ -45,6 +45,7 @@ export function buildMedia(p) {
     items: (p.items || []).map((i) => ({
       url: i.url, mime: str(i.mime), kind: i.kind,
       referer: str(i.referer), origin: str(i.origin), cookies: str(i.cookies), userAgent: str(i.userAgent),
+      size: Number.isFinite(i.size) ? i.size : -1,        // bilinen toplam bayt (Content-Range/Content-Length), yoksa -1
     })),
   };
 }
@@ -59,6 +60,10 @@ export function buildQualities(p) {
     pageTitle: str(p.pageTitle),
     frameUrl: str(p.frameUrl),
     src: str(p.src),
+    // Düğme tıklanınca oynatıcı yapılandırmasından okunan kaynaklar: [{ url, label, height }] (en fazla 40)
+    players: (Array.isArray(p.players) ? p.players : [])
+      .filter((x) => x && typeof x.url === "string" && x.url.length <= 2000).slice(0, 40)
+      .map((x) => ({ url: x.url, label: str(x.label).slice(0, 40), height: Number.isFinite(x.height) ? Math.max(0, Math.round(x.height)) : 0 })),
   };
 }
 

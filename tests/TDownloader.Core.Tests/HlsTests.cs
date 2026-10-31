@@ -50,16 +50,18 @@ public sealed class HlsTestServer : IDisposable
                     if (!Routes.TryGetValue(path, out var r)) { c.Response.StatusCode = 404; c.Response.Close(); return; }
                     var body = r.Body;
                     var range = c.Request.Headers["Range"];
+                    long total = body.Length;
                     if (range != null && range.StartsWith("bytes="))
                     {
                         var p = range[6..].Split('-');
                         long a = long.Parse(p[0]), b = Math.Min(long.Parse(p[1]), body.Length - 1);
                         body = body[(int)a..(int)(b + 1)];
                         c.Response.StatusCode = 206;
+                        c.Response.AddHeader("Content-Range", $"bytes {a}-{b}/{total}");
                     }
                     c.Response.ContentType = r.Type;
                     c.Response.ContentLength64 = body.Length;
-                    c.Response.OutputStream.Write(body);
+                    if (c.Request.HttpMethod != "HEAD") c.Response.OutputStream.Write(body);
                     c.Response.Close();
                 }
                 catch { try { c.Response.Abort(); } catch { } }

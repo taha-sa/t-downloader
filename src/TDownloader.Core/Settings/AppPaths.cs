@@ -7,6 +7,9 @@ public sealed class AppPaths
     public string SettingsFile => Path.Combine(Root, "settings.json");
     public string DownloadsFile => Path.Combine(Root, "downloads.json");
     public string DwnlDataDir => Path.Combine(Root, "DwnlData");
+    public string LogsDir => Path.Combine(Root, "logs");
+    /// <summary>Düğmeye tıklanınca o sekmede yakalananların (host+yol, sorgu/imza YOK) döner tanı günlüğü.</summary>
+    public string MediaLogFile => Path.Combine(LogsDir, "media.log");
 
     public AppPaths(string root) { Root = root; }
 

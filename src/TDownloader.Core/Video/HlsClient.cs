@@ -77,8 +77,11 @@ public sealed class HlsClient
             if (media.Segments.Count == 0) throw new HlsException("Playlist'te parça yok.");
             if (!media.EndList) throw new HlsException("Canlı yayınlar desteklenmiyor.");
             if (HlsParser.DrmReason(media) is { } drm) throw new HlsException("Bu içerik DRM korumalı olduğu için indirilemez (" + drm + ").", true);
-            string label = "Tek kalite" + (media.TotalDuration > 0 ? " (" + FormatDuration(media.TotalDuration) + ")" : "");
-            return new VideoInfo(name, new List<QualityOption> { new(label, MakeFormat(url, null, 0), "mp4", 0, 0, false) });
+            int h = HlsParser.HeightFromUrl(url);
+            if (h == 0) h = HlsParser.ResolutionHeight(text);
+            string dur = media.TotalDuration > 0 ? " (" + FormatDuration(media.TotalDuration) + ")" : "";
+            string label = h > 0 ? $"{h}p hls{dur}" : "Varsayılan kalite" + dur;
+            return new VideoInfo(name, new List<QualityOption> { new(label, MakeFormat(url, null, h), "mp4", h, 0, false) });
         }
 
         var master = HlsParser.ParseMaster(text, url);
@@ -102,9 +105,48 @@ public sealed class HlsClient
         return new VideoInfo(name, BuildOptions(master, duration));
     }
 
+    /// <summary>Uzak dosyanın bayt uzunluğu (HEAD; olmazsa Range 0-0 ile Content-Range). Bilinmiyorsa -1.</summary>
+    private async Task<long> GetLengthAsync(string url, MediaContext ctx, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(8));
+        using (var head = new HttpRequestMessage(HttpMethod.Head, url))
+        {
+            ctx.Apply(head, new Uri(url).Host);
+            try
+            {
+                using var r = await _http.SendAsync(head, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+                if (r.IsSuccessStatusCode && r.Content.Headers.ContentLength is > 0 and var l) return l;
+            }
+            catch (HttpRequestException) { }
+        }
+        using var get = new HttpRequestMessage(HttpMethod.Get, url);
+        ctx.Apply(get, new Uri(url).Host);
+        get.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
+        using var resp = await _http.SendAsync(get, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode) return -1;
+        return resp.Content.Headers.ContentRange?.Length ?? resp.Content.Headers.ContentLength ?? -1;
+    }
+
+    /// <summary>
+    /// Bir sekme/çerçevede yakalanan TÜM m3u8 adreslerinden ve oynatıcı yapılandırmasından kalite listesi
+    /// (bkz. <see cref="HlsQualityResolver"/>). <paramref name="probeMaster"/> yalnızca kullanıcı tıklamasında true olmalı.
+    /// Hiçbir adres kullanılamazsa <see cref="HlsException"/> (çağıran yt-dlp'ye düşebilir).
+    /// </summary>
+    public Task<VideoInfo> GetInfoSetAsync(IReadOnlyList<HlsCandidate> candidates, MediaContext? ctx, string? title, bool probeMaster,
+        Action<string>? log = null, CancellationToken ct = default)
+    {
+        ctx ??= MediaContext.Empty;
+        var r = new HlsQualityResolver((u, c) => GetTextAsync(u, ctx, c), (u, c) => GetLengthAsync(u, ctx, c), log);
+        string name = string.IsNullOrWhiteSpace(title) ? (candidates.Count > 0 ? TitleFromUrl(candidates[0].Url) : "video") : title!;
+        return r.ResolveAsync(candidates, name, probeMaster, ct);
+    }
+
     public static List<QualityOption> BuildOptions(HlsMaster master, double duration)
     {
         var options = new List<QualityOption>();
+        // Çözünürlüğü olmayan varyantlar için URL'den (/720/, _480p) tahmin
+        master = master with { Variants = master.Variants.Select(v => v.Height > 0 ? v : v with { Height = HlsParser.HeightFromUrl(v.Url) }).ToList() };
         // Aynı yükseklikte en yüksek bit hızlı varyant; yükseklik bilinmiyorsa bit hızına göre ayrı satır.
         var groups = master.Variants.GroupBy(v => v.Height > 0 ? "h" + v.Height : "b" + v.Bandwidth)
             .Select(g => g.OrderByDescending(v => v.Bandwidth).First())
@@ -127,7 +169,7 @@ public sealed class HlsClient
         return options;
     }
 
-    private static string FormatDuration(double s)
+    internal static string FormatDuration(double s)
     {
         var t = TimeSpan.FromSeconds(s);
         return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";

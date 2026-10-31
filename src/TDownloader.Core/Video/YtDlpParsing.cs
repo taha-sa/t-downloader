@@ -4,7 +4,8 @@ using System.Text.Json;
 namespace TDownloader.Core.Video;
 
 /// <summary>Menüde gösterilen sadeleştirilmiş kalite seçeneği.</summary>
-public sealed record QualityOption(string Label, string Format, string Ext, int Height, long Size, bool AudioOnly);
+/// <summary>Other: ana videoya ait olmayan (kısa/önizleme/reklam olabilecek) satır; menüde en altta "Diğer dosyalar" altında gösterilir.</summary>
+public sealed record QualityOption(string Label, string Format, string Ext, int Height, long Size, bool AudioOnly, bool Other = false);
 
 public sealed record VideoInfo(string Title, List<QualityOption> Options);
 

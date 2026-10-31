@@ -6,6 +6,18 @@ import * as media from "./lib/media.js";
 import * as geometry from "./lib/geometry.js";
 import * as menus from "./lib/menus.js";
 import { buildQualities, buildQualitySelect } from "./lib/protocol.js";
+import { readPlayers } from "./lib/players.js";
+
+// Yalnızca düğme tıklanınca: o çerçevedeki oynatıcı yapılandırmasını (jwplayer/video.js/HLS.js/Playerjs/<source>) OKUR.
+async function probePlayers(tabId, frameId) {
+  try {
+    if (!chrome.scripting?.executeScript || tabId == null) return [];
+    const run = chrome.scripting.executeScript({ target: { tabId, frameIds: [frameId ?? 0] }, world: "MAIN", func: readPlayers });
+    const res = await Promise.race([run, new Promise((r) => setTimeout(() => r(null), 1500))]);
+    const list = res && res[0] && res[0].result;
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }                                  // kısıtlı sayfa / çerçeve kapandı
+}
 
 let hostVersion = null;
 
@@ -53,10 +65,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       (async () => {
         const tab = sender.tab || {};
         native.connect();
+        const players = await probePlayers(tab.id, sender.frameId);
         const requestId = `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
         const res = await native.request(buildQualities({
           requestId, tabId: tab.id, frameId: sender.frameId ?? 0, pageUrl: tab.url, pageTitle: tab.title,
-          frameUrl: sender.url, src: msg.src,
+          frameUrl: sender.url, src: msg.src, players,
         }), (m) => m.type === "qualitiesResult" && m.requestId === requestId, 100000);
         sendResponse(res ? { ...res } : { ok: false, errorCode: "silent", error: "T-Downloader yanıt vermedi. Uygulama çalışıyor mu?" });
       })();

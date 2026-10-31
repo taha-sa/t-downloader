@@ -75,6 +75,49 @@ public static class HlsParser
         return new HlsMaster(variants, audios);
     }
 
+    private static readonly Regex UrlWxH = new(@"(?<![A-Za-z0-9])\d{3,4}x(\d{3,4})(?![A-Za-z0-9])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex UrlP = new(@"(?<![A-Za-z0-9])(2160|1440|1080|720|576|540|480|360|240|144)p?(?![A-Za-z0-9])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ResolutionRe = new(@"RESOLUTION=(\d{2,5})x(\d{2,5})", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly HashSet<int> KnownHeights = new() { 144, 240, 360, 480, 540, 576, 720, 1080, 1440, 2160 };
+
+    /// <summary>URL yolundan (sorgu hariç) yükseklik tahmini: /1080/, _720p., 1280x720 ... Bulunamazsa 0. Yolun SONUNDAKİ eşleşme kazanır.</summary>
+    public static int HeightFromUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return 0;
+        string path = url;
+        int q = path.IndexOfAny(new[] { '?', '#' });
+        if (q >= 0) path = path[..q];
+        int scheme = path.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0) { int slash = path.IndexOf('/', scheme + 3); path = slash >= 0 ? path[slash..] : ""; }   // host adı sayı içerebilir
+        int best = 0, bestAt = -1;
+        foreach (Match m in UrlWxH.Matches(path))
+            if (int.TryParse(m.Groups[1].Value, out int h) && KnownHeights.Contains(h) && m.Index > bestAt) { best = h; bestAt = m.Index; }
+        foreach (Match m in UrlP.Matches(path))
+            if (int.TryParse(m.Groups[1].Value, out int h) && m.Index > bestAt) { best = h; bestAt = m.Index; }
+        return best;
+    }
+
+    /// <summary>Playlist metninde RESOLUTION=WxH varsa (master dışı playlist'lerde nadiren bulunur) yüksekliği döner, yoksa 0.</summary>
+    public static int ResolutionHeight(string? text)
+    {
+        if (text == null) return 0;
+        var m = ResolutionRe.Match(text);
+        return m.Success && int.TryParse(m.Groups[2].Value, out int h) ? h : 0;
+    }
+
+    /// <summary>"1080p", "720", "1920x1080", "4K" gibi etiketten yükseklik; yoksa 0.</summary>
+    public static int HeightFromLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label)) return 0;
+        var s = label.Trim();
+        var m = Regex.Match(s, @"(\d{3,4})\s*[xX×]\s*(\d{3,4})");
+        if (m.Success && int.TryParse(m.Groups[2].Value, out int hh)) return hh;
+        m = Regex.Match(s, @"(\d{3,4})\s*[pP]");
+        if (m.Success && int.TryParse(m.Groups[1].Value, out int hp)) return hp;
+        if (Regex.IsMatch(s, @"^\s*4K\s*$", RegexOptions.IgnoreCase)) return 2160;
+        return int.TryParse(s, out int n) && KnownHeights.Contains(n) ? n : 0;
+    }
+
     private static long ParseLong(string? s) => long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
 
     public static HlsMedia ParseMedia(string text, string baseUrl)
