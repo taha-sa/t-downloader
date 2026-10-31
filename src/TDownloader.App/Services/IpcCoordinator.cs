@@ -7,11 +7,15 @@ public sealed class IpcCoordinator : IAsyncDisposable
 {
     private readonly AppServices _svc;
     private readonly IpcServer _server = new();
-    private readonly SemaphoreSlim _dialogGate = new(1, 1);
+    private readonly DownloadCaptureGate _capture;
 
     public IpcCoordinator(AppServices svc)
     {
         _svc = svc;
+        // IDM tarzı: kurallar uygunsa hemen accepted:true, onay penceresi arka planda sırayla (pencere eklentiyi bekletmez).
+        _capture = new DownloadCaptureGate(
+            enabled: d => _svc.Main != null && (d.Explicit || _svc.Settings.BrowserCaptureEnabled),
+            showPrompt: d => _svc.PromptDownloadAsync(d.Url, d.Referrer, d.Cookies, d.UserAgent, d.Filename, d.FileSize));
         svc.Ipc = _server;
         _server.MessageHandler = HandleAsync;
         _server.ClientConnected += (_, c) =>
@@ -23,24 +27,19 @@ public sealed class IpcCoordinator : IAsyncDisposable
 
     public void Start() => _server.Start();
 
-    private async Task<IpcMessage?> HandleAsync(IpcMessage msg, IpcConnection conn)
+    private Task<IpcMessage?> HandleAsync(IpcMessage msg, IpcConnection conn)
     {
         switch (msg)
         {
             case PingMessage:
-                return new PongMessage(AppServices.Version);
+                return Task.FromResult<IpcMessage?>(new PongMessage(AppServices.Version));
 
             case DownloadMessage d:
-                bool accepted;
-                await _dialogGate.WaitAsync().ConfigureAwait(false);
-                try { accepted = await _svc.PromptDownloadAsync(d.Url, d.Referrer, d.Cookies, d.UserAgent, d.Filename, d.FileSize).ConfigureAwait(false); }
-                catch (Exception) { accepted = false; }
-                finally { _dialogGate.Release(); }
-                return new DownloadResultMessage(d.RequestId, accepted);
+                return Task.FromResult<IpcMessage?>(_capture.Handle(d));
 
             case MediaMessage m:
                 try { _svc.Media.OnMedia(m); } catch (Exception) { }
-                return null;
+                return Task.FromResult<IpcMessage?>(null);
 
             case QualitiesMessage q:
                 // Uzun sürebilir (yt-dlp): bağlantının mesaj döngüsünü bloke etme, yanıtı ayrıca gönder.
@@ -51,17 +50,17 @@ public sealed class IpcCoordinator : IAsyncDisposable
                     catch (Exception ex) { r = new QualitiesResultMessage(q.RequestId, false, ex.Message, "error", null, null, null); }
                     try { await conn.SendAsync(r).ConfigureAwait(false); } catch (Exception) { }
                 });
-                return null;
+                return Task.FromResult<IpcMessage?>(null);
 
             case QualitySelectMessage qs:
                 try { _svc.Media.OnQualitySelect(qs); } catch (Exception) { }
-                return null;
+                return Task.FromResult<IpcMessage?>(null);
 
             case VideoGeometryMessage v:
                 try { _svc.Media.OnVideoGeometry(v); } catch (Exception) { }
-                return null;
+                return Task.FromResult<IpcMessage?>(null);
         }
-        return null;
+        return Task.FromResult<IpcMessage?>(null);
     }
 
     public ValueTask DisposeAsync() => _server.DisposeAsync();

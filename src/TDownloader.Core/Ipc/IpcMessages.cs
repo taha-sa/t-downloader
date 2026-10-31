@@ -25,7 +25,7 @@ public sealed record PongMessage(string Version) : IpcMessage;
 
 public sealed record DownloadMessage(
     string RequestId, string Url, string? Referrer, string? Cookies, string? UserAgent,
-    string? Filename, string? Mime, long FileSize) : IpcMessage;
+    string? Filename, string? Mime, long FileSize, bool Explicit = false) : IpcMessage;
 
 public sealed record DownloadResultMessage(string RequestId, bool Accepted) : IpcMessage;
 

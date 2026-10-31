@@ -30,6 +30,7 @@ export function buildDownload(p) {
     filename: str(p.filename),
     mime: str(p.mime),
     fileSize: Number.isFinite(p.fileSize) ? p.fileSize : -1,
+    explicit: p.explicit === true,   // sağ tık menüsü gibi kullanıcı eylemi: App "yakalama kapalı" ayarını yok sayar
   };
 }
 

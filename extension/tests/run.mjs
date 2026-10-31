@@ -11,7 +11,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // ---- sözleşme şema doğrulayıcı (CONTRACT.md) ----
 const T = { s: "string", n: "number", b: "boolean" };
 const SCHEMAS = {
-  download: { type: "s", requestId: "s", url: "s", referrer: "s", cookies: "s", userAgent: "s", filename: "s", mime: "s", fileSize: "n" },
+  download: { type: "s", requestId: "s", url: "s", referrer: "s", cookies: "s", userAgent: "s", filename: "s", mime: "s", fileSize: "n", explicit: "b" },
   media: { type: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", items: "a" },
   qualities: { type: "s", requestId: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", src: "s", players: "a" },
   qualitySelect: { type: "s", selectionId: "s", index: "n" },
@@ -48,17 +48,20 @@ let hostBehavior = "accept"; // accept | reject | silent
 const calls = [];
 let searchResult = null; // downloads.search sahte yanıtı
 let ports = 0;
+let lastPort = null;
+let hostDelayMs = 0;     // sahte App yanıt gecikmesi
 const mkListener = () => { const f = []; return { addListener: (x) => f.push(x), _fire: (...a) => f.forEach((x) => x(...a)) }; };
 
 function makePort() {
   const onMessage = mkListener(), onDisconnect = mkListener();
   ports++;
-  return {
+  return lastPort = {
     onMessage, onDisconnect,
     postMessage(m) {
       sent.push(m);
       if (m.type === "download" && hostBehavior !== "silent") {
-        queueMicrotask(() => onMessage._fire({ type: "downloadResult", requestId: m.requestId, accepted: hostBehavior === "accept" }));
+        const fire = () => onMessage._fire({ type: "downloadResult", requestId: m.requestId, accepted: hostBehavior === "accept" });
+        if (hostDelayMs > 0) setTimeout(fire, hostDelayMs); else queueMicrotask(fire);
       }
       if (m.type === "ping") queueMicrotask(() => onMessage._fire({ type: "pong", version: "1.2.3" }));
     },
@@ -80,7 +83,7 @@ globalThis.chrome = {
     cancel: async (id) => calls.push(["cancel", id]),
     erase: async (q) => calls.push(["erase", q.id]),
   },
-  tabs: { get: async (id) => ({ id, url: "https://site.test/watch", title: "Video" }) },
+  tabs: { get: async (id) => ({ id, url: "https://site.test/watch", title: "Video" }), sendMessage: async () => ({ urls: [] }) },
   windows: { get: async () => ({ left: 10, top: 20, width: 1280, height: 720, state: "normal" }) },
 };
 
@@ -92,6 +95,8 @@ const geometry = await import(url("lib/geometry.js"));
 const proto = await import(url("lib/protocol.js"));
 const settings = await import(url("lib/settings.js"));
 const { readPlayers } = await import(url("lib/players.js"));
+const menus = await import(url("lib/menus.js"));
+assert.equal(capture.opts.timeoutMs, 15000, "App soğuk başlangıcı için 15 sn");
 
 capture.nameWait.totalMs = 150; capture.nameWait.stepMs = 30;
 let passed = 0;
@@ -156,6 +161,47 @@ await test("zaman aşımı -> resume", async () => {
   sent.length = 0; calls.length = 0; hostBehavior = "silent"; capture.opts.timeoutMs = 80;
   await capture.onDownloadCreated(item());
   assert.deepEqual(calls.map((c) => c[0]), ["pause", "resume"]);
+});
+await test("zaman aşımından sonra gelen accepted:true tarayıcı kopyasını iptal eder (çift indirme yok)", async () => {
+  sent.length = 0; calls.length = 0; hostBehavior = "silent"; capture.opts.timeoutMs = 60;
+  const it = item();
+  await capture.onDownloadCreated(it);
+  assert.deepEqual(calls.map((c) => c[0]), ["pause", "resume"]);
+  const dl = sent.find((x) => x.type === "download");
+  assert.equal(capture.watchedCount() >= 1, true);
+  calls.length = 0;
+  lastPort.onMessage._fire({ type: "downloadResult", requestId: dl.requestId, accepted: true });
+  await sleep(30);
+  assert.deepEqual(calls.map((c) => c[0]), ["cancel", "erase"]);
+  assert.equal(calls[0][1], it.id);
+  calls.length = 0;
+  lastPort.onMessage._fire({ type: "downloadResult", requestId: dl.requestId, accepted: true });   // ikinci kez: etkisiz
+  await sleep(30);
+  assert.equal(calls.length, 0);
+});
+await test("onay penceresi uzun sürse de (App hemen accepted:true) indirme bir kez iptal edilir; 50 eşzamanlı istek", async () => {
+  sent.length = 0; calls.length = 0; hostBehavior = "accept"; capture.opts.timeoutMs = 15000; hostDelayMs = 40;
+  const items = Array.from({ length: 50 }, (_, i) => item({ url: `https://dl.test/f/${i}.zip`, finalUrl: `https://dl.test/f/${i}.zip` }));
+  const t0 = Date.now();
+  await Promise.all(items.map((it) => capture.onDownloadCreated(it)));
+  hostDelayMs = 0;
+  assert.ok(Date.now() - t0 < 5000);
+  assert.equal(sent.filter((x) => x.type === "download").length, 50);
+  assert.equal(calls.filter((c) => c[0] === "cancel").length, 50);
+  assert.equal(calls.filter((c) => c[0] === "resume").length, 0);        // hiçbiri tarayıcıya geri bırakılmadı
+});
+await test("sağ tık 'tüm linkleri indir': seri bekleme yok (toplu paralel), explicit=true", async () => {
+  sent.length = 0; calls.length = 0; hostBehavior = "accept"; hostDelayMs = 50;
+  const urls = Array.from({ length: 30 }, (_, i) => `https://dl.test/all/${i}.zip`);
+  chrome.tabs.sendMessage = async () => ({ urls });
+  const t0 = Date.now();
+  await menus.onMenuClick({ menuItemId: "td-page", pageUrl: "https://dl.test/" }, { id: 1, url: "https://dl.test/" });
+  const dt = Date.now() - t0;
+  hostDelayMs = 0; chrome.tabs.sendMessage = async () => ({ urls: [] });
+  const dls = sent.filter((x) => x.type === "download");
+  assert.equal(dls.length, 30);
+  assert.ok(dls.every((m) => m.explicit === true));
+  assert.ok(dt < 700, `seri olurdu (~1500ms), ölçülen ${dt}ms`);
 });
 await test("geçmişten gelen / tekrarlanan indirme -> dokunulmaz", async () => {
   sent.length = 0; calls.length = 0; hostBehavior = "accept";

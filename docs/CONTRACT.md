@@ -1,6 +1,6 @@
 # T-Downloader — Mimari Sözleşme
 
-Tüm alt agentlar bu dosyaya uyar. Değişiklik gerekiyorsa raporda öner, kendin değiştirme.
+Tüm alt agentlar bu dosyaya uyar. Bu dosyayı yalnızca arayüz/IPC/eklenti sahibi (Agent B) düzenler; diğerleri gerekiyorsa raporda önerir.
 
 ## Amaç
 IDM benzeri, Windows için indirme yöneticisi. Referans analizler: `C:\Users\hp\idm-analiz\01-ana-program.md`,
@@ -67,3 +67,17 @@ Yerel düğme penceresi (`videoGeometry` akışı) yalnızca `UseNativeVideoButt
 - DRM aşma, lisans/kayıt mantığı yok. IDM dosyalarını değiştirme/çalıştırma yok.
 - Registry'ye yazma yalnızca native messaging host kaydı için (HKCU) ve yalnızca kullanıcı onaylı ayrı bir kurulum adımında; geliştirme sırasında yazılmaz.
 - Commit atma serbest (yerel git), push yok.
+
+## Performans/dayanıklılık düzeltmeleri (geriye uyumlu eklemeler)
+
+### İndirme yakalama akışı (IDM tarzı)
+- App `download` alınca yakalama kuralları uygunsa (http/https ve yakalama açık) **hemen** `downloadResult accepted:true` döner,
+  onay penceresini sonra (sırayla, aynı anda tek pencere) gösterir. Pencerede "İptal" = hiçbir şey inmez; tarayıcıya geri bırakma YOK.
+  Kural/kapalı ise hemen `accepted:false` (tarayıcı kendi indirir).
+- `download.explicit` (bool, isteğe bağlı, varsayılan false): kullanıcı eylemi (sağ tık menüsü). `true` ise App "tarayıcı yakalama kapalı" ayarını yok sayar.
+- IPC sunucusu bağlantı başına mesajları seri beklemez: yavaş işleyici (onay penceresi, yt-dlp) ping/media/qualities akışını tıkamaz;
+  yanıtlar tamamlanma sırasıyla yazılır ve `requestId` ile eşleşir. Eşzamanlı tamamlanan mesajların (media, hideButton…) sırası korunur.
+- Eklenti zaman aşımı 5 sn → 15 sn (yalnızca App soğuk başlangıcı için). Zaman aşımında tarayıcı indirmeyi sürdürür; App geç de olsa
+  `accepted:true` dönerse eklenti tarayıcıdaki kopyayı iptal eder (çift indirme olmaz).
+- Sağ tık "Tüm linkleri indir": en fazla 10 isteklik paralel gruplar (seri 5 sn beklemesi yok).
+

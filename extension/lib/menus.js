@@ -2,6 +2,7 @@
 import * as native from "./native.js";
 import { sendDownload, addBypass } from "./capture.js";
 
+export const BATCH = 10;
 const ITEMS = [
   { id: "td-link", title: "T-Downloader ile indir", contexts: ["link"] },
   { id: "td-page", title: "Tüm linkleri T-Downloader ile indir", contexts: ["page"] },
@@ -23,7 +24,7 @@ async function queueUrl(url, referrer) {
     native.connect();
     if (!native.isConnected()) { addBypass(url); try { await chrome.downloads.download({ url }); } catch { /* yut */ } return; }
   }
-  const ok = await sendDownload({ url, referrer });
+  const ok = await sendDownload({ url, referrer, explicit: true });
   if (!ok) { addBypass(url); try { await chrome.downloads.download({ url }); } catch { /* yut */ } }
 }
 
@@ -44,7 +45,8 @@ export async function onMenuClick(info, tab) {
       if (!tab?.id) return;
       const sel = info.menuItemId === "td-selection";
       const urls = await collectLinks(tab.id, sel ? info.frameId ?? 0 : 0, sel);
-      for (const u of urls) await queueUrl(u, referrer);
+      // Seri bekleme yok: App yanıtı onay penceresini beklemez; yine de en fazla BATCH istek eşzamanlı gider.
+      for (let i = 0; i < urls.length; i += BATCH) await Promise.all(urls.slice(i, i + BATCH).map((u) => queueUrl(u, referrer)));
     }
   }
 }

@@ -15,7 +15,7 @@ public class HostProcessTests
         return p;
     }
 
-    private sealed class HostProc : IDisposable
+    internal sealed class HostProc : IDisposable
     {
         public Process P { get; }
         public string LogPath { get; }

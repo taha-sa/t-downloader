@@ -64,13 +64,17 @@ public sealed class IpcServer : IAsyncDisposable
     private Task? _acceptLoop;
 
     /// <summary>
-    /// Gelen mesaj işleyicisi. Döndürdüğü yanıt (null değilse) aynı bağlantıya gönderilir.
+    /// Gelen mesaj işleyicisi. Döndürdüğü yanıt (null değilse) aynı bağlantıya gönderilir. İşleyiciler bağlantı başına
+    /// birbirini BEKLEMEZ (yavaş biri diğerlerini tıkamaz); yanıtlar tamamlanma sırasıyla yazılır, eşleme requestId iledir.
     /// Çağrılar arka plan thread'lerinden gelir; UI'ya Invoke ile geçin.
     /// </summary>
     public Func<IpcMessage, IpcConnection, Task<IpcMessage?>>? MessageHandler { get; set; }
 
     public event EventHandler<IpcConnection>? ClientConnected;
     public event EventHandler<IpcConnection>? ClientDisconnected;
+
+    /// <summary>Dinlenen pipe adı (testler istemciyi bununla bağlar).</summary>
+    public string PipeNameForTests => _pipeName;
 
     public IpcServer(string? pipeName = null) { _pipeName = pipeName ?? IpcSerializer.ActivePipeName; }
 
@@ -111,10 +115,14 @@ public sealed class IpcServer : IAsyncDisposable
                 if (msg == null) break;
                 var h = MessageHandler;
                 if (h == null) continue;
-                IpcMessage? reply;
-                try { reply = await h(msg, conn).ConfigureAwait(false); }
+                // Mesajlar SERİ BEKLENMEZ: işleyici okuma döngüsünde başlatılır (eşzamanlı tamamlanan işleyiciler için sıra
+                // korunur), uzun süren işleyici ise arka planda bitip yanıtını requestId ile kendisi yazar. Böylece onay
+                // penceresi/yt-dlp gibi yavaş işler ping/media/qualities akışını tıkamaz.
+                Task<IpcMessage?> t;
+                try { t = h(msg, conn); }
                 catch (Exception) { continue; }
-                if (reply != null) await conn.SendAsync(reply, ct).ConfigureAwait(false);
+                if (t.IsCompleted) await ReplyAsync(t, conn, ct).ConfigureAwait(false);
+                else _ = ReplyAsync(t, conn, ct);
             }
         }
         catch (OperationCanceledException) { }
@@ -125,6 +133,17 @@ public sealed class IpcServer : IAsyncDisposable
             ClientDisconnected?.Invoke(this, conn);
             conn.Dispose();
         }
+    }
+
+    private static async Task ReplyAsync(Task<IpcMessage?> handler, IpcConnection conn, CancellationToken ct)
+    {
+        try
+        {
+            var reply = await handler.ConfigureAwait(false);
+            if (reply != null) await conn.SendAsync(reply, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException) { }
+        catch (Exception) { /* işleyici hatası bağlantıyı düşürmez */ }
     }
 
     /// <summary>Bağlı tüm istemcilere gönderir (ör. settings, hideButton).</summary>
