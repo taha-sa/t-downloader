@@ -53,6 +53,55 @@ public class HlsCoreFixTests : IDisposable
             new HlsClient.Options(null, WorkDir: Path.Combine(_tmp, "w2")), _ => { }, cts.Token));
     }
 
+    // ------------------------------------------------------------ C2
+
+    [Theory]
+    [InlineData(60)]
+    [InlineData(95)]
+    public async Task C2_PauseDuringMerge_ResumesFromCheckpoint_NoRedownload_IdenticalOutput(int cancelAtPct)
+    {
+        var plain = Publish("mg", 40);
+        string expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(plain.SelectMany(x => x).ToArray()));
+        string work = Path.Combine(_tmp, "wm"), outBase = Path.Combine(_tmp, "o", "f");
+        var opt = new HlsClient.Options(null, WorkDir: work);
+        using var cts = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new HlsClient().DownloadAsync(Url("mg"), null, null, outBase, opt, p =>
+        {
+            if (p.Phase is { } ph && ph.StartsWith("Birleştiriliyor %") && int.Parse(ph[17..]) >= cancelAtPct) cts.Cancel();
+        }, cts.Token));
+
+        // Kesinti sonrası: işaretçi var; silinen parçalar işaretçiyle kayıtlı, kalanlar diskte.
+        var progress = File.ReadAllText(Path.Combine(work, "merged.v.merge")).Split('\n');
+        int recorded = int.Parse(progress[1]);
+        Assert.True(recorded >= 8 && recorded < 40);
+        for (int i = 0; i < 40; i++)
+            Assert.Equal(i >= recorded, File.Exists(Path.Combine(work, i.ToString("D5") + ".seg")));
+        Assert.True(new FileInfo(Path.Combine(work, "merged.v")).Length >= long.Parse(progress[2]));
+        Assert.Equal(recorded * 20L * 188, long.Parse(progress[2]));
+
+        int before; lock (_s.Log) before = _s.Log.Count;
+        var res = await new HlsClient().DownloadAsync(Url("mg"), null, null, outBase, opt, _ => { }, CancellationToken.None);
+        Assert.Equal(expected, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(res))));
+        lock (_s.Log) Assert.DoesNotContain(_s.Log.Skip(before), e => e.Path.EndsWith(".ts"));   // tek parça bile yeniden istenmedi
+        Assert.False(Directory.Exists(work) && Directory.GetFiles(work, "*.seg").Length > 0);
+    }
+
+    [Fact]
+    public async Task C2_StaleMergeProgress_WithTruncatedMergedFile_IsIgnored_AndRedownloads()
+    {
+        var plain = Publish("st", 20);
+        string work = Path.Combine(_tmp, "ws"), outBase = Path.Combine(_tmp, "o", "f");
+        var opt = new HlsClient.Options(null, WorkDir: work);
+        using var cts = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new HlsClient().DownloadAsync(Url("st"), null, null, outBase, opt, p =>
+        {
+            if (p.Phase is { } ph && ph.StartsWith("Birleştiriliyor %") && int.Parse(ph[17..]) >= 80) cts.Cancel();
+        }, cts.Token));
+        File.WriteAllBytes(Path.Combine(work, "merged.v"), new byte[10]);   // birleşik dosya işaretçinin dediğinden kısa: güvenilmez
+        var res = await new HlsClient().DownloadAsync(Url("st"), null, null, outBase, opt, _ => { }, CancellationToken.None);
+        Assert.Equal(plain.SelectMany(x => x).ToArray(), File.ReadAllBytes(res));
+    }
+
     // ------------------------------------------------------------ C3 / C4
 
     [Fact]

@@ -544,6 +544,17 @@ public sealed class HlsClient
         }
         TryDelete(okPath);
 
+        // Birleştirme ilerleme işaretçisi (C2): önceki çalışma birleştirmede kesildiyse, birleşik dosyaya zaten girmiş ve
+        // diskten silinmiş parçalar yeniden indirilmez; birleşik dosya kayıtlı uzunluğa kırpılıp kalan parçalarla sürülür.
+        string mergePath = outPath + ".merge";
+        int mergedStart = 0; long mergedLen = 0;
+        if (sameList && TryReadMergeProgress(mergePath, marker, outPath, count) is { } mp)
+        {
+            (mergedStart, mergedLen) = mp;
+            opt.Log?.Invoke($"HLS devam: birleştirme {mergedStart}/{count} parçadan sürecek.");
+        }
+        else TryDelete(mergePath);
+
         var keyCache = new Dictionary<string, byte[]>();
         var keyLock = new SemaphoreSlim(1, 1);
         // Çerez sınırı ctx.CookieHost'tur (çerezin alındığı host); isteğin kendi host'undan türetilmez.
@@ -636,7 +647,12 @@ public sealed class HlsClient
         // ---- inmiş parçalar: kaynak gerçeği dosya varlığı + boyut > 0
         var missing = new List<int>();
         long seedBytes = 0; double seedDur = 0; int done = 0;
-        for (int i = 0; i < count; i++)
+        if (mergedStart > 0)
+        {
+            seedBytes = mergedLen; done = mergedStart;
+            for (int i = 0; i < mergedStart; i++) seedDur += media.Segments[i].Duration;
+        }
+        for (int i = mergedStart; i < count; i++)
         {
             var fi = new FileInfo(HlsStateStore.SegPath(workDir, prefix, i));
             if (fi.Exists && fi.Length > 0) { seedBytes += fi.Length; seedDur += media.Segments[i].Duration; done++; }
@@ -713,26 +729,56 @@ public sealed class HlsClient
 
         // ---- sırayla birleştir: parça dosyaları birleştikçe silinir (disk tepesi ~2x yerine ~1x + son dosya)
         long onDisk = 0;
-        for (int i = 0; i < count; i++) { var fi = new FileInfo(HlsStateStore.SegPath(workDir, prefix, i)); if (fi.Exists) onDisk += fi.Length; }
+        for (int i = mergedStart; i < count; i++) { var fi = new FileInfo(HlsStateStore.SegPath(workDir, prefix, i)); if (fi.Exists) onDisk += fi.Length; }
         CheckSpace(opt, workDir, outBase, onDisk, onDisk, "birleştirmeden önce");
         int lastPct = -1;
-        using (var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write, FileShare.Read, 1 << 16))
+        // Parça dosyaları yalnızca işaretçi diske yazıldıktan SONRA silinir: kesinti olsa da silinen her parça birleşik dosyada,
+        // işaretçide kayıtlıdır; kayıt dışı (silinmemiş) parçalar diskte durur.
+        using (var fs = new FileStream(outPath, mergedStart > 0 ? FileMode.OpenOrCreate : FileMode.Create, FileAccess.Write, FileShare.Read, 1 << 16))
         {
-            if (media.Map != null) await CopyFileAsync(initFile, fs, ct).ConfigureAwait(false);
-            for (int i = 0; i < count; i++)
+            if (mergedStart > 0) { fs.SetLength(mergedLen); fs.Seek(0, SeekOrigin.End); }
+            else if (media.Map != null) await CopyFileAsync(initFile, fs, ct).ConfigureAwait(false);
+            int recorded = mergedStart;
+            for (int i = mergedStart; i < count; i++)
             {
-                string sp = HlsStateStore.SegPath(workDir, prefix, i);
-                await CopyFileAsync(sp, fs, ct).ConfigureAwait(false);
-                TryDelete(sp);
-                int pct = (i + 1) * 100 / count;
+                ct.ThrowIfCancellationRequested();
+                await CopyFileAsync(HlsStateStore.SegPath(workDir, prefix, i), fs, ct).ConfigureAwait(false);
+                int merged = i + 1;
+                if (merged - recorded >= MergeCheckpointEvery && merged < count)
+                {
+                    fs.Flush(flushToDisk: true);
+                    await HlsStateStore.WriteAtomicAsync(mergePath, Encoding.UTF8.GetBytes($"{marker}\n{merged}\n{fs.Length}"),CancellationToken.None).ConfigureAwait(false);
+                    for (int j = recorded; j < merged; j++) TryDelete(HlsStateStore.SegPath(workDir, prefix, j));
+                    recorded = merged;
+                }
+                int pct = merged * 100 / count;
                 if (pct != lastPct) { lastPct = pct; prog.ReportPhase($"Birleştiriliyor %{pct}"); }
             }
-            await fs.FlushAsync(ct).ConfigureAwait(false);
+            fs.Flush(flushToDisk: true);
         }
         // Birleşik dosya tamam: devamda (ffmpeg aşamasında duraklatılırsa) parçalar yeniden indirilmesin.
         await File.WriteAllTextAsync(okPath, marker, CancellationToken.None).ConfigureAwait(false);   // iptal gelse bile işaretçi yazılsın
+        for (int j = 0; j < count; j++) TryDelete(HlsStateStore.SegPath(workDir, prefix, j));
+        TryDelete(mergePath);
         if (media.Map != null) TryDelete(initFile);
         return (outPath, fmp4);
+    }
+
+    /// <summary>Birleştirme işaretçisinde kaç parçanın birleşik dosyaya girdiği (kontrol noktası sıklığı).</summary>
+    internal const int MergeCheckpointEvery = 8;
+
+    /// <summary>İşaretçi (marker, birleşen parça sayısı, uzunluk; satır satır) geçerliyse ve birleşik dosya o uzunluğu içeriyorsa döner.</summary>
+    private static (int Count, long Length)? TryReadMergeProgress(string mergePath, string marker, string outPath, int count)
+    {
+        var t = TryReadText(mergePath);
+        if (t == null) return null;
+        var p = t.Split('\n');
+        if (p.Length != 3 || p[0] != marker) return null;
+        if (!int.TryParse(p[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) || n < 1 || n >= count) return null;
+        if (!long.TryParse(p[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out long len) || len < 0) return null;
+        try { if (!File.Exists(outPath) || new FileInfo(outPath).Length < len) return null; }
+        catch (IOException) { return null; }
+        return (n, len);
     }
 
     private static string? TryReadText(string path)
