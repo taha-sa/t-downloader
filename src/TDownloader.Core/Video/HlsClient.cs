@@ -59,15 +59,21 @@ public sealed class HlsClient
 
     // ---------------------------------------------------------------- ağ yardımcıları
 
+    /// <summary>Hedef adres için istek kurar; bağlam başlıkları (çerez yalnızca CookieHost'a) her yönlendirme adımında yeniden uygulanır.</summary>
+    private static HttpRequestMessage Req(HttpMethod method, Uri u, MediaContext ctx)
+    {
+        var r = new HttpRequestMessage(method, u);
+        ctx.Apply(r);
+        return r;
+    }
+
     private async Task<string> GetTextAsync(string url, MediaContext ctx, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(_playlistTimeout);
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            ctx.Apply(req);
-            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+            using var resp = await EngineHttp.SendFollowingAsync(_http, new Uri(url), u => Req(HttpMethod.Get, u, ctx), HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) throw new HlsException($"Sunucu playlist'i vermedi (HTTP {(int)resp.StatusCode}).", false, (int)resp.StatusCode);
             var bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
             if (bytes.Length > 8 * 1024 * 1024) throw new HlsException("Playlist beklenenden büyük.");
@@ -133,20 +139,18 @@ public sealed class HlsClient
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(8));
-        using (var head = new HttpRequestMessage(HttpMethod.Head, url))
+        try
         {
-            ctx.Apply(head);
-            try
-            {
-                using var r = await _http.SendAsync(head, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
-                if (r.IsSuccessStatusCode && r.Content.Headers.ContentLength is > 0 and var l) return l;
-            }
-            catch (HttpRequestException) { }
+            using var r = await EngineHttp.SendFollowingAsync(_http, new Uri(url), u => Req(HttpMethod.Head, u, ctx), HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+            if (r.IsSuccessStatusCode && r.Content.Headers.ContentLength is > 0 and var l) return l;
         }
-        using var get = new HttpRequestMessage(HttpMethod.Get, url);
-        ctx.Apply(get);
-        get.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
-        using var resp = await _http.SendAsync(get, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+        catch (HttpRequestException) { }
+        using var resp = await EngineHttp.SendFollowingAsync(_http, new Uri(url), u =>
+        {
+            var g = Req(HttpMethod.Get, u, ctx);
+            g.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
+            return g;
+        }, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode) return -1;
         return resp.Content.Headers.ContentRange?.Length ?? resp.Content.Headers.ContentLength ?? -1;
     }
@@ -792,6 +796,9 @@ public sealed class HlsClient
         await src.CopyToAsync(dest, 1 << 16, ct).ConfigureAwait(false);
     }
 
+    /// <summary>Tek parça/anahtar/init için bellek üst sınırı.</summary>
+    internal const long MaxPartBytes = 256L * 1024 * 1024;
+
     private async Task<byte[]> FetchBytesAsync(string url, MediaContext ctx, long offset, long length, Options opt, CancellationToken ct, Action<long>? onBytes = null)
     {
         int attempt = 0;
@@ -803,10 +810,12 @@ public sealed class HlsClient
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 cts.CancelAfter(TimeSpan.FromSeconds(60));
-                using var req = new HttpRequestMessage(HttpMethod.Get, url);
-                ctx.Apply(req);
-                if (length > 0) req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(offset, offset + length - 1);
-                using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+                using var resp = await EngineHttp.SendFollowingAsync(_http, new Uri(url), u =>
+                {
+                    var req = Req(HttpMethod.Get, u, ctx);
+                    if (length > 0) req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(offset, offset + length - 1);
+                    return req;
+                }, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
                 {
                     int code = (int)resp.StatusCode;
@@ -814,7 +823,26 @@ public sealed class HlsClient
                     if (code is 401 or 403 or 404 or 410) throw new HlsException($"Sunucu parçayı vermedi (HTTP {code}).", false, code);
                     throw HttpStatusException.From(resp);
                 }
-                if (onBytes == null) return await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
+                // Parça/anahtar/init başına üst sınır: kötü niyetli/bozuk Content-Length ile dev bellek ayrılmasın (C14).
+                if (resp.Content.Headers.ContentLength is { } clen && clen > MaxPartBytes)
+                    throw new HlsException($"Parça beklenenden büyük ({clen / 1048576} MB > {MaxPartBytes / 1048576} MB sınırı).");
+                if (onBytes == null)
+                {
+                    using var small = new MemoryStream();
+                    await using var s0 = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+                    var b0 = ArrayPool<byte>.Shared.Rent(32 * 1024);
+                    try
+                    {
+                        int r0;
+                        while ((r0 = await s0.ReadAsync(b0.AsMemory(), cts.Token).ConfigureAwait(false)) > 0)
+                        {
+                            small.Write(b0, 0, r0);
+                            if (small.Length > MaxPartBytes) throw new HlsException("Parça beklenenden büyük (sınır aşıldı).");
+                        }
+                    }
+                    finally { ArrayPool<byte>.Shared.Return(b0); }
+                    return small.ToArray();
+                }
                 // Akış okuma: okunan baytlar anında bildirilir; hata olursa bu denemenin baytları geri alınır.
                 long got = 0;
                 var rented = ArrayPool<byte>.Shared.Rent(32 * 1024);
@@ -827,6 +855,7 @@ public sealed class HlsClient
                     while ((n = await stream.ReadAsync(rented.AsMemory(), cts.Token).ConfigureAwait(false)) > 0)
                     {
                         ms.Write(rented, 0, n); got += n; onBytes(n);
+                        if (got > MaxPartBytes) throw new HlsException("Parça beklenenden büyük (sınır aşıldı).");
                     }
                     return ms.ToArray();
                 }

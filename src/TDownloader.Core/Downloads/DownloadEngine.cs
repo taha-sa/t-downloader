@@ -167,6 +167,7 @@ public sealed class DownloadEngine : IDisposable
     {
         _opt.Connections = Math.Clamp(_opt.Connections, 1, 32);
         _hostGate = HostGate.For(HostKey(_item.Url), Math.Clamp(_opt.MaxConnectionsPerHost, 1, EngineHttp.PoolLimit));
+        ValidateHeaders();
         var (total, ranges, etag) = await ProbeAsync(ct).ConfigureAwait(false);
         _total = total; _ranges = ranges; _etag = etag;
         if (_item.TotalSize != total) _item.TotalSize = total;
@@ -226,16 +227,27 @@ public sealed class DownloadEngine : IDisposable
     private static bool IsOverloadStatus(Exception ex) =>
         ex is HttpStatusException { StatusCode: HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable };
 
-    private HttpRequestMessage BuildRequest()
+    private static bool HasControlChars(string? v) => v != null && v.Any(c => c < 0x20 && c != '	' || c == 0x7F);
+
+    /// <summary>Başlık değeri satır sonu/denetim karakteri içeriyorsa istek hiç gönderilmez (başlık enjeksiyonu / boşuna yeniden deneme).</summary>
+    private void ValidateHeaders()
     {
-        var req = new HttpRequestMessage(HttpMethod.Get, _item.Url);
+        if (HasControlChars(_item.Cookie) || HasControlChars(_item.UserAgent) || HasControlChars(_item.Referrer))
+            throw new NonRetryableException("Çerez/başlık değeri geçersiz (satır sonu veya denetim karakteri içeriyor).");
+    }
+
+    private HttpRequestMessage BuildRequest(Uri? target = null)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, target ?? new Uri(_item.Url));
         req.Headers.TryAddWithoutValidation("User-Agent", string.IsNullOrWhiteSpace(_item.UserAgent)
             ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) T-Downloader/1.0" : _item.UserAgent);
         req.Headers.TryAddWithoutValidation("Accept", "*/*");
         req.Headers.TryAddWithoutValidation("Accept-Encoding", "identity");
         if (!string.IsNullOrWhiteSpace(_item.Referrer) && Uri.TryCreate(_item.Referrer, UriKind.Absolute, out var r))
             req.Headers.Referrer = r;
-        if (!string.IsNullOrWhiteSpace(_item.Cookie))
+        // Çerez yalnızca özgün adresin host'una gider; yönlendirmeyle başka host'a geçilirse eklenmez (C9).
+        if (!string.IsNullOrWhiteSpace(_item.Cookie) && Uri.TryCreate(_item.Url, UriKind.Absolute, out var orig)
+            && string.Equals(orig.Host, (target ?? orig).Host, StringComparison.OrdinalIgnoreCase))
             req.Headers.TryAddWithoutValidation("Cookie", _item.Cookie);
         return req;
     }
@@ -247,11 +259,14 @@ public sealed class DownloadEngine : IDisposable
         {
             try
             {
-                using var req = BuildRequest();
-                req.Headers.Range = new RangeHeaderValue(0, 0);
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(_opt.ReadTimeout);
-                using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+                using var resp = await EngineHttp.SendFollowingAsync(_http, new Uri(_item.Url), u =>
+                {
+                    var r = BuildRequest(u);
+                    r.Headers.Range = new RangeHeaderValue(0, 0);
+                    return r;
+                }, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
                 string? etag = resp.Headers.ETag?.Tag;
                 if (resp.StatusCode == HttpStatusCode.PartialContent)
                 {
@@ -383,7 +398,7 @@ public sealed class DownloadEngine : IDisposable
                 }
             }
         }
-        if (ev != null) SegmentSplit?.Invoke(this, ev);
+        if (ev != null) Notify(SegmentSplit, ev);
         return result;
     }
 
@@ -405,16 +420,28 @@ public sealed class DownloadEngine : IDisposable
                     w.State = ConnectionState.Connecting;
                     // Aynı host için bağlantı tavanı: sıra beklemek zaman aşımına sayılmaz (cts aşağıda kurulur).
                     using var lease = await _hostGate.AcquireAsync(ct).ConfigureAwait(false);
-                    using var req = BuildRequest();
-                    if (_ranges)
-                        req.Headers.Range = new RangeHeaderValue(startPos, endEx == long.MaxValue ? null : endEx - 1);
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     cts.CancelAfter(_opt.ReadTimeout);
-                    using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+                    // If-Range: dosya indirme sırasında değiştiyse sunucu 206 yerine 200 döner; parçalar karışmasın (C13).
+                    string? ifRange = _ranges && _etag is { } et && !et.StartsWith("W/", StringComparison.Ordinal) ? et : null;
+                    using var resp = await EngineHttp.SendFollowingAsync(_http, new Uri(_item.Url), u =>
+                    {
+                        var r = BuildRequest(u);
+                        if (_ranges)
+                        {
+                            r.Headers.Range = new RangeHeaderValue(startPos, endEx == long.MaxValue ? null : endEx - 1);
+                            if (ifRange != null) r.Headers.TryAddWithoutValidation("If-Range", ifRange);
+                        }
+                        return r;
+                    }, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
                     if (!resp.IsSuccessStatusCode)
                         throw HttpStatusException.From(resp);
                     if (_ranges && resp.StatusCode != HttpStatusCode.PartialContent)
-                        throw new NonRetryableException("Sunucu Range isteğine parçalı yanıt vermedi.");
+                        throw new NonRetryableException(ifRange != null && resp.StatusCode == HttpStatusCode.OK
+                            ? "Uzak dosya indirme sırasında değişti (If-Range)." : "Sunucu Range isteğine parçalı yanıt vermedi.");
+                    // Sunucu/ara proxy farklı aralık döndürdüyse veri yanlış konuma yazılırdı (C13).
+                    if (_ranges && resp.Content.Headers.ContentRange?.From is long cf && cf != startPos)
+                        throw new IOException($"Sunucu beklenmeyen aralık döndürdü (istenen {startPos}, gelen {cf}).");
 
                     w.State = ConnectionState.Receiving;
                     await using var stream = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
@@ -511,6 +538,8 @@ public sealed class DownloadEngine : IDisposable
             using var timer = new PeriodicTimer(_opt.ProgressInterval);
             while (await timer.WaitForNextTickAsync(stop).ConfigureAwait(false))
             {
+              try
+              {
                 double t = sw.Elapsed.TotalSeconds, dt = Math.Max(0.001, t - lastT);
                 lastT = t;
                 long cur = SumDownloaded();
@@ -526,9 +555,12 @@ public sealed class DownloadEngine : IDisposable
                 if (sw.ElapsedMilliseconds - lastSave >= _opt.StateSaveInterval.TotalMilliseconds)
                 {
                     lastSave = sw.ElapsedMilliseconds;
+                    FlushData();   // durum dosyası diskteki veriden ileri olmasın (C12)
                     SaveState();
                 }
                 PublishProgress(speed);
+              }
+              catch (Exception ex) when (ex is not OperationCanceledException) { /* tek tur hatası döngüyü öldürmesin */ }
             }
         }
         catch (OperationCanceledException) { }
@@ -567,7 +599,7 @@ public sealed class DownloadEngine : IDisposable
         }).ToList();
         TimeSpan? eta = null;
         if (speed > 1 && _total > 0) eta = TimeSpan.FromSeconds(Math.Max(0, (_total - _item.Downloaded) / speed));
-        ProgressChanged?.Invoke(this, new DownloadProgress
+        Notify(ProgressChanged, new DownloadProgress
         {
             Id = _item.Id, Downloaded = _item.Downloaded, TotalSize = _total, SpeedBytesPerSec = speed,
             Eta = eta, Connections = conns
@@ -577,12 +609,26 @@ public sealed class DownloadEngine : IDisposable
     private void SetStatus(DownloadStatus s)
     {
         _item.Status = s;
-        StatusChanged?.Invoke(this, s);
+        Notify(StatusChanged, s);
+    }
+
+    /// <summary>Olayı abone başına korumalı çağırır: bir abonenin (UI) istisnası indirmeyi başarısız yapmaz / ilerleme döngüsünü öldürmez.</summary>
+    private void Notify<T>(EventHandler<T>? h, T arg)
+    {
+        if (h == null) return;
+        foreach (var d in h.GetInvocationList())
+        {
+            try { ((EventHandler<T>)d)(this, arg); }
+            catch (Exception) { /* abone hatası motoru durdurmaz */ }
+        }
     }
 
     private DownloadStatus Fail(Exception ex)
     {
         _item.Error = ex.Message;
+        // Çerez kalıcı yazılmadığı için yeniden başlatma sonrası kimlik doğrulamalı indirme 401/403 alır: nedeni açıkla (C10).
+        if (ex is HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } && string.IsNullOrWhiteSpace(_item.Cookie))
+            _item.Error += " — oturum çerezi bulunmuyor olabilir (çerezler güvenlik için kaydedilmez); bağlantıyı tarayıcıdan yeniden ekleyin.";
         SetStatus(DownloadStatus.Failed);
         return DownloadStatus.Failed;
     }
@@ -621,6 +667,13 @@ public sealed class DownloadEngine : IDisposable
     }
 
     // ------------------------------------------------------------------ kalıcılık
+
+    /// <summary>Yazılan veriyi diske zorlar; state.json'daki konumlar yalnızca kalıcılaşmış veriyi göstersin.</summary>
+    private void FlushData()
+    {
+        try { var h = _handle; if (h != null && !h.IsClosed) RandomAccess.FlushToDisk(h); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException) { }
+    }
 
     private void SaveState()
     {

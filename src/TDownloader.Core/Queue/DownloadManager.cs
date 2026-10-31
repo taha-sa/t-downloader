@@ -348,8 +348,8 @@ public sealed class DownloadManager : IAsyncDisposable
         var opt = new EngineOptions { Connections = Settings.EffectiveConnections, MaxConnectionsPerHost = Settings.MaxConnectionsPerHost };
         ConfigureEngine?.Invoke(opt);
         var engine = new DownloadEngine(item, Paths.DwnlDataDir, opt, Limiter, _http);
-        engine.ProgressChanged += (_, p) => { ProgressChanged?.Invoke(this, p); };
-        engine.StatusChanged += (_, _) => ItemChanged?.Invoke(this, item);
+        engine.ProgressChanged += (_, p) => Raise(ProgressChanged, p);   // abone istisnası motoru etkilemesin
+        engine.StatusChanged += (_, _) => Raise(ItemChanged, item);
         var task = Task.Run(async () =>
         {
             DownloadStatus result;
@@ -382,7 +382,7 @@ public sealed class DownloadManager : IAsyncDisposable
         item.LastTryAt = DateTime.Now;
         var task = Task.Run(async () =>
         {
-            ItemChanged?.Invoke(this, item);
+            Raise(ItemChanged, item);
             ExternalResult? res = null;
             bool canceled = false;
             try
@@ -394,7 +394,7 @@ public sealed class DownloadManager : IAsyncDisposable
                         item.Downloaded = p.Downloaded;
                         if (p.Total > 0) item.TotalSize = p.Total;
                         item.SpeedBytesPerSec = p.SpeedBytesPerSec;
-                        ProgressChanged?.Invoke(this, new DownloadProgress
+                        Raise(ProgressChanged, new DownloadProgress
                         {
                             Id = item.Id, Downloaded = p.Downloaded, TotalSize = p.Total > 0 ? p.Total : item.TotalSize,
                             SpeedBytesPerSec = p.SpeedBytesPerSec,

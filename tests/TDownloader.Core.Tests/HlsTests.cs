@@ -20,6 +20,7 @@ public sealed class HlsTestServer : IDisposable
     public Func<string, bool>? Forbid { get; set; }
     public Func<string, bool>? Transient { get; set; }   // 500 döndür
     public Func<string, int>? DelayMs { get; set; }       // yanıttan önce bekle (zaman aşımı testleri)
+    public Dictionary<string, string> Redirects { get; } = new();   // yol -> Location (302)
 
     public HlsTestServer()
     {
@@ -47,6 +48,7 @@ public sealed class HlsTestServer : IDisposable
                 try
                 {
                     if (DelayMs?.Invoke(path) is > 0 and var dly) Thread.Sleep(dly);
+                    if (Redirects.TryGetValue(path, out var loc)) { c.Response.StatusCode = 302; c.Response.AddHeader("Location", loc); c.Response.Close(); return; }
                     if (Transient?.Invoke(path) == true) { c.Response.StatusCode = 500; c.Response.Close(); return; }
                     if (Forbid?.Invoke(path) == true) { c.Response.StatusCode = 403; c.Response.Close(); return; }
                     if (!Routes.TryGetValue(path, out var r)) { c.Response.StatusCode = 404; c.Response.Close(); return; }

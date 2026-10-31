@@ -99,14 +99,39 @@ public static class EngineHttp
     /// <summary>HttpClient bağlantı havuzu üst sınırı (MaxConnectionsPerServer); host tavanı bunu aşamaz.</summary>
     public const int PoolLimit = 64;
 
+    /// <summary>
+    /// İsteği gönderir ve yönlendirmeleri elle izler (en çok 10). Her adım için <paramref name="build"/> hedef adresle yeni istek kurar,
+    /// böylece çerez/Referer gibi başlıklar host değişince çağıranın kuralıyla eklenir ya da atılır.
+    /// </summary>
+    public static async Task<HttpResponseMessage> SendFollowingAsync(HttpClient http, Uri start, Func<Uri, HttpRequestMessage> build,
+        HttpCompletionOption completion, CancellationToken ct, int maxRedirects = 10)
+    {
+        var uri = start;
+        for (int hop = 0; ; hop++)
+        {
+            using var req = build(uri);
+            var resp = await http.SendAsync(req, completion, ct).ConfigureAwait(false);
+            if (resp.StatusCode is not (HttpStatusCode.MovedPermanently or HttpStatusCode.Found or HttpStatusCode.SeeOther
+                or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect) || resp.Headers.Location is not { } loc)
+                return resp;
+            resp.Dispose();
+            if (hop >= maxRedirects) throw new HttpRequestException("Çok fazla yönlendirme.");
+            var next = loc.IsAbsoluteUri ? loc : new Uri(uri, loc);
+            if (next.Scheme != Uri.UriSchemeHttp && next.Scheme != Uri.UriSchemeHttps) throw new HttpRequestException("Desteklenmeyen yönlendirme adresi.");
+            uri = next;
+        }
+    }
+
     public static HttpClient Create()
     {
         var h = new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.None,
             UseCookies = false,
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 10,
+            // Yönlendirmeyi biz izleriz (SendFollowingAsync): .NET özel Cookie başlığını başka host'a da taşırdı (C9).
+            AllowAutoRedirect = false,
+            // Tarayıcılar gibi başlık değerleri UTF-8 gönderilir: ASCII dışı çerez/UA tüm indirmeyi düşürmesin (C11).
+            RequestHeaderEncodingSelector = (_, _) => System.Text.Encoding.UTF8,
             MaxConnectionsPerServer = PoolLimit,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             ConnectTimeout = TimeSpan.FromSeconds(30),
