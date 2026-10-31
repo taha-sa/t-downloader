@@ -42,6 +42,21 @@ public sealed class IpcCoordinator : IAsyncDisposable
                 try { _svc.Media.OnMedia(m); } catch (Exception) { }
                 return null;
 
+            case QualitiesMessage q:
+                // Uzun sürebilir (yt-dlp): bağlantının mesaj döngüsünü bloke etme, yanıtı ayrıca gönder.
+                _ = Task.Run(async () =>
+                {
+                    QualitiesResultMessage r;
+                    try { r = await _svc.Media.GetQualitiesAsync(q).ConfigureAwait(false); }
+                    catch (Exception ex) { r = new QualitiesResultMessage(q.RequestId, false, ex.Message, "error", null, null, null); }
+                    try { await conn.SendAsync(r).ConfigureAwait(false); } catch (Exception) { }
+                });
+                return null;
+
+            case QualitySelectMessage qs:
+                try { _svc.Media.OnQualitySelect(qs); } catch (Exception) { }
+                return null;
+
             case VideoGeometryMessage v:
                 try { _svc.Media.OnVideoGeometry(v); } catch (Exception) { }
                 return null;

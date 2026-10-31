@@ -175,7 +175,17 @@ public sealed class FileInfoDialog : DluForm
         long len = await TryProbe(u, HttpMethod.Head);
         if (len <= 0) len = await TryProbe(u, HttpMethod.Get);
         if (len > 0 && !IsDisposed && _fileSize <= 0) { _fileSize = len; UpdateSizeAndIcon(); }
+        // Sunucu Content-Disposition ile gerçek adı veriyorsa (ve kullanıcı yolu elle değiştirmediyse) onu öner.
+        if (_probedName != null && !IsDisposed && !_pathEdited &&
+            string.Equals(FileName, NameFromUrl(Url), StringComparison.OrdinalIgnoreCase))
+        {
+            var n = DownloadManager.SanitizeFileName(_probedName);
+            SetCategoryAndPath(Categories.FromFileName(n), n);
+            UpdateSizeAndIcon();
+        }
     }
+
+    private string? _probedName;
 
     private async Task<long> TryProbe(Uri u, HttpMethod method)
     {
@@ -188,6 +198,8 @@ public sealed class FileInfoDialog : DluForm
             if (!string.IsNullOrEmpty(_cookies)) req.Headers.TryAddWithoutValidation("Cookie", _cookies);
             if (!string.IsNullOrEmpty(_userAgent)) req.Headers.TryAddWithoutValidation("User-Agent", _userAgent);
             using var resp = await Core.Downloads.EngineHttp.Shared.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            if (_probedName == null && resp.Content.Headers.TryGetValues("Content-Disposition", out var cd))
+                _probedName = Core.Util.ContentDispositionParser.Parse(string.Join("; ", cd));
             if (method == HttpMethod.Get && resp.Content.Headers.ContentRange?.Length is long total) return total;
             if (method == HttpMethod.Head || resp.StatusCode == System.Net.HttpStatusCode.OK)
                 return resp.Content.Headers.ContentLength ?? -1;

@@ -3,6 +3,8 @@ export const HOST_NAME = "com.tdownloader.host";
 
 export const DEFAULT_SETTINGS = {
   interceptEnabled: true,
+  showVideoButton: true,   // sayfa içi "T-Downloader ile İndir" düğmesi
+  nativeButton: false,     // eski yerel düğme penceresi (videoGeometry); varsayılan kapalı
   minFileSizeKb: 0,
   excludedSites: [],
   // Boş liste = tüm türler. Varsayılan: yaygın arşiv/program/belge/medya.
@@ -38,8 +40,30 @@ export function buildMedia(p) {
     frameId: p.frameId ?? 0,
     pageUrl: str(p.pageUrl),
     pageTitle: str(p.pageTitle),
-    items: (p.items || []).map((i) => ({ url: i.url, mime: str(i.mime), kind: i.kind })),
+    frameUrl: str(p.frameUrl),
+    // referer/origin/cookies/userAgent: iframe oynatıcıdan gelen akış için istek başlıkları (CONTRACT.md, isteğe bağlı alanlar)
+    items: (p.items || []).map((i) => ({
+      url: i.url, mime: str(i.mime), kind: i.kind,
+      referer: str(i.referer), origin: str(i.origin), cookies: str(i.cookies), userAgent: str(i.userAgent),
+    })),
   };
+}
+
+export function buildQualities(p) {
+  return {
+    type: "qualities",
+    requestId: str(p.requestId),
+    tabId: p.tabId,
+    frameId: p.frameId ?? 0,
+    pageUrl: str(p.pageUrl),
+    pageTitle: str(p.pageTitle),
+    frameUrl: str(p.frameUrl),
+    src: str(p.src),
+  };
+}
+
+export function buildQualitySelect(p) {
+  return { type: "qualitySelect", selectionId: str(p.selectionId), index: Number.isInteger(p.index) ? p.index : -1 };
 }
 
 export function buildVideoGeometry(p) {
@@ -65,11 +89,19 @@ export function buildVideoGeometry(p) {
 // ---- medya sınıflandırma ----
 const MEDIA_EXT = /\.(mp4|m4v|webm|mkv|mov|flv|avi|mp3|m4a|aac|ogg|oga|opus|wav|flac)(?:$|[?#])/i;
 
+// m3u8/mpd adresi yolun sonunda olmak zorunda değil (ör. /master.m3u8/index.txt, ?format=m3u8).
+const HLS_URL = /\.m3u8(?:$|[/?#&])|[?&](?:format|type|ext)=m3u8(?:$|[&#])/i;
+const DASH_URL = /\.mpd(?:$|[/?#&])/i;
+
+export function originOf(url) {
+  try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? u.origin : ""; } catch { return ""; }
+}
+
 export function classifyMedia(url, contentType = "", contentLength = -1) {
   const path = (url || "").split(/[?#]/)[0].toLowerCase();
   const ct = (contentType || "").split(";")[0].trim().toLowerCase();
-  if (path.endsWith(".m3u8") || ct === "application/vnd.apple.mpegurl" || ct === "application/x-mpegurl" || ct === "audio/mpegurl" || ct === "audio/x-mpegurl") return "hls";
-  if (path.endsWith(".mpd") || ct === "application/dash+xml") return "dash";
+  if (HLS_URL.test(url || "") || ct === "application/vnd.apple.mpegurl" || ct === "application/x-mpegurl" || ct === "audio/mpegurl" || ct === "audio/x-mpegurl") return "hls";
+  if (DASH_URL.test(url || "") || ct === "application/dash+xml") return "dash";
   const isMime = ct.startsWith("video/") || ct.startsWith("audio/");
   if (isMime || MEDIA_EXT.test(url || "")) {
     // Çok küçük yanıtlar (ses efekti, parça başlığı vb.) gürültüdür.

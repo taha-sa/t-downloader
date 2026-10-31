@@ -592,18 +592,18 @@ public sealed class MainForm : Form
     }
 
     /// <summary>yt-dlp (External) indirmesi: kalite seçildikten sonra aynı pencereyi gösterir.</summary>
-    public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption opt)
+    public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption opt, TDownloader.Core.Video.MediaContext? ctx = null)
     {
         string stem = DownloadManager.SanitizeFileName(title.Length <= 120 ? title : title[..119] + "…");
         string name = stem + "." + opt.Ext;
         return RunPromptAsync(() =>
         {
-            using var dlg = new FileInfoDialog(_mgr, source, name, opt.Size, probeSize: false, referrer: referer, description: "yt-dlp: " + opt.Label);
+            using var dlg = new FileInfoDialog(_mgr, source, name, opt.Size, probeSize: false, referrer: referer, cookies: ctx?.Cookies, userAgent: ctx?.UserAgent, description: "Video: " + opt.Label);
             var r = dlg.ShowDialog();
             if (r is not (DialogResult.Yes or DialogResult.No)) return false;
             try
             {
-                _mgr.AddExternal(new AddExternalRequest(dlg.Url, dlg.FileName, opt.Format, dlg.SaveFolder, referer, dlg.Description, dlg.StartNow));
+                _mgr.AddExternal(new AddExternalRequest(dlg.Url, dlg.FileName, opt.Format, dlg.SaveFolder, referer, dlg.Description, dlg.StartNow, ctx?.Cookies, ctx?.UserAgent, ctx?.EffectiveOrigin));
                 return true;
             }
             catch (ArgumentException ex)

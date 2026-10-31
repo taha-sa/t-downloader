@@ -20,6 +20,8 @@ export function applyAppSettings(msg) {
     minFileSizeKb: Number.isFinite(msg.minFileSizeKb) ? msg.minFileSizeKb : appSettings.minFileSizeKb,
     excludedSites: Array.isArray(msg.excludedSites) ? msg.excludedSites : appSettings.excludedSites,
     fileTypes: Array.isArray(msg.fileTypes) ? msg.fileTypes : appSettings.fileTypes,
+    showVideoButton: typeof msg.showVideoButton === "boolean" ? msg.showVideoButton : appSettings.showVideoButton,
+    nativeButton: typeof msg.nativeButton === "boolean" ? msg.nativeButton : appSettings.nativeButton,
   };
   chrome.storage.local.set({ appSettings }).catch?.(() => {});
 }
@@ -35,3 +37,6 @@ export const getUserCapture = () => userCapture;
 export function effective() {
   return { ...appSettings, interceptEnabled: appSettings.interceptEnabled && userCapture };
 }
+
+// Sayfa içi düğme ve geometri için arayüz ayarları.
+export const uiConfig = () => ({ showVideoButton: appSettings.showVideoButton !== false, nativeButton: appSettings.nativeButton === true });

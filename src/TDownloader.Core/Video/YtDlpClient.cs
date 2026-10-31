@@ -33,15 +33,26 @@ public sealed class YtDlpClient : IExternalRunner
 
     // ---------------------------------------------------------------- argümanlar (test edilebilir)
 
-    public static List<string> BuildInfoArgs(string url, string? referer)
+    /// <summary>Referer/Origin/Cookie/User-Agent'ı yt-dlp bağımsız değişkenlerine çevirir (OpenDM'deki http_headers karşılığı).</summary>
+    public static void AddContextArgs(List<string> a, string? referer, MediaContext? ctx)
     {
-        var a = new List<string> { "-J", "--no-playlist", "--no-warnings", "--no-colors" };
-        if (!string.IsNullOrWhiteSpace(referer)) { a.Add("--referer"); a.Add(referer); }
+        string? refr = !string.IsNullOrWhiteSpace(ctx?.Referer) ? ctx!.Referer : referer;
+        if (!string.IsNullOrWhiteSpace(refr)) { a.Add("--referer"); a.Add(refr); }
+        var origin = ctx != null ? ctx.EffectiveOrigin : (Uri.TryCreate(referer, UriKind.Absolute, out var u) ? u.GetLeftPart(UriPartial.Authority) : null);
+        if (!string.IsNullOrWhiteSpace(origin)) { a.Add("--add-header"); a.Add("Origin:" + origin); }
+        if (!string.IsNullOrWhiteSpace(ctx?.Cookies)) { a.Add("--add-header"); a.Add("Cookie:" + ctx!.Cookies); }
+        if (!string.IsNullOrWhiteSpace(ctx?.UserAgent)) { a.Add("--user-agent"); a.Add(ctx!.UserAgent); }
+    }
+
+    public static List<string> BuildInfoArgs(string url, string? referer, MediaContext? ctx = null)
+    {
+        var a = new List<string> { "-J", "--no-playlist", "--no-warnings", "--no-colors", "--socket-timeout", "20", "--retries", "3" };
+        AddContextArgs(a, referer, ctx);
         a.Add("--"); a.Add(url);
         return a;
     }
 
-    public static List<string> BuildDownloadArgs(string url, string format, string outputTemplate, string? referer, string? ffmpeg)
+    public static List<string> BuildDownloadArgs(string url, string format, string outputTemplate, string? referer, string? ffmpeg, MediaContext? ctx = null)
     {
         var a = new List<string>
         {
@@ -50,8 +61,9 @@ public sealed class YtDlpClient : IExternalRunner
             "--progress-template", YtDlpParsing.ProgressTemplate,
             "--print", "after_move:" + YtDlpParsing.FilePrefix + "%(filepath)s",
         };
+        a.AddRange(new[] { "--retries", "10", "--fragment-retries", "10", "--concurrent-fragments", "4", "--socket-timeout", "30" });
         if (!string.IsNullOrWhiteSpace(ffmpeg)) { a.Add("--ffmpeg-location"); a.Add(ffmpeg); }
-        if (!string.IsNullOrWhiteSpace(referer)) { a.Add("--referer"); a.Add(referer); }
+        AddContextArgs(a, referer, ctx);
         a.Add("--"); a.Add(url);
         return a;
     }
@@ -72,10 +84,10 @@ public sealed class YtDlpClient : IExternalRunner
 
     // ---------------------------------------------------------------- kalite listesi
 
-    public async Task<VideoInfo> GetInfoAsync(string url, string? referer, CancellationToken ct = default)
+    public async Task<VideoInfo> GetInfoAsync(string url, string? referer, CancellationToken ct = default, MediaContext? ctx = null)
     {
         var exe = FindYtDlp() ?? throw new YtDlpNotFoundException();
-        using var p = new Process { StartInfo = Psi(exe, BuildInfoArgs(url, referer)) };
+        using var p = new Process { StartInfo = Psi(exe, BuildInfoArgs(url, referer, ctx)) };
         try { p.Start(); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         { throw new YtDlpException("yt-dlp başlatılamadı: " + ex.Message); }
@@ -107,7 +119,7 @@ public sealed class YtDlpClient : IExternalRunner
         var dir = Path.GetDirectoryName(item.SavePath)!;
         Directory.CreateDirectory(dir);
         string template = Path.Combine(dir, Path.GetFileNameWithoutExtension(item.SavePath)) + ".%(ext)s";
-        var args = BuildDownloadArgs(item.Url, item.ExternalFormat ?? "bv*+ba/b", template, item.Referrer, FindFfmpeg());
+        var args = BuildDownloadArgs(item.Url, item.ExternalFormat ?? "bv*+ba/b", template, item.Referrer, FindFfmpeg(), VideoRunner.ContextOf(item));
         using var p = new Process { StartInfo = Psi(exe, args) };
         var err = new StringBuilder();
         string? finalPath = null;

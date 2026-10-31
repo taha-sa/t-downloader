@@ -62,6 +62,22 @@ export function isFreshDownload(item, now = Date.now()) {
   return true;
 }
 
+// onCreated anında dosya adı genelde boştur (Content-Disposition henüz işlenmedi). Tarayıcı adı belirleyince
+// (kısa süre içinde) gerçek adı alırız; böylece App'e sunucunun verdiği ad gider.
+export const nameWait = { totalMs: 1200, stepMs: 120 };
+export async function waitForFilename(item) {
+  if (item.filename) return item;
+  const end = Date.now() + nameWait.totalMs;
+  while (Date.now() < end) {
+    await new Promise((r) => setTimeout(r, nameWait.stepMs));
+    try {
+      const [cur] = (await chrome.downloads.search?.({ id: item.id })) || [];
+      if (cur?.filename) return { ...item, ...cur };
+    } catch { return item; }
+  }
+  return item;
+}
+
 export async function onDownloadCreated(item) {
   const url = item.finalUrl || item.url || "";
   if (!url || NON_HTTP.test(url)) return;                 // blob:/data: -> tarayıcıda kalsın
@@ -73,6 +89,7 @@ export async function onDownloadCreated(item) {
   if (!native.isConnected()) { native.connect(); if (!native.isConnected()) return; }
 
   await safe(() => chrome.downloads.pause(item.id));
+  item = await waitForFilename(item);
   let accepted = false;
   try {
     const filename = filenameFrom(item);

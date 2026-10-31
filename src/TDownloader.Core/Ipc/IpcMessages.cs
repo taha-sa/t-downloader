@@ -14,6 +14,9 @@ namespace TDownloader.Core.Ipc;
 [JsonDerivedType(typeof(VideoGeometryMessage), "videoGeometry")]
 [JsonDerivedType(typeof(HideButtonMessage), "hideButton")]
 [JsonDerivedType(typeof(SettingsMessage), "settings")]
+[JsonDerivedType(typeof(QualitiesMessage), "qualities")]
+[JsonDerivedType(typeof(QualitiesResultMessage), "qualitiesResult")]
+[JsonDerivedType(typeof(QualitySelectMessage), "qualitySelect")]
 public abstract record IpcMessage;
 
 public sealed record PingMessage : IpcMessage;
@@ -26,9 +29,13 @@ public sealed record DownloadMessage(
 
 public sealed record DownloadResultMessage(string RequestId, bool Accepted) : IpcMessage;
 
-public sealed record MediaItem(string Url, string? Mime, string Kind);
+/// <summary>
+/// Sniff edilen medya. Referer/Origin/Cookies/UserAgent isteğe bağlıdır (eski eklentiler göndermez): iframe
+/// oynatıcıdaki akışlar için istek başlıklarını taşır.
+/// </summary>
+public sealed record MediaItem(string Url, string? Mime, string Kind, string? Referer = null, string? Origin = null, string? Cookies = null, string? UserAgent = null);
 
-public sealed record MediaMessage(int TabId, int FrameId, string? PageUrl, string? PageTitle, List<MediaItem> Items) : IpcMessage;
+public sealed record MediaMessage(int TabId, int FrameId, string? PageUrl, string? PageTitle, List<MediaItem> Items, string? FrameUrl = null) : IpcMessage;
 
 public sealed record RectInfo(double Left, double Top, double Right, double Bottom);
 public sealed record SizeInfo(double Width, double Height);
@@ -38,12 +45,26 @@ public sealed record VideoGeometryMessage(
     int TabId, int WindowId, bool Visible, bool Fullscreen, RectInfo Rect, double DevicePixelRatio,
     SizeInfo Viewport, WindowRectInfo BrowserWindow, string? PageUrl, string? PageTitle) : IpcMessage;
 
+/// <summary>Sayfa içi düğme kalite listesi ister (eklenti -> App). Src: videonun currentSrc'si (http/https ise).</summary>
+public sealed record QualitiesMessage(string RequestId, int TabId, int FrameId, string? PageUrl, string? PageTitle, string? FrameUrl, string? Src) : IpcMessage;
+
+/// <summary>Menüde gösterilen satır. Kind: "video" | "audio" | "file".</summary>
+public sealed record QualityOptionInfo(string Label, string Kind, int Height, long Size, bool AudioOnly, bool IsDefault);
+
+/// <summary>Kalite listesi yanıtı (App -> eklenti). ErrorCode: "no_ytdlp" | "no_media" | "error". SelectionId seçimde geri gönderilir.</summary>
+public sealed record QualitiesResultMessage(string RequestId, bool Ok, string? Error, string? ErrorCode, string? Title, string? SelectionId,
+    List<QualityOptionInfo>? Options) : IpcMessage;
+
+/// <summary>Kullanıcı menüden bir satır seçti (eklenti -> App); App "Dosya İndirme Bilgisi" penceresini açar.</summary>
+public sealed record QualitySelectMessage(string SelectionId, int Index) : IpcMessage;
+
 public sealed record HideButtonMessage(int TabId) : IpcMessage;
 
-public sealed record SettingsMessage(bool InterceptEnabled, int MinFileSizeKb, List<string> ExcludedSites, List<string> FileTypes) : IpcMessage
+public sealed record SettingsMessage(bool InterceptEnabled, int MinFileSizeKb, List<string> ExcludedSites, List<string> FileTypes,
+    bool ShowVideoButton = true, bool NativeButton = false) : IpcMessage
 {
     public static SettingsMessage From(AppSettings s) =>
-        new(s.BrowserCaptureEnabled, s.MinFileSizeKb, s.ExcludedSites.ToList(), s.FileTypes.ToList());
+        new(s.BrowserCaptureEnabled, s.MinFileSizeKb, s.ExcludedSites.ToList(), s.FileTypes.ToList(), s.ShowVideoButton, s.UseNativeVideoButton);
 }
 
 public static class IpcSerializer

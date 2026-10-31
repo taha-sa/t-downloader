@@ -15,6 +15,10 @@ public interface IMediaSink
     void Attach(IAppServices services);
     void OnMedia(MediaMessage message);
     void OnVideoGeometry(VideoGeometryMessage message);
+    /// <summary>Sayfa içi düğme kalite listesi ister.</summary>
+    Task<QualitiesResultMessage> GetQualitiesAsync(QualitiesMessage message);
+    /// <summary>Menüden seçilen satır: indirme onay penceresini açar.</summary>
+    void OnQualitySelect(QualitySelectMessage message);
     void Detach();
 }
 
@@ -24,6 +28,9 @@ public sealed class NullMediaSink : IMediaSink
     public void Attach(IAppServices services) { }
     public void OnMedia(MediaMessage message) { }
     public void OnVideoGeometry(VideoGeometryMessage message) { }
+    public Task<QualitiesResultMessage> GetQualitiesAsync(QualitiesMessage m) =>
+        Task.FromResult(new QualitiesResultMessage(m.RequestId, false, "Video desteği yok.", "error", null, null, null));
+    public void OnQualitySelect(QualitySelectMessage message) { }
     public void Detach() { }
 }
 
@@ -40,7 +47,7 @@ public interface IAppServices
     Task<bool> PromptDownloadAsync(string url, string? referrer = null, string? cookies = null, string? userAgent = null,
         string? fileName = null, long fileSize = -1);
     /// <summary>yt-dlp kalite seçimi sonrası aynı pencereyi açar; onaylanırsa External indirme ekler.</summary>
-    Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option);
+    Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option, TDownloader.Core.Video.MediaContext? ctx = null);
 }
 
 public sealed class AppServices : IAppServices
@@ -60,8 +67,8 @@ public sealed class AppServices : IAppServices
         string? fileName = null, long fileSize = -1)
         => Main?.PromptDownloadAsync(url, referrer, cookies, userAgent, fileName, fileSize) ?? Task.FromResult(false);
 
-    public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option)
-        => Main?.PromptExternalAsync(source, referer, title, option) ?? Task.FromResult(false);
+    public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option, TDownloader.Core.Video.MediaContext? ctx = null)
+        => Main?.PromptExternalAsync(source, referer, title, option, ctx) ?? Task.FromResult(false);
 
     /// <summary>Ayarları uygular, diske yazar ve eklentiye yayınlar.</summary>
     public void ApplySettings(AppSettings s)

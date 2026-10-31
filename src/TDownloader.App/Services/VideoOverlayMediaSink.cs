@@ -18,10 +18,13 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     {
         public string? PageUrl, PageTitle;
         public readonly Dictionary<int, List<MediaItem>> Frames = new();
+        public readonly Dictionary<string, long> Seen = new(StringComparer.Ordinal);   // url -> geliş sırası
+        public long Counter;
         public IEnumerable<MediaItem> Items => Frames.Values.SelectMany(x => x);
     }
 
     private readonly YtDlpClient _yt;
+    private readonly HlsClient _hls = new();
     private IAppServices? _svc;
     private VideoButtonWindow? _win;
     private System.Windows.Forms.Timer? _tick;
@@ -64,6 +67,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     {
         var t = Tab(m.TabId);
         t.Frames[m.FrameId] = m.Items ?? new();
+        foreach (var i in m.Items ?? new()) if (!t.Seen.ContainsKey(i.Url)) t.Seen[i.Url] = ++t.Counter;
         if (!string.IsNullOrEmpty(m.PageUrl)) t.PageUrl = m.PageUrl;
         if (!string.IsNullOrEmpty(m.PageTitle)) t.PageTitle = m.PageTitle;
         Prefetch(m.TabId);   // akış adresi geldiyse kaliteleri şimdiden al
@@ -74,6 +78,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
 
     public void OnVideoGeometry(VideoGeometryMessage g)
     {
+        if (_svc == null || !Settings.UseNativeVideoButton) return;   // sayfa içi düğme kullanılıyor
         if (_geo.Offer(g.TabId, g)) Post(() => { foreach (var m in _geo.Drain()) Apply(m); });
     }
 
@@ -228,33 +233,64 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         if (_win != null) _win.MenuOpen = false;
     }
 
-    private readonly record struct Sources(List<MediaItem> Direct, string? Page, string? Source, string? Referer);
+    private readonly record struct Sources(List<MediaItem> Direct, string? Page, string? Source, MediaContext Ctx, bool Hls, string? Referer);
 
-    private static Sources Resolve(TabState tab)
+    /// <summary>Sekmedeki medyaları çözer: doğrudan dosyalar ve en son görülen akış (HLS/DASH). Akışın başlıkları iframe'den gelir.</summary>
+    private static Sources Resolve(TabState tab, int preferFrame = -1)
     {
         var direct = tab.Items.Where(i => i.Kind == "file" && IsHttp(i.Url)).DistinctBy(i => i.Url).Take(25).ToList();
-        var stream = tab.Items.FirstOrDefault(i => (i.Kind == "hls" || i.Kind == "dash") && IsHttp(i.Url));
+        // Düğmenin çizildiği çerçevenin akışı önce; yoksa sekmedeki en son görülen.
+        var streams = tab.Frames.SelectMany(f => f.Value.Select(i => (Frame: f.Key, Item: i)))
+            .Where(x => (x.Item.Kind == "hls" || x.Item.Kind == "dash") && IsHttp(x.Item.Url));
+        var stream = streams.OrderByDescending(x => x.Frame == preferFrame ? 1 : 0)
+            .ThenByDescending(x => tab.Seen.GetValueOrDefault(x.Item.Url)).Select(x => x.Item).FirstOrDefault();
         string? page = IsHttp(tab.PageUrl) ? tab.PageUrl : null;
-        return new Sources(direct, page, stream?.Url ?? (direct.Count == 0 ? page : null), stream != null ? page : null);
+        if (stream != null)
+        {
+            var ctx = ContextOf(stream, page);
+            return new Sources(direct, page, stream.Url, ctx, stream.Kind == "hls" || HlsClient.LooksLikeHlsUrl(stream.Url), ctx.Referer);
+        }
+        return new Sources(direct, page, direct.Count == 0 ? page : null, MediaContext.Empty, false, null);
     }
 
-    /// <summary>Önbellekteki (veya yeni başlatılan) yt-dlp bilgi görevi. Başarısız/eskimiş görev yeniden başlatılır.</summary>
-    private Task<VideoInfo> InfoFor(string source, string? referer)
+    /// <summary>Öğenin kendi başlıkları; yoksa sayfa adresi Referer olur.</summary>
+    public static MediaContext ContextOf(MediaItem i, string? page) =>
+        new(string.IsNullOrWhiteSpace(i.Referer) ? page : i.Referer, i.Origin, i.Cookies, i.UserAgent);
+
+    /// <summary>
+    /// Önbellekteki (veya yeni başlatılan) kalite bilgisi görevi. HLS akışları önce master playlist'ten doğrudan okunur
+    /// (yt-dlp'siz, çok hızlı); olmazsa yt-dlp'ye düşer. Başarısız/eskimiş görev yeniden başlatılır.
+    /// </summary>
+    private Task<VideoInfo> InfoFor(string source, MediaContext ctx, bool hls, string? title)
     {
         var now = DateTime.UtcNow;
         if (_info.TryGetValue(source, out var e) && now - e.At < InfoTtl && !e.Task.IsFaulted && !e.Task.IsCanceled)
             return e.Task;
         foreach (var k in _info.Where(p => now - p.Value.At >= InfoTtl).Select(p => p.Key).ToList()) _info.Remove(k);
-        var t = Task.Run(() => _yt.GetInfoAsync(source, referer));
+        var t = Task.Run(async () =>
+        {
+            if (hls)
+            {
+                try { return await _hls.GetInfoAsync(source, ctx, title).ConfigureAwait(false); }
+                catch (HlsException ex) when (ex.IsDrm) { throw new YtDlpException(ex.Message); }
+                catch (Exception ex) when (ex is HlsException or HttpRequestException or OperationCanceledException or UriFormatException)
+                {
+                    if (_yt.FindYtDlp() == null) throw new YtDlpException("Akış okunamadı: " + ex.Message);
+                }
+            }
+            return await _yt.GetInfoAsync(source, ctx.Referer, default, ctx).ConfigureAwait(false);
+        });
         _info[source] = (now, t);
         return t;
     }
 
     private void Prefetch(int tabId)
     {
-        if (tabId != _tabId || !Settings.ShowVideoButton || _yt.FindYtDlp() == null) return;
-        var s = Resolve(Tab(tabId));
-        if (s.Source != null) _ = InfoFor(s.Source, s.Referer);
+        if (tabId != _tabId || !Settings.ShowVideoButton) return;
+        var tab = Tab(tabId);
+        var s = Resolve(tab);
+        if (s.Source == null || (!s.Hls && _yt.FindYtDlp() == null)) return;
+        _ = InfoFor(s.Source, s.Ctx, s.Hls, tab.PageTitle);
     }
 
     private void ShowMenu()
@@ -262,7 +298,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         if (_svc == null || _win == null) return;
         CloseMenu();
         var tab = Tab(_tabId);
-        var (direct, page, source, referer) = Resolve(tab);
+        var (direct, page, source, ctx, hls, referer) = Resolve(tab);
 
         // Tek doğrudan medya: menüsüz indir.
         if (source == null && direct.Count == 1) { DownloadDirect(direct[0], page, tab.PageTitle); return; }
@@ -289,7 +325,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         ToolStripMenuItem? loading = null;
         if (source != null)
         {
-            if (_yt.FindYtDlp() == null)
+            if (!hls && _yt.FindYtDlp() == null)
             {
                 var miss = new ToolStripMenuItem("yt-dlp bulunamadı — kurulum bilgisi") { ForeColor = Theme.Danger };
                 miss.Click += (_, _) => ShowInstallInfo();
@@ -317,10 +353,10 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         _menuBrowser = _browser;
         _menuTitle = BrowserWindows.Title(_browser);
 
-        Task<VideoInfo>? infoTask = loading != null && source != null ? InfoFor(source, referer) : null;
+        Task<VideoInfo>? infoTask = loading != null && source != null ? InfoFor(source, ctx, hls, tab.PageTitle) : null;
         if (infoTask is { IsCompletedSuccessfully: true })
         {
-            FillQualities(menu, loading!, infoTask.Result, source!, page ?? referer);   // önceden alınmış: anında
+            FillQualities(menu, loading!, infoTask.Result, source!, ctx, page ?? referer);   // önceden alınmış: anında
             infoTask = null;
         }
 
@@ -337,7 +373,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
                 try
                 {
                     var info = await infoTask.WaitAsync(cts.Token).ConfigureAwait(false);
-                    Post(() => { if (ReferenceEquals(_menu, menu)) FillQualities(menu, loadingItem, info, src, page ?? referer); });
+                    Post(() => { if (ReferenceEquals(_menu, menu)) FillQualities(menu, loadingItem, info, src, ctx, page ?? referer); });
                 }
                 catch (OperationCanceledException) { }
                 catch (YtDlpNotFoundException) { Post(() => ReplaceLoading(menu, loadingItem, "yt-dlp bulunamadı — kurulum bilgisi", ShowInstallInfo)); }
@@ -358,7 +394,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         menu.Items.Insert(i, it);
     }
 
-    private void FillQualities(ContextMenuStrip menu, ToolStripMenuItem loading, VideoInfo info, string source, string? referer)
+    private void FillQualities(ContextMenuStrip menu, ToolStripMenuItem loading, VideoInfo info, string source, MediaContext ctx, string? referer)
     {
         int i = menu.Items.IndexOf(loading);
         if (i < 0) return;
@@ -370,11 +406,96 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             var it = new ToolStripMenuItem($"{n}.  {opt.Label}");
             if (n - 1 == def) it.Font = new Font(menu.Font, FontStyle.Bold);
             var cap = opt;
-            it.Click += (_, _) => StartQuality(source, referer, info.Title, cap);
+            it.Click += (_, _) => StartQuality(source, referer, ctx, info.Title, cap);
             menu.Items.Insert(i + n - 1, it);
             n++;
         }
     }
+
+    // ------------------------------------------------------------ sayfa içi düğme (eklenti) için kalite listesi
+
+    private sealed record Entry(MediaItem? File, QualityOption? Quality);
+    private sealed record Selection(List<Entry> Entries, string Source, MediaContext Ctx, string Title, string? Page, string? Referer);
+    private readonly Dictionary<string, Selection> _selections = new();
+
+    public async Task<QualitiesResultMessage> GetQualitiesAsync(QualitiesMessage q)
+    {
+        static QualitiesResultMessage Fail(string id, string msg, string code) => new(id, false, msg, code, null, null, null);
+        if (_svc == null) return Fail(q.RequestId, "Uygulama hazır değil.", "error");
+
+        var tcs = new TaskCompletionSource<(Sources S, string? Title, string? Page)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Post(() =>
+        {
+            try
+            {
+                var tab = Tab(q.TabId);
+                if (!string.IsNullOrEmpty(q.PageUrl)) tab.PageUrl = q.PageUrl;
+                if (!string.IsNullOrEmpty(q.PageTitle)) tab.PageTitle = q.PageTitle;
+                var s = Resolve(tab, q.FrameId);
+                // Video öğesi doğrudan http(s) dosyası oynatıyorsa (blob değil) ve listede yoksa ekle.
+                if (IsHttp(q.Src) && !HlsClient.LooksLikeHlsUrl(q.Src!) && !s.Direct.Any(d => d.Url == q.Src))
+                    s.Direct.Insert(0, new MediaItem(q.Src!, "", "file", q.FrameUrl));
+                tcs.TrySetResult((s, tab.PageTitle, tab.PageUrl));
+            }
+            catch (Exception ex) { tcs.TrySetException(ex); }
+        });
+        var (src, pageTitle, pageUrl) = await tcs.Task.ConfigureAwait(false);
+
+        var entries = new List<Entry>();
+        var infos = new List<QualityOptionInfo>();
+        string title = string.IsNullOrWhiteSpace(pageTitle) ? "Video" : pageTitle!;
+        string? error = null, code = null;
+        string? streamSource = src.Source;
+        var ctx = src.Ctx;
+
+        if (streamSource != null)
+        {
+            if (!src.Hls && _yt.FindYtDlp() == null) { error = "yt-dlp bulunamadı."; code = "no_ytdlp"; }
+            else
+            {
+                try
+                {
+                    var info = await InfoFor(streamSource, ctx, src.Hls, pageTitle).ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
+                    int def = YtDlpParsing.PickDefault(info.Options, Settings.DefaultVideoQuality);
+                    for (int i = 0; i < info.Options.Count; i++)
+                    {
+                        var o = info.Options[i];
+                        entries.Add(new Entry(null, o));
+                        infos.Add(new QualityOptionInfo(o.Label, o.AudioOnly ? "audio" : "video", o.Height, o.Size, o.AudioOnly, i == def));
+                    }
+                }
+                catch (YtDlpNotFoundException) { error = "yt-dlp bulunamadı."; code = "no_ytdlp"; }
+                catch (YtDlpException ex) { error = ex.Message; code = "error"; }
+                catch (Exception ex) { error = ex.Message; code = "error"; }
+            }
+        }
+        foreach (var d in src.Direct)
+        {
+            entries.Add(new Entry(d, null));
+            infos.Add(new QualityOptionInfo(Shorten(DirectName(d, pageTitle), 48), "file", 0, 0, false, infos.Count == 0));
+        }
+
+        if (entries.Count == 0)
+            return Fail(q.RequestId, error ?? "Bu sayfada indirilebilir medya bulunamadı.", code ?? "no_media");
+
+        string id = Guid.NewGuid().ToString("N");
+        var sel = new Selection(entries, streamSource ?? "", ctx, title, pageUrl, src.Referer);
+        Post(() =>
+        {
+            if (_selections.Count >= 20) _selections.Remove(_selections.Keys.First());
+            _selections[id] = sel;
+        });
+        return new QualitiesResultMessage(q.RequestId, true, null, null, title, id, infos);
+    }
+
+    public void OnQualitySelect(QualitySelectMessage m) => Post(() =>
+    {
+        if (!_selections.TryGetValue(m.SelectionId, out var sel) || m.Index < 0 || m.Index >= sel.Entries.Count) return;
+        var e = sel.Entries[m.Index];
+        if (e.File != null) DownloadDirect(e.File, sel.Page, sel.Title);
+        else if (e.Quality != null) StartQuality(sel.Source, sel.Page ?? sel.Referer, sel.Ctx, sel.Title, e.Quality);
+    });
 
     // ------------------------------------------------------------ indirme
 
@@ -400,13 +521,13 @@ public sealed class VideoOverlayMediaSink : IMediaSink
 
     private void DownloadDirect(MediaItem item, string? page, string? title)
     {
-        _ = _svc!.PromptDownloadAsync(item.Url, page, null, null, DirectName(item, title));
+        _ = _svc!.PromptDownloadAsync(item.Url, string.IsNullOrWhiteSpace(item.Referer) ? page : item.Referer, item.Cookies, item.UserAgent, DirectName(item, title));
     }
 
-    private void StartQuality(string source, string? referer, string title, QualityOption opt)
+    private void StartQuality(string source, string? referer, MediaContext ctx, string title, QualityOption opt)
     {
         // İndirme başlamadan "Dosya İndirme Bilgisi" penceresi açılır (IDM gibi).
-        _ = _svc!.PromptExternalAsync(source, referer, title, opt);
+        _ = _svc!.PromptExternalAsync(source, ctx.Referer ?? referer, title, opt, ctx);
     }
 
     // ------------------------------------------------------------ bilgi kutuları

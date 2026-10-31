@@ -36,7 +36,7 @@ internal static class Program
         manager.Load();
 
         var yt = new Core.Video.YtDlpClient(() => manager.Settings, paths);
-        manager.ExternalRunner = yt;
+        manager.ExternalRunner = new TDownloader.Core.Video.VideoRunner(yt);
         var svc = new AppServices { Manager = manager, Paths = paths };
         var form = new MainForm(svc, background);
         svc.Main = form;

@@ -19,4 +19,7 @@ public sealed record AddExternalRequest(
     string? SaveFolder = null,
     string? Referrer = null,
     string? Description = null,
-    bool StartNow = true);
+    bool StartNow = true,
+    string? Cookie = null,
+    string? UserAgent = null,
+    string? Origin = null);

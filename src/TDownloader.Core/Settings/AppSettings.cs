@@ -53,6 +53,8 @@ public sealed class AppSettings
     // ---- Video (yt-dlp) ----
     /// <summary>Videoların üstünde "Bu videoyu indir" düğmesini göster.</summary>
     public bool ShowVideoButton { get; set; } = true;
+    /// <summary>Eski yerel (native) düğme penceresi. Varsayılan kapalı: düğme sayfa içinde (eklenti) çizilir.</summary>
+    public bool UseNativeVideoButton { get; set; }
     /// <summary>yt-dlp.exe yolu (boşsa otomatik aranır).</summary>
     public string YtDlpPath { get; set; } = "";
     /// <summary>ffmpeg.exe yolu veya klasörü (boşsa otomatik aranır).</summary>

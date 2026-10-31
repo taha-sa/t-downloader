@@ -1,6 +1,7 @@
 // content script'ten gelen geometriyi sekme/pencere bilgisiyle zenginleştirip host'a iletir.
 import * as native from "./native.js";
 import { buildVideoGeometry } from "./protocol.js";
+import { uiConfig } from "./settings.js";
 
 const frames = new Map();   // tabId -> Map(frameId -> payload)
 const hidden = new Set();   // App `hideButton` dediği sekmeler
@@ -37,7 +38,7 @@ async function windowRect(windowId) {
 }
 
 export async function emit(tabId, windowId, tabInfo = {}) {
-  if (hidden.has(tabId)) return;
+  if (hidden.has(tabId) || !uiConfig().nativeButton) return;   // yerel düğme kapalıyken trafik yok
   const p = best(tabId);
   if (!p) return;
   const w = await windowRect(windowId);
@@ -69,7 +70,8 @@ export async function onContentGeometry(payload, sender) {
 
 // Pencere taşınınca/boyanınca konumu yeniden gönder.
 export async function resendWindow(windowId) {
-  for (const [tabId, info] of last) {
+  // Anlık görüntü üzerinde dön: emit() `last`'e yeniden yazar; canlı Map üzerinde dönmek sonsuz döngü yapar.
+  for (const [tabId, info] of [...last]) {
     if (info.windowId === windowId) { last.delete(tabId); await emit(tabId, windowId); }
   }
 }

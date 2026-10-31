@@ -25,6 +25,8 @@ public sealed class DownloadItem
     public string? Referrer { get; set; }
     public string? Cookie { get; set; }
     public string? UserAgent { get; set; }
+    /// <summary>Akış istekleri için Origin başlığı (iframe oynatıcı sayfasının origin'i); yoksa Referrer'dan türetilir.</summary>
+    public string? Origin { get; set; }
     public string? Error { get; set; }
     /// <summary>İndirme türü; eski downloads.json dosyalarında yoksa Http.</summary>
     public DownloadKind Kind { get; set; } = DownloadKind.Http;

@@ -46,9 +46,21 @@ Eklenti → App:
 - `{ "type":"download", "requestId", "url", "referrer", "cookies", "userAgent", "filename", "mime", "fileSize" }`
   → `{ "type":"downloadResult", "requestId", "accepted": true|false }`
 - `{ "type":"media", "tabId", "frameId", "pageUrl", "pageTitle", "items":[{ "url","mime","kind":"hls|dash|file" }] }`
+  - Geriye uyumlu EK alanlar (isteğe bağlı): mesajda `frameUrl` (isteği yapan iframe belgesi); her öğede `referer`, `origin`, `cookies`, `userAgent`
+    (iframe oynatıcıdaki akışı CDN'in beklediği başlıklarla indirmek için; Referer = tarayıcının gönderdiği veya iframe belge adresi).
+- `{ "type":"qualities", "requestId", "tabId", "frameId", "pageUrl", "pageTitle", "frameUrl", "src" }` — sayfa içi düğme kalite listesi ister
+  (`src`: `<video>` http(s) adresi, blob ise boş). App yanıtı: `{ "type":"qualitiesResult", "requestId", "ok", "error", "errorCode":"no_ytdlp|no_media|error",
+  "title", "selectionId", "options":[{ "label","kind":"video|audio|file","height","size","audioOnly","isDefault" }] }`.
+- `{ "type":"qualitySelect", "selectionId", "index" }` — menüden seçim; App IDM tarzı "Dosya İndirme Bilgisi" penceresini açar.
 - `{ "type":"videoGeometry", "tabId", "windowId", "visible", "fullscreen", "rect":{ "left","top","right","bottom" }, "devicePixelRatio", "viewport":{ "width","height" }, "browserWindow":{ "left","top","width","height" }, "pageUrl", "pageTitle" }`
 App → Eklenti:
 - `{ "type":"hideButton", "tabId" }`, `{ "type":"settings", "interceptEnabled", "minFileSizeKb", "excludedSites":[...], "fileTypes":[...] }`
+  - `settings` EK alanları: `showVideoButton` (sayfa içi düğme açık/kapalı, varsayılan true), `nativeButton` (eski yerel düğme penceresi; varsayılan false).
+    `nativeButton=false` iken eklenti `videoGeometry` göndermez, App de yok sayar.
+
+### Video düğmesi (sayfa içi)
+Düğme ve kalite menüsü eklentinin `button.js` içerik script'iyle sayfanın DOM'una (Shadow DOM) çizilir (iframe dahil, her çerçeve kendi videosu için).
+Yerel düğme penceresi (`videoGeometry` akışı) yalnızca `UseNativeVideoButton` ayarıyla açılır.
 
 ## Sınırlar (tüm agentlar)
 - DRM aşma, lisans/kayıt mantığı yok. IDM dosyalarını değiştirme/çalıştırma yok.
