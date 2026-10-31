@@ -124,7 +124,8 @@ public sealed class YtDlpClient : IExternalRunner
             return new ExternalResult(false, "yt-dlp bulunamadı. Seçenekler > Video sekmesinden yolunu belirtin veya kurulum bilgisine bakın.", null);
         var dir = Path.GetDirectoryName(item.SavePath)!;
         Directory.CreateDirectory(dir);
-        string template = Path.Combine(dir, Path.GetFileNameWithoutExtension(item.SavePath)) + ".%(ext)s";
+        // yt-dlp uzantıyı kendisi seçer: bu addaki herhangi bir tamamlanmış dosya (ör. kullanıcının Film.mp4'ü) varsa yeni ad seçilir.
+        string template = Path.Combine(dir, Util.UniqueName.Stem(dir, Path.GetFileNameWithoutExtension(item.SavePath))) + ".%(ext)s";
         var mctx = VideoRunner.ContextOf(item);
         using var jar = CookieJarFile.Create(mctx);   // iş bitince silinir
         var args = BuildDownloadArgs(item.Url, item.ExternalFormat ?? "bv*+ba/b", template, item.Referrer, FindFfmpeg(), mctx, SupportsProgressDelta(exe), jar?.Path);
@@ -145,7 +146,12 @@ public sealed class YtDlpClient : IExternalRunner
             while ((line = await p.StandardOutput.ReadLineAsync().ConfigureAwait(false)) != null)
             {
                 var pr = YtDlpParsing.ParseProgressLine(line);
-                if (pr != null) { report(agg.Add(pr)); continue; }
+                if (pr != null)
+                {
+                    // Abone (UI) istisnası stdout okumasını durdurmasın: aksi halde pipe dolar, yt-dlp bloke olur, indirme asılı kalır.
+                    try { report(agg.Add(pr)); } catch (Exception) { }
+                    continue;
+                }
                 finalPath = YtDlpParsing.ParseFilePathLine(line) ?? finalPath;
             }
         });
