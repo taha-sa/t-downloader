@@ -140,9 +140,9 @@ public class HlsRobustnessTests : IDisposable
         {
             Assert.NotEmpty(phases);
             Assert.All(phases, ph => Assert.StartsWith("Birleştiriliyor %", ph));
-            Assert.True(counts[0] < N, "ilk birleştirme raporunda en az bir parça silinmiş olmalı");
+            Assert.Contains(counts, c => c < N && c > 0);   // kontrol noktalarında (C2) toplu silinir; yine de birleştirme sürerken
             Assert.Equal(0, counts[^1]);
-            for (int i = 1; i < counts.Count; i++) Assert.True(counts[i] <= counts[i - 1]);   // tek tek azalır
+            for (int i = 1; i < counts.Count; i++) Assert.True(counts[i] <= counts[i - 1]);   // azalır (kontrol noktası başına toplu)
             Assert.Equal("Birleştiriliyor %100", phases[^1]);
         }
     }
