@@ -38,7 +38,7 @@ IDM benzeri, Windows için indirme yöneticisi. Referans analizler: `C:\Users\hp
 - Named pipe: `\\.\pipe\TDownloader.Ipc` — App sunucu, Host istemci.
 - Çerçeve: her mesaj tek satır UTF-8 JSON + `\n`.
 - Native messaging (eklenti ↔ Host): Chrome standardı (4 bayt little-endian uzunluk + UTF-8 JSON). Host adı: `com.tdownloader.host`.
-- Host, pipe'a bağlanamazsa kendi klasöründeki `TDownloader.exe`'yi `--background` ile başlatır, en fazla 10 sn bağlanmayı dener.
+- Host, YALNIZCA `download`/`qualities` için ve pipe'a bağlanamazsa kendi klasöründeki `TDownloader.exe`'yi `--background` ile başlatır, en fazla 10 sn bağlanmayı dener. Diğer mesajlar App'i başlatmaz (aşağıda: A5).
 
 ### Mesajlar (alan adları camelCase)
 Eklenti → App:
@@ -106,3 +106,46 @@ Yerel düğme penceresi (`videoGeometry` akışı) yalnızca `UseNativeVideoButt
 - Eklenti: `nativeButton=false` iken `content.js` geometri altyapısını (MutationObserver, interval, scroll/resize/mousemove dinleyicileri) hiç kurmaz; ayar
   açılınca kurar, kapanınca söker. `button.js` videoları IntersectionObserver ile izler (mousemove'da `elementsFromPoint`, tüm `<video>` taraması yok);
   250 ms kararlılık zamanlayıcısı yalnızca görünür alanda video varken, rAF döngüsü yalnızca düğme/menü gerekliyken ve video görünürken çalışır.
+
+## Güvenlik ve dayanıklılık düzeltmeleri (docs/review/02-app-ipc-eklenti.md)
+
+### Çerez sınırı (A1)
+- `qualities.cookies` = `{ "<origin>": "a=b" }` artık YALNIZCA şu kuralla üretilir: eklenti her origin için çerezi o origin'in kendi adresiyle
+  (`chrome.cookies.getAll({url})`, tarayıcının kendi kapsamı) okur. Sayfanın verdiği oynatıcı adresleri (`players`) için çerez OKUNMAZ; sayfa başka sitenin çerezini isteyemez.
+- Yeni EK alan `qualities.cookieHosts` = `{ "<origin>": "<host>" }`: çerezin hangi host için okunduğu. App bu host'u `MediaContext.CookieHost` alanına koyar
+  (`MediaContexts.ContextOf`); Core çerezi yalnızca bu host'a (ve alt alan adlarına) gönderir. Host'u bildirilmemiş/uyuşmayan origin'e çerez uygulanmaz.
+  `qualities.cookieHosts` yoksa (eski eklenti) yalnızca origin eşleşmesi aranır; çerezli bağlamda `CookieHost` boşsa Core çerezi hiçbir isteğe eklemez.
+- App, kalite/indirme başlatırken bağlam çerezini kaynak adresinin host'una uygulanamıyorsa atar (`MediaContexts.ForSource`).
+
+### Sayfa içi düğme güven sınırı (A2, A17)
+- Shadow root `closed`; düğme/menü/Esc/mousedown/mousemove işleyicileri ve `content.js` Alt tuşu işleyicileri `event.isTrusted` ister:
+  sayfa betiği sentetik olayla menü açamaz, `qualities`/`qualitySelect` tetikleyemez, tarayıcının yakalamasını kapatamaz.
+- Video düğmesinden gelen indirmeler (`qualitySelect` -> doğrudan dosya) `ShowFileInfoOnCapture` kapalı olsa bile HER ZAMAN "Dosya İndirme Bilgisi" penceresini gösterir.
+- `qualitySelect` yanıtı: eklenti içi `sendResponse({ ok })`; host'a yazılamadıysa düğme hata gösterir ("✓ gönderildi" değil).
+
+### Host: App'i ne zaman başlatır (A5, A6)
+- Host App'i YALNIZCA `download` ve `qualities` (kullanıcı eylemi) için başlatır. `ping`, `media`, `tabClosed`, `videoGeometry`, `qualitiesCancel`, `qualitySelect`
+  App'i ASLA başlatmaz (tepsiden Çıkış sonrası geri gelmez); bağlıysa iletir, değilse 50 ms'lik tek bağlanma denemesinden sonra düşürür.
+- App'e ulaşılamazsa `qualities` mesajına HEMEN `{ "type":"qualitiesResult", "requestId", "ok":false, "error":"T-Downloader çalışmıyor...", "errorCode":"error" }` döner
+  (menü 100 sn beklemez); `download` için eskisi gibi `accepted:false`.
+
+### IPC pipe (A7)
+- Pipe `PipeOptions.CurrentUserOnly` ile açılır/bağlanılır (başka kullanıcı oturumu bağlanamaz, sunucuyu taklit edemez). Kabul döngüsü hiçbir istisnada ölmez
+  (günlüğe yazar, 500 ms sonra yeniden dener). Pipe adı değişmedi (`TDownloader.Ipc`).
+
+### Medya durumu tutarlılığı (A8, A9, A12, A15)
+- Eklenti `media` gönderemediyse (bağlantı yok) öğeleri "gönderilmiş" saymaz. App bağlandığında ilk mesaj `settings`'tir; eklenti `settings` alınca açık sekmelerin
+  tüm medya listesini `media` (`append:false`, devamı `append:true`) ile yeniden gönderir.
+- Sekme yeni belgeye gidince/yenilenince (`tabs.onUpdated status=loading`, adres değişmese de) eklenti her zaman `tabClosed { tabId }` gönderir (service worker uyuyup
+  grup belleği kaybolsa bile): App o sekmenin medya durumunu ve bekleyen kalite isteklerini temizler. `tabClosed` artık "sıfırla" anlamını da taşır.
+- Gizli pencere (`incognito`) indirmeleri yakalanmaz (tarayıcıda kalır).
+- `qualities` isteği kimliği `await`'ten önce izlenir; App `qualitiesCancel`'i istek kaydı oluşmadan önce de saklar ve istek başında uygular.
+
+### Onay penceresi tekilleştirme (A4, A13)
+- Aynı URL için bekleyen/açık pencere varken tekrar gelen istek yeni pencere açmaz (zaman penceresiyle değil durumla). Pencere "İptal" ile kapanınca talep hemen
+  bırakılır: aynı bağlantıya tekrar tıklanınca yeniden sorulur. Yalnızca eklenen indirme 15 sn hatırlanır (tarayıcı çift gönderimi).
+- Kullanıcı "Çıkış" derken onay bekleyen pencere varsa App uyarır.
+
+### Diskten Sil (A3)
+- Dosyalar `SHFileOperation(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_WANTNUKEWARNING)` ile Geri Dönüşüm Kutusu'na gönderilir. Kutuya gönderilemeyen dosya için kabuk
+  AYRICA "kalıcı silinsin mi?" diye sorar; reddedilirse dosya silinmez ve kullanıcıya bildirilir. Sessiz kalıcı silme yoktur.
