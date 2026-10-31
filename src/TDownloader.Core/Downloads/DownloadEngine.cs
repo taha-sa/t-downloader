@@ -418,6 +418,8 @@ public sealed class DownloadEngine : IDisposable
                             }
                             throw new IOException("Bağlantı beklenenden erken kapandı.");
                         }
+                        // Hız sınırı beklemesi okuma zaman aşımına sayılmasın: zamanlayıcı yalnızca soket okumasını ölçer.
+                        cts.CancelAfter(Timeout.InfiniteTimeSpan);
                         await _limiter.AcquireAsync(n, ct).ConfigureAwait(false);
                         long off; int allow;
                         lock (_gate)

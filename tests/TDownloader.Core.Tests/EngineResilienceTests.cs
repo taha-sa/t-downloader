@@ -122,4 +122,18 @@ public sealed class EngineResilienceTests : IDisposable
         Assert.True(isAsync, "kısmi dosya FileOptions.Asynchronous ile açılmalı");
         Assert.Equal(Sha(srv.Data), Sha(File.ReadAllBytes(item.SavePath)));
     }
+
+    [Fact]
+    public async Task RateLimiterWait_DoesNotCountTowardsReadTimeout_NoReconnects()
+    {
+        using var srv = new ScriptServer(TestHttpServer.RandomData(100 * 1024));
+        // 40 KB/s sınır, 250 ms okuma zaman aşımı: bekleme zaman aşımına sayılsaydı sürekli yeniden bağlanırdı.
+        var lim = new RateLimiter(40 * 1024);
+        var item = NewItem(srv.Url);
+        using var engine = NewEngine(item, o => { o.Connections = 1; o.ReadTimeout = TimeSpan.FromMilliseconds(250); o.MaxRetries = 20; }, lim);
+        var st = await engine.RunAsync();
+        Assert.Equal(DownloadStatus.Completed, st);
+        Assert.Equal(2, srv.Requests);   // 1 probe + 1 segment isteği; yeniden bağlanma yok
+        Assert.Equal(Sha(srv.Data), Sha(File.ReadAllBytes(item.SavePath)));
+    }
 }
