@@ -189,7 +189,7 @@
     const seen = new Set();
     for (const a of document.querySelectorAll("a[href]")) {
       if (sel && (sel.isCollapsed || !sel.containsNode(a, true))) continue;
-      if (/^(https?|ftp):/i.test(a.href)) seen.add(a.href);
+      if (/^https?:/i.test(a.href)) seen.add(a.href);
       if (seen.size >= 500) break;
     }
     return [...seen];

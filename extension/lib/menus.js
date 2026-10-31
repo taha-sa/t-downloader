@@ -18,7 +18,7 @@ export function createMenus() {
 }
 
 async function queueUrl(url, referrer) {
-  if (!/^https?:|^ftp:/i.test(url || "")) return;
+  if (!/^https?:/i.test(url || "")) return;
   // Host yoksa sessizce tarayıcıya bırak (yedek indirme yakalanmasın diye bypass).
   if (!native.isConnected()) {
     native.connect();
