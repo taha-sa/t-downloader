@@ -12,10 +12,10 @@
     try { chrome.runtime.sendMessage(msg, (r) => { void chrome.runtime.lastError; cb && cb(r); }); }
     catch { cb && cb(undefined); }                       // eklenti yenilendi: bağlam geçersiz
   };
-  send({ kind: "cfg" }, (r) => { if (r) enabled = r.showVideoButton !== false; });
+  send({ kind: "cfg" }, (r) => { if (r) { enabled = r.showVideoButton !== false; syncTick(); } });
   try {
     chrome.runtime.onMessage.addListener((m) => {
-      if (m && m.kind === "cfg") { enabled = m.showVideoButton !== false; if (!enabled) hideAll(); }
+      if (m && m.kind === "cfg") { enabled = m.showVideoButton !== false; if (!enabled) hideAll(); syncTick(); }
     });
   } catch { /* test ortamı */ }
 
@@ -108,7 +108,9 @@
   // Tam ekran/sinema geçişinde yeniden kararlılık beklenir (düğme gizlenir, sonra doğru yerde belirir): zıplama yok.
   document.addEventListener("fullscreenchange", () => { trackers = new WeakMap(); if (host.isConnected) mount(); });
 
+  let lastSig = "", lastCover = 0;      // değişmeyen kare: pahalı kontroller atlanır
   function setShown(on) {
+    if (!on) lastSig = "";
     if (on) {
       if (btn.style.display !== "flex") { btn.style.display = "flex"; void btn.offsetWidth; }   // opaklık 0'dan başlasın (fade-in)
       btn.classList.add("vis");
@@ -130,16 +132,29 @@
     if (!target || !target.isConnected || !qualifies(target)) return hide();
     const r = target.getBoundingClientRect();
     const [sx, sy] = scrollXY();
-    if (!stepTracker(trackerOf(target), r, sx, sy, clock())) { setShown(false); if (menuOpen) closeMenu(); return; }
+    const now = clock();
+    // Düğme görünürken video/kaydırma/pencere değişmediyse (ve kapatan öğe denetimi yakın zamanda yapıldıysa) kare boşa hesaplanmaz.
+    const sig = r.left + "," + r.top + "," + r.width + "," + r.height + "," + sx + "," + sy + "," + innerWidth + "," + innerHeight;
+    if (lastSig === sig && now - lastCover < 300) return;
+    if (!stepTracker(trackerOf(target), r, sx, sy, now)) { setShown(false); if (menuOpen) closeMenu(); return; }
     setShown(true);
     const bh = btn.offsetHeight || 30;
     const p = buttonPos(r, btn.offsetWidth, bh, innerWidth, innerHeight);
     if (!p.visible || coveredAt(p.left + btn.offsetWidth / 2, p.top + bh / 2)) { setShown(false); if (menuOpen) closeMenu(); return; }
     btn.style.left = p.left + "px"; btn.style.top = p.top + "px";
+    lastSig = sig; lastCover = now;
     if (menuOpen) placeMenu();
   }
   // Hedef varken her karede konumu güncelle: kaydırma/animasyonda video ile birebir hareket eder (konumda CSS geçişi yok).
-  function loop() { raf = 0; if (!target && !menuOpen) return; place(); raf = requestAnimationFrame(loop); }
+  // rAF döngüsü yalnızca düğme/menü gerekliyken ve video görünür alandayken (IntersectionObserver) çalışır.
+  function loop() {
+    raf = 0;
+    if (!target && !menuOpen) return;
+    if (document.hidden) return;
+    if (!menuOpen && target && ioSeen.has(target) && !inView.has(target)) { hide(); return; }   // video görünür alanda değil: döngü durur
+    place();
+    raf = requestAnimationFrame(loop);
+  }
   function startLoop() { if (!raf) raf = requestAnimationFrame(loop); }
 
   function placeMenu() {
@@ -158,31 +173,71 @@
     if (pendingRid) { send({ kind: "qualitiesCancel", rid: pendingRid }); pendingRid = null; }
   }
 
-  const videoAt = (x, y) => [...document.querySelectorAll("video")].find((v) => {
-    const r = v.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-  });
+  // ---- video keşfi: IntersectionObserver ile görünür alandaki videolar tutulur; mousemove'da tüm <video>lar taranmaz ----
+  let tickId = 0;
+  const inView = new Set();             // görünür alandaki videolar
+  const ioSeen = new WeakSet();         // en az bir IntersectionObserver bildirimi almış olanlar
+  const known = new WeakSet();
+  const io = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
+    for (const en of entries) { ioSeen.add(en.target); if (en.isIntersecting) inView.add(en.target); else inView.delete(en.target); }
+    syncTick();
+  }, { threshold: 0.05 }) : null;
+  function track(v) {
+    if (!v || v.tagName !== "VIDEO" || known.has(v)) return;
+    known.add(v);
+    if (io) io.observe(v); else { inView.add(v); syncTick(); }
+  }
+  function discover() { try { for (const v of document.querySelectorAll("video")) track(v); } catch { /* DOM hazır değil */ } }
+  discover();
+  document.addEventListener("DOMContentLoaded", discover);
+  addEventListener("load", discover);
+  for (const ev of ["loadedmetadata", "play", "playing"]) document.addEventListener(ev, (e) => track(e.target), true);
+
+  function inRect(v, x, y) { const r = v.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; }
+  // İmlecin altındaki video: elementsFromPoint (yığın derinliği kadar iş); yoksa yalnızca görünür alandaki videolar denenir.
+  function videoUnder(x, y) {
+    try {
+      if (typeof document.elementsFromPoint === "function") {
+        for (const el of document.elementsFromPoint(x, y)) if (el.tagName === "VIDEO") { track(el); return el; }
+      }
+    } catch { /* eski tarayıcı */ }
+    for (const v of inView) if (inRect(v, x, y)) return v;
+    return null;
+  }
+  let lastMove = -1e9;
   addEventListener("mousemove", (e) => {
     if (!enabled || menuOpen) return;
-    const v = videoAt(e.clientX, e.clientY);
+    const t = clock();
+    if (t - lastMove < 60) return;                       // fare olayı sağanağında en çok ~16 tarama/sn
+    lastMove = t;
+    const v = videoUnder(e.clientX, e.clientY);
     if (v && qualifies(v)) {
       mount(); target = v; place(); startLoop();
       clearTimeout(hideT); hideT = setTimeout(() => { if (!btn.matches(":hover")) hide(); }, 3500);
     }
   }, { passive: true });
   addEventListener("scroll", () => { if (target) place(); }, { passive: true, capture: true });
-  // Videoların kararlılığı hover'dan önce ölçülür (ilk hover'da 400 ms beklemeyi önler); hafif, 250 ms'de bir.
-  if (typeof setInterval === "function") setInterval(() => {
+  // Görünür alandaki videoların kararlılığı hover'dan önce ölçülür (ilk hover'da 400 ms beklemeyi önler).
+  // Zamanlayıcı yalnızca görünür alanda video varken çalışır; yoksa durur.
+  function tickOnce() {
     if (document.hidden || !enabled) return;
     try {
       const [sx, sy] = scrollXY(), now = clock();
       let n = 0;
-      for (const v of document.querySelectorAll("video")) {
+      for (const v of inView) {
         if (++n > 6) break;
         const r = v.getBoundingClientRect();
         if (r.width >= 100 && r.height >= 60) stepTracker(trackerOf(v), r, sx, sy, now);
       }
     } catch { /* DOM hazır değil */ }
-  }, 250);
+  }
+  function syncTick() {
+    const want = inView.size > 0 && enabled && typeof setInterval === "function";
+    if (want && !tickId) tickId = setInterval(tickOnce, 250);
+    else if (!want && tickId && typeof clearInterval === "function") { clearInterval(tickId); tickId = 0; }
+  }
+  // Olay vermeden eklenen videolar için seyrek güvenlik ağı (4 sn).
+  if (typeof setInterval === "function") setInterval(() => { if (!document.hidden && enabled) discover(); }, 4000);
   addEventListener("resize", () => { if (target) place(); }, { passive: true });
   addEventListener("mousedown", (e) => { if (menuOpen && !e.composedPath().includes(host)) { closeMenu(); hide(); } }, true);
   addEventListener("keydown", (e) => { if (e.key === "Escape" && menuOpen) { closeMenu(); hide(); } }, true);
@@ -249,7 +304,7 @@
 
   if (typeof globalThis.__TD_TEST__ !== "undefined") {
     globalThis.__TD_TEST__.button = {
-      qualifies, buttonPos, host, btn, menu, drawOptions, groupOf, newTracker, stepTracker, place,
+      qualifies, buttonPos, host, btn, menu, drawOptions, groupOf, newTracker, stepTracker, place, inView, ioSeen, videoUnder, syncTick, loop,
       setTarget: (v) => { target = v; }, setClock: (f) => { clock = f; }, resetTrackers: () => { trackers = new WeakMap(); },
     };
   }

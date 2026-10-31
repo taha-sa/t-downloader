@@ -454,7 +454,7 @@ await test("önceden alma yok: media mesajı ve düğme yüklemesi qualities gö
 });
 
 // ---- düğme: kaydırma / kararlılık / fade-in (sahte DOM + sahte zaman) ----
-function loadButton() {
+function loadButton(ov = {}) {
   const mkEl = () => {
     const cls = new Set();
     return { style: {}, classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), has: (c) => cls.has(c), contains: (c) => cls.has(c) }, offsetWidth: 160, offsetHeight: 22,
@@ -470,8 +470,9 @@ function loadButton() {
   const sandbox = { window: win, document: doc, __TD_TEST__: {}, parseFloat, Math, setTimeout, clearTimeout, requestAnimationFrame: () => 0, addEventListener() {}, innerWidth: 1000, innerHeight: 600,
     chrome: { runtime: { sendMessage() {}, onMessage: mkListener(), getURL: (p) => "chrome-extension://x/" + p } } };
   sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  Object.assign(doc, ov.doc || {}); Object.assign(sandbox, ov.sandbox || {});
   vm.runInContext(readFileSync(join(root, "button.js"), "utf8"), sandbox);
-  return { b: sandbox.__TD_TEST__.button, sandbox, els };
+  return { b: sandbox.__TD_TEST__.button, sandbox, els, doc };
 }
 const fakeVideo = (rect) => ({ tagName: "VIDEO", isConnected: true, closest: () => null, rect, getBoundingClientRect() { const r = this.rect; return { left: r.l, top: r.t, width: r.w, height: r.h, right: r.l + r.w, bottom: r.t + r.h }; } });
 
@@ -542,6 +543,67 @@ await test("stepTracker: kaydırma (sayfa koordinatı sabit) kararlılığı boz
   assert.equal(at(100, 0, 0), false);
   assert.equal(at(60, 40, 200), false);
   assert.equal(at(20, 80, 450), true);                    // viewport'ta kaydı ama sayfada sabit: 450 ms kararlı
+});
+
+// ---- CPU: geometri altyapısı yalnızca nativeButton=true iken; button.js keşfi IntersectionObserver ile ----
+await test("content.js: nativeButton=false iken geometri altyapısı HİÇ kurulmaz; açılınca kurulur, kapanınca sökülür", () => {
+  const added = [], removed = []; let observers = 0, disconnects = 0, intervals = 0, cleared = 0;
+  const doc = { querySelectorAll: () => [], fullscreenElement: null, title: "T", documentElement: {}, hidden: false,
+    addEventListener: (t) => added.push("d:" + t), removeEventListener: (t) => removed.push("d:" + t) };
+  const win = { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1, location: { href: "https://x.test/" },
+    getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1" }), getSelection: () => null,
+    addEventListener: (t) => added.push("w:" + t), removeEventListener: (t) => removed.push("w:" + t) };
+  win.top = win;
+  const om = mkListener();
+  const sandbox = { window: win, document: doc, __TD_TEST__: {}, setTimeout, clearTimeout, Date, JSON, Math, parseFloat,
+    setInterval: () => { intervals++; return 7; }, clearInterval: () => { cleared++; },
+    MutationObserver: class { constructor() { observers++; } observe() {} disconnect() { disconnects++; } },
+    chrome: { runtime: { sendMessage: (m, cb) => { if (typeof cb === "function") cb({ nativeButton: false }); return Promise.resolve(); }, onMessage: om } } };
+  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  vm.runInContext(readFileSync(join(root, "content.js"), "utf8"), sandbox);
+  const heavy = ["w:scroll", "w:resize", "w:mousemove", "w:message", "d:fullscreenchange", "d:play", "d:loadedmetadata"];
+  assert.deepEqual(heavy.filter((x) => added.includes(x)), [], "geometri dinleyicileri kurulmamalı");
+  assert.ok(added.includes("w:keydown"), "Alt tuşu izleme her zaman açık");
+  assert.equal(observers, 0); assert.equal(intervals, 0);
+  om._fire({ kind: "cfg", nativeButton: true });
+  assert.deepEqual(heavy.filter((x) => !added.includes(x)), [], "açılınca kurulmalı");
+  assert.equal(observers, 1); assert.equal(intervals, 1);
+  om._fire({ kind: "cfg", nativeButton: true });                       // yinelenen ayar: ikinci kurulum yok
+  assert.equal(observers, 1); assert.equal(intervals, 1);
+  om._fire({ kind: "cfg", nativeButton: false });
+  assert.deepEqual(heavy.filter((x) => !removed.includes(x)), [], "kapanınca sökülmeli");
+  assert.equal(disconnects, 1); assert.equal(cleared, 1);
+});
+await test("button.js: video keşfi IntersectionObserver ile; mousemove tüm <video>ları taramaz; zamanlayıcı yalnızca görünür video varken; rAF görünmeyen videoda durur", () => {
+  let ioCb = null; const observed = [];
+  let qs = 0, rafs = 0, nextId = 1; const timers = new Map(); const handlers = {};
+  const video = fakeVideo({ l: 100, t: 100, w: 640, h: 360 });
+  const { b, sandbox } = loadButton({
+    doc: { querySelectorAll: () => { qs++; return [video]; }, elementsFromPoint: () => [{ tagName: "DIV" }, video], appendChild() {} },
+    sandbox: {
+      IntersectionObserver: class { constructor(cb) { ioCb = cb; } observe(v) { observed.push(v); } },
+      setInterval: (f, ms) => { const id = nextId++; timers.set(id, ms); return id; }, clearInterval: (id) => timers.delete(id),
+      requestAnimationFrame: () => { rafs++; return rafs; },
+      addEventListener: (t, fn) => { handlers[t] = fn; },
+    },
+  });
+  assert.deepEqual(observed, [video]);                                  // başlangıç keşfi
+  assert.deepEqual([...timers.values()], [4000]);                       // yalnızca seyrek güvenlik ağı; 250 ms zamanlayıcı yok
+  const q0 = qs;
+  ioCb([{ target: video, isIntersecting: true }]);
+  assert.deepEqual([...timers.values()].sort((x, y) => x - y), [250, 4000]);
+  for (let i = 0; i < 20; i++) handlers.mousemove({ clientX: 200, clientY: 200 });
+  assert.equal(qs, q0, "mousemove DOM taraması yapmamalı");
+  assert.equal(b.videoUnder(200, 200), video);
+  // video görünür alandan çıktı: zamanlayıcı durur ve rAF döngüsü kendini bitirir
+  b.setTarget(video);
+  ioCb([{ target: video, isIntersecting: false }]);
+  assert.deepEqual([...timers.values()], [4000]);
+  rafs = 0; b.loop();
+  assert.equal(rafs, 0, "görünmeyen videoda rAF yeniden planlanmamalı");
+  ioCb([{ target: video, isIntersecting: true }]);
+  b.setTarget(video); b.loop();
+  assert.equal(rafs, 1);                                                // görünürken döngü sürer
 });
 
 // ---- oynatıcı yapılandırması ayrıştırma ----

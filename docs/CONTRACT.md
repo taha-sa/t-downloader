@@ -99,3 +99,10 @@ Yerel düğme penceresi (`videoGeometry` akışı) yalnızca `UseNativeVideoButt
   aynı kaynak için devam eden işi paylaşır ve aynı anda en fazla 2 `yt-dlp -J` çalıştırır.
 - `{ "type":"tabClosed", "tabId" }` (eklenti → App): sekme kapandı; App o sekmenin medya durumunu ve bekleyen kalite isteklerini temizler.
 
+
+### Host ve eklenti CPU
+- Host: App'e ulaşılamadıysa (başlatma başarısız) cooldown (30 sn) bağlanma denemesinden ÖNCE denetlenir; cooldown'da yalnızca tek ucuz (1 ms) bağlanma
+  denemesi yapılır (App elle açıldıysa bulunur), yeniden başlatma/uzun bekleme yoktur. `host.log` boyutla döndürülür (1 MB → `host.log.old`).
+- Eklenti: `nativeButton=false` iken `content.js` geometri altyapısını (MutationObserver, interval, scroll/resize/mousemove dinleyicileri) hiç kurmaz; ayar
+  açılınca kurar, kapanınca söker. `button.js` videoları IntersectionObserver ile izler (mousemove'da `elementsFromPoint`, tüm `<video>` taraması yok);
+  250 ms kararlılık zamanlayıcısı yalnızca görünür alanda video varken, rAF döngüsü yalnızca düğme/menü gerekliyken ve video görünürken çalışır.

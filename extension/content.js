@@ -4,12 +4,15 @@
   const MIN_W = 50, MIN_H = 30;
   let lastSent = 0, timer = null, lastJson = "", wasVisible = false;
   // Geometri yalnızca eski yerel düğme penceresi açıkken gönderilir (sayfa içi düğme geometriye ihtiyaç duymaz).
+  // nativeButton=false (varsayılan) iken geometri altyapısı (MutationObserver, interval, scroll/resize/mousemove dinleyicileri)
+  // HİÇ kurulmaz; ayar açılınca kurulur, kapanınca sökülür (startGeo/stopGeo).
   let nativeGeo = false;
-  const applyCfg = (r) => { const v = !!(r && r.nativeButton); if (v !== nativeGeo) { nativeGeo = v; lastJson = ""; if (v) schedule(); } };
-  try {
-    chrome.runtime.sendMessage({ kind: "cfg" }, (r) => { void chrome.runtime.lastError; applyCfg(r); });
-    chrome.runtime.onMessage.addListener((m) => { if (m && m.kind === "cfg") applyCfg(m); });
-  } catch { /* test ortamı */ }
+  const applyCfg = (r) => {
+    const v = !!(r && r.nativeButton);
+    if (v === nativeGeo) return;
+    nativeGeo = v; lastJson = "";
+    if (v) { startGeo(); schedule(); } else stopGeo();
+  };
 
   function isShown(el, win) {
     const cs = win.getComputedStyle(el);
@@ -146,24 +149,38 @@
   window.addEventListener("mousedown", altClick, true);
   window.addEventListener("click", altClick, true);
 
-  window.addEventListener("message", (e) => { if (onChildMessage(e)) schedule(); });
-
-  // ---- geometri tetikleyicileri ----
-  window.addEventListener("scroll", schedule, { capture: true, passive: true });
-  window.addEventListener("resize", schedule, { passive: true });
-  window.addEventListener("mousemove", schedule, { passive: true });
-  document.addEventListener("fullscreenchange", schedule);
-  for (const ev of ["loadedmetadata", "play", "pause", "emptied"]) {
-    document.addEventListener(ev, schedule, true);
+  // ---- geometri tetikleyicileri (yalnızca nativeGeo açıkken) ----
+  const onMessage = (e) => { if (onChildMessage(e)) schedule(); };
+  const MEDIA_EVENTS = ["loadedmetadata", "play", "pause", "emptied"];
+  let geoOn = false, obs = null, tick = 0;
+  function startGeo() {
+    if (geoOn) return;
+    geoOn = true;
+    window.addEventListener("message", onMessage);
+    window.addEventListener("scroll", schedule, { capture: true, passive: true });
+    window.addEventListener("resize", schedule, { passive: true });
+    window.addEventListener("mousemove", schedule, { passive: true });
+    document.addEventListener("fullscreenchange", schedule);
+    for (const ev of MEDIA_EVENTS) document.addEventListener(ev, schedule, true);
+    if (document.documentElement && typeof MutationObserver === "function") {
+      obs = new MutationObserver(schedule);
+      obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden"] });
+    }
+    tick = setInterval(() => { if (!document.hidden) schedule(); }, 1500);
   }
-  const startObs = () => {
-    if (!document.documentElement) return;
-    new MutationObserver(schedule).observe(document.documentElement, {
-      childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class", "hidden"],
-    });
-  };
-  startObs();
-  setInterval(() => { if (!document.hidden) schedule(); }, 1500);
+  function stopGeo() {
+    if (!geoOn) return;
+    geoOn = false;
+    window.removeEventListener("message", onMessage);
+    window.removeEventListener("scroll", schedule, { capture: true });
+    window.removeEventListener("resize", schedule);
+    window.removeEventListener("mousemove", schedule);
+    document.removeEventListener("fullscreenchange", schedule);
+    for (const ev of MEDIA_EVENTS) document.removeEventListener(ev, schedule, true);
+    if (obs) { obs.disconnect(); obs = null; }
+    if (tick) { clearInterval(tick); tick = 0; }
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
 
   // ---- link toplama (sağ tık menüsü) ----
   function collectLinks(selectionOnly) {
@@ -184,10 +201,13 @@
       }
       return false;
     });
+    // Arayüz ayarı (nativeButton): tanımlar yukarıda olduktan sonra kaydedilir.
+    chrome.runtime.onMessage.addListener((m) => { if (m && m.kind === "cfg") applyCfg(m); return false; });
+    chrome.runtime.sendMessage({ kind: "cfg" }, (r) => { void chrome.runtime.lastError; applyCfg(r); });
   } catch { /* test ortamı */ }
 
   // Test için yalnızca __TD_TEST__ tanımlıysa dışa aç.
   if (typeof globalThis.__TD_TEST__ !== "undefined") {
-    globalThis.__TD_TEST__.exports = { buildPayload, pickMedia, collectLinks, flush, schedule, onChildMessage, translateChild };
+    globalThis.__TD_TEST__.exports = { buildPayload, pickMedia, collectLinks, flush, schedule, onChildMessage, translateChild, applyCfg, isGeoOn: () => geoOn };
   }
 })();
