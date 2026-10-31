@@ -136,4 +136,69 @@ public sealed class EngineResilienceTests : IDisposable
         Assert.Equal(2, srv.Requests);   // 1 probe + 1 segment isteği; yeniden bağlanma yok
         Assert.Equal(Sha(srv.Data), Sha(File.ReadAllBytes(item.SavePath)));
     }
+
+    [Fact]
+    public async Task HostConnectionCap_LimitsConcurrency_AndQueuedWorkersDoNotTimeOut()
+    {
+        // 6 parça x 4 x 150 ms = ~600 ms; tavan 2 => 3 dalga (~1,8 sn). ReadTimeout 1 sn: bekleyenler zaman aşımına düşmemeli.
+        using var srv = new ScriptServer(TestHttpServer.RandomData(6 * 64 * 1024));
+        srv.Custom = (c, s, e, probe) => srv.Serve(c, s, e, chunkDelayMs: probe ? 0 : 150);
+        var item = NewItem(srv.Url);
+        using var engine = NewEngine(item, o => { o.Connections = 6; o.MaxConnectionsPerHost = 2; o.ReadTimeout = TimeSpan.FromSeconds(1); });
+        var st = await engine.RunAsync();
+        Assert.Equal(DownloadStatus.Completed, st);
+        Assert.True(srv.MaxInFlight <= 2, $"eşzamanlı bağlantı {srv.MaxInFlight}");
+        Assert.Equal(1 + 6, srv.Requests);   // probe + 6 parça; zaman aşımıyla yeniden bağlanma yok
+        Assert.Equal(Sha(srv.Data), Sha(File.ReadAllBytes(item.SavePath)));
+    }
+
+    [Fact]
+    public async Task Overload429_HalvesHostLimit()
+    {
+        using var srv = new ScriptServer(TestHttpServer.RandomData(256 * 1024));
+        int hits = 0;
+        srv.Custom = async (c, s, e, probe) =>
+        {
+            if (!probe && Interlocked.Increment(ref hits) == 1) { c.Response.StatusCode = 503; c.Response.AddHeader("Retry-After", "0"); c.Response.Close(); return; }
+            await srv.Serve(c, s, e);
+        };
+        var item = NewItem(srv.Url);
+        using var engine = NewEngine(item, o => { o.Connections = 4; o.MaxConnectionsPerHost = 8; });
+        var st = await engine.RunAsync();
+        Assert.Equal(DownloadStatus.Completed, st);
+        var gate = HostGate.Peek(new Uri(srv.Url).Authority)!;
+        Assert.Equal(4, gate.Limit);   // 8 -> 4
+    }
+
+    [Fact]
+    public async Task HostGate_QueuesFifo_ThrottlesAndRestores()
+    {
+        var old = HostGate.RestoreAfter;
+        HostGate.RestoreAfter = TimeSpan.FromMilliseconds(200);
+        try
+        {
+            var g = new HostGate(2);
+            var a = await g.AcquireAsync(CancellationToken.None);
+            var b = await g.AcquireAsync(CancellationToken.None);
+            var third = g.AcquireAsync(CancellationToken.None).AsTask();
+            await Task.Delay(50);
+            Assert.False(third.IsCompleted);
+            a.Dispose();
+            var l3 = await third.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Equal(2, g.Active);
+            // iptal edilen bekleyen yer tutmaz
+            using var cts = new CancellationTokenSource();
+            var fourth = g.AcquireAsync(cts.Token).AsTask();
+            cts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fourth);
+            b.Dispose(); l3.Dispose();
+            Assert.Equal(0, g.Active);
+
+            g.Throttle();
+            Assert.Equal(1, g.Limit);
+            await Task.Delay(300);
+            Assert.Equal(2, g.Limit);
+        }
+        finally { HostGate.RestoreAfter = old; }
+    }
 }

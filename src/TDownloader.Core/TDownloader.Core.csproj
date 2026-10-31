@@ -5,4 +5,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>TDownloader.Core</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TDownloader.Core.Tests" />
+  </ItemGroup>
 </Project>

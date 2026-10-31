@@ -304,7 +304,7 @@ public sealed class DownloadManager : IAsyncDisposable
     private void Launch(DownloadItem item)
     {
         if (item.Kind == DownloadKind.External) { LaunchExternal(item); return; }
-        var opt = new EngineOptions { Connections = Settings.EffectiveConnections };
+        var opt = new EngineOptions { Connections = Settings.EffectiveConnections, MaxConnectionsPerHost = Settings.MaxConnectionsPerHost };
         ConfigureEngine?.Invoke(opt);
         var engine = new DownloadEngine(item, Paths.DwnlDataDir, opt, Limiter, _http);
         engine.ProgressChanged += (_, p) => { ProgressChanged?.Invoke(this, p); };

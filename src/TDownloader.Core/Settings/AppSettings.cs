@@ -6,6 +6,8 @@ public sealed class AppSettings
 {
     /// <summary>İndirme başına bağlantı sayısı (1–32).</summary>
     public int Connections { get; set; } = 8;
+    /// <summary>Aynı sunucuya tüm indirmelerin toplam etkin bağlantı tavanı (1–64, varsayılan 32).</summary>
+    public int MaxConnectionsPerHost { get; set; } = 32;
     /// <summary>Aynı anda aktif indirme sayısı.</summary>
     public int MaxConcurrentDownloads { get; set; } = 3;
     /// <summary>Global hız sınırı KB/s; 0 = sınırsız.</summary>

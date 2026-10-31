@@ -52,6 +52,7 @@ public sealed class DownloadEngine : IDisposable
     private string? _etag;
     private int _splitCount;
     private int _retiredWorkers;
+    private HostGate _hostGate = null!;
 
     public DownloadItem Item => _item;
     /// <summary>Dinamik bölmenin kaç kez gerçekleştiği.</summary>
@@ -158,6 +159,7 @@ public sealed class DownloadEngine : IDisposable
     private async Task PrepareAsync(CancellationToken ct)
     {
         _opt.Connections = Math.Clamp(_opt.Connections, 1, 32);
+        _hostGate = HostGate.For(HostKey(_item.Url), Math.Clamp(_opt.MaxConnectionsPerHost, 1, EngineHttp.PoolLimit));
         var (total, ranges, etag) = await ProbeAsync(ct).ConfigureAwait(false);
         _total = total; _ranges = ranges; _etag = etag;
         if (_item.TotalSize != total) _item.TotalSize = total;
@@ -211,6 +213,12 @@ public sealed class DownloadEngine : IDisposable
         SyncItem();
     }
 
+    private static string HostKey(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Authority : url;
+
+    private static bool IsOverloadStatus(Exception ex) =>
+        ex is HttpStatusException { StatusCode: HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable };
+
     private HttpRequestMessage BuildRequest()
     {
         var req = new HttpRequestMessage(HttpMethod.Get, _item.Url);
@@ -257,6 +265,7 @@ public sealed class DownloadEngine : IDisposable
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) when (IsRetryable(ex))
             {
+                if (IsOverloadStatus(ex)) _hostGate.Throttle();
                 if (++attempt > _opt.MaxRetries) throw;
                 await Task.Delay(Backoff(attempt, ex), ct).ConfigureAwait(false);
             }
@@ -387,6 +396,8 @@ public sealed class DownloadEngine : IDisposable
                 try
                 {
                     w.State = ConnectionState.Connecting;
+                    // Aynı host için bağlantı tavanı: sıra beklemek zaman aşımına sayılmaz (cts aşağıda kurulur).
+                    using var lease = await _hostGate.AcquireAsync(ct).ConfigureAwait(false);
                     using var req = BuildRequest();
                     if (_ranges)
                         req.Headers.Range = new RangeHeaderValue(startPos, endEx == long.MaxValue ? null : endEx - 1);
@@ -437,6 +448,7 @@ public sealed class DownloadEngine : IDisposable
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                 catch (Exception ex) when (IsRetryable(ex))
                 {
+                    if (IsOverloadStatus(ex)) _hostGate.Throttle();
                     long before = startPos;
                     lock (_gate)
                     {

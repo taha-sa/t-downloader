@@ -60,7 +60,7 @@ public sealed class ScriptServer : IDisposable
             await s.WriteAsync(Data.AsMemory((int)pos, n));
             pos += n; sent += n;
             if (stopAfterBytes >= 0 && sent >= stopAfterBytes) { resp.Abort(); return; }
-            if (chunkDelayMs > 0) await Task.Delay(chunkDelayMs);
+            if (chunkDelayMs > 0 && pos <= end) await Task.Delay(chunkDelayMs);
         }
         resp.Close();
     }

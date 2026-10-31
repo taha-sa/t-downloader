@@ -15,6 +15,8 @@ public sealed class EngineOptions
     public TimeSpan ProgressInterval { get; set; } = TimeSpan.FromMilliseconds(250);
     public TimeSpan StateSaveInterval { get; set; } = TimeSpan.FromSeconds(1);
     public int BufferSize { get; set; } = 64 * 1024;
+    /// <summary>Aynı host (host:port) için tüm indirmelerin toplam etkin bağlantı tavanı (varsayılan 32, en çok 64).</summary>
+    public int MaxConnectionsPerHost { get; set; } = 32;
 }
 
 public enum ConnectionState { Idle, Connecting, Receiving, Retrying, Done, Failed }
@@ -92,6 +94,9 @@ public static class EngineHttp
     private static readonly Lazy<HttpClient> _shared = new(Create);
     public static HttpClient Shared => _shared.Value;
 
+    /// <summary>HttpClient bağlantı havuzu üst sınırı (MaxConnectionsPerServer); host tavanı bunu aşamaz.</summary>
+    public const int PoolLimit = 64;
+
     public static HttpClient Create()
     {
         var h = new SocketsHttpHandler
@@ -100,7 +105,7 @@ public static class EngineHttp
             UseCookies = false,
             AllowAutoRedirect = true,
             MaxAutomaticRedirections = 10,
-            MaxConnectionsPerServer = 64,
+            MaxConnectionsPerServer = PoolLimit,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             ConnectTimeout = TimeSpan.FromSeconds(30),
         };
