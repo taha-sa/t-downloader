@@ -15,14 +15,14 @@ public static class Fmt
 
     public static string Speed(double bps) => bps <= 0 ? "" : $"{Size((long)bps)}/sn";
 
+    /// <summary>Kalan süre: &lt;1 dk "X sn", &lt;1 sa "X dk Y sn", üstü "X sa Y dk" (saniye yukarı yuvarlanır).</summary>
     public static string Eta(TimeSpan? t)
     {
         if (t is null) return "";
-        var v = t.Value;
-        if (v.TotalDays >= 1) return $"{(int)v.TotalDays} gün {v.Hours} sa";
-        if (v.TotalHours >= 1) return $"{(int)v.TotalHours} sa {v.Minutes} dk {v.Seconds} sn";
-        if (v.TotalMinutes >= 1) return $"{v.Minutes} dk {v.Seconds} sn";
-        return $"{Math.Max(0, v.Seconds)} sn";
+        long sec = (long)Math.Ceiling(Math.Max(0, t.Value.TotalSeconds));
+        if (sec < 60) return $"{sec} sn";
+        if (sec < 3600) return $"{sec / 60} dk {sec % 60} sn";
+        return $"{sec / 3600} sa {sec % 3600 / 60} dk";
     }
 
     public static string Date(DateTime? d) => d is null ? "" : d.Value.ToString("dd.MM.yyyy HH:mm");

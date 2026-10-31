@@ -60,6 +60,11 @@ public static class Icons
                 DrawTrash(g, -2, 0, 0.82f);
                 using (var p = T(2.8f)) g.DrawLines(p, new PointF[] { new(13, 15), new(16.5f, 18.5f), new(22, 10.5f) });
                 break;
+            case "deletedisk":
+                DrawTrash(g, -2.5f, -1, 0.82f);
+                using (var p = T(1.8f)) g.DrawEllipse(p, 12.5f, 12.5f, 9, 9);   // küçük disk
+                using (var p = T(2.2f)) { g.DrawLine(p, 15f, 15f, 19f, 19f); g.DrawLine(p, 19f, 15f, 15f, 19f); }   // çarpı
+                break;
             case "options":
                 DrawGear(g);
                 break;

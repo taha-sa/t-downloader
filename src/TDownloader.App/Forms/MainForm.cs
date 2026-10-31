@@ -40,7 +40,9 @@ public sealed class MainForm : Form
     private readonly DarkTree _tree = new();
     private readonly BufferedListView _list = new();
     private readonly ContextMenuStrip _ctx = new();
-    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 400 };
+    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 250 };   // motorun 250 ms bildirimiyle hizalı
+    private readonly Dictionary<string, UpdateGate> _textGates = new();   // satır başına hız/kalan süre metin kısıtlaması (1 sn)
+    private ToolStripButton? _btnDiskDelete;
     private ToolStripMenuItem? _viewCats;
 
     // Büyük liste: satır önbelleği (tüm öğeler, bir kez üretilir) + o an listede görünenler; kategori değişince satırlar
@@ -82,7 +84,7 @@ public sealed class MainForm : Form
         Icon = Icons.AppIcon();
         // IDM ana pencere: 532x209 DLU liste+ağaç alanı (798 px genişlik); yükseklik pratik amaçlı büyütüldü.
         ClientSize = new Size(Dlu.X(532), Scaled(500));
-        MinimumSize = new Size(Scaled(560), Scaled(320));
+        MinimumSize = new Size(Scaled(56 * 13 + 40), Scaled(320));   // 13 araç çubuğu düğmesi sığsın
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
 
@@ -194,6 +196,7 @@ public sealed class MainForm : Form
             Mi("&Durdur", StopSelected, Keys.None, "stop"),
             Mi("&Şimdi indir / Devam et", ResumeSelected, Keys.None, "resume"),
             Mi("&Sil", DeleteSelected, Keys.Delete, "delete"),
+            Mi("&Diskten Sil", DeleteSelectedFromDisk, Keys.Shift | Keys.Delete, "deletedisk"),
             new ToolStripSeparator(),
             Mi("Dosyayı &aç", OpenSelectedFile),
             Mi("&Klasörü aç", ShowSelectedInFolder),
@@ -268,6 +271,9 @@ public sealed class MainForm : Form
         B("Durdur", "Seçili indirmeleri durdur", "stop", StopSelected);
         B("Tümü Dur.", "Tüm indirmeleri durdur", "stopall", _mgr.PauseAll);
         B("Sil", "Seçili indirmeleri listeden sil", "delete", DeleteSelected);
+        B("Diskten Sil", "Seçilenleri diskten sil (Geri Dönüşüm Kutusu)", "deletedisk", DeleteSelectedFromDisk);
+        _btnDiskDelete = (ToolStripButton)_tool.Items[^1];
+        _btnDiskDelete.Enabled = false;
         B("Temizle", "Tamamlananları listeden sil", "deletedone", DeleteCompleted);
         B("Ayarlar", "Seçenekler", "options", ShowOptions);
         B("Zamanla", "Zamanlayıcı ve indirme kuyruğu", "scheduler", ShowScheduler);
@@ -352,6 +358,9 @@ public sealed class MainForm : Form
             Mi("Devam et", ResumeSelected, Keys.None, "resume"), Mi("Durdur", StopSelected, Keys.None, "stop"),
             Mi("İlerleme penceresi", ShowSelectedProgress), new ToolStripSeparator(), Mi("Sil", DeleteSelected, Keys.None, "delete"),
         });
+        var ctxDisk = Mi("Diskten Sil", DeleteSelectedFromDisk, Keys.None, "deletedisk");
+        ctxDisk.ShortcutKeyDisplayString = "Shift+Del";
+        _ctx.Items.Add(ctxDisk);
         _ctx.Renderer = new ThemeRenderer();
         _list.ContextMenuStrip = _ctx;
         _split.Panel2.Controls.Add(_list);
@@ -437,7 +446,7 @@ public sealed class MainForm : Form
         bool bulk = ids.Length >= 20;
         foreach (var id in ids)
         {
-            _items.Remove(id); _stats.Remove(id);
+            _items.Remove(id); _stats.Remove(id); _textGates.Remove(id);
             if (_rows.Remove(id, out var li) && _shown.Remove(id) && !bulk) li.Remove();
             _progress.TryRemove(id, out _);
             if (_dialogs.TryGetValue(id, out var d)) d.Close();
@@ -470,8 +479,17 @@ public sealed class MainForm : Form
         Set(1, it.Status is DownloadStatus.Queued or DownloadStatus.Downloading ? "•" : "");
         Set(2, it.TotalSize > 0 ? Fmt.Size(it.TotalSize) : "");
         Set(3, StatusText(it, true));
-        Set(4, active && p != null ? Fmt.Eta(p.Eta) : "");
-        Set(5, active ? Fmt.Speed(p?.SpeedBytesPerSec ?? it.SpeedBytesPerSec) : "");
+        // Hız / kalan süre metni satır başına en fazla saniyede 1 güncellenir; yüzde/boyut her turda.
+        if (!active) { _textGates.Remove(it.Id); Set(4, ""); Set(5, ""); }
+        else
+        {
+            if (!_textGates.TryGetValue(it.Id, out var gate)) _textGates[it.Id] = gate = new UpdateGate();
+            if (gate.Due(Environment.TickCount64))
+            {
+                Set(4, p != null ? Fmt.Eta(p.Eta) : "");
+                Set(5, Fmt.Speed(p?.SpeedBytesPerSec ?? it.SpeedBytesPerSec));
+            }
+        }
         Set(6, Fmt.Date(it.LastTryAt));
         Set(7, Fmt.Date(it.AddedAt));
         Set(8, it.Description ?? "");
@@ -520,6 +538,7 @@ public sealed class MainForm : Form
         T(_stSpeed, "Hız: " + (_stats.Speed > 0 ? Fmt.Speed(_stats.Speed) : "0 B/sn"));
         T(_stTotal, $"Toplam: {_stats.Total}");
         int sel = _list.SelectedIndices.Count;
+        if (_btnDiskDelete != null && _btnDiskDelete.Enabled != (sel > 0)) _btnDiskDelete.Enabled = sel > 0;
         T(_stMain, sel > 0 ? $"{sel} öğe seçili" : "Hazır");
     }
 
@@ -716,6 +735,45 @@ public sealed class MainForm : Form
         if (sel.Count == 0) return;
         if (MessageBox.Show(this, $"{sel.Count} indirme listeden silinsin mi?\n(Diskteki dosyalar silinmez.)", "Sil", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         foreach (var i in sel) await _mgr.RemoveAsync(i.Id, false);
+    }
+
+    private bool _diskDeleting;
+
+    /// <summary>Seçilenleri durdurur, listeden kaldırır ve dosyaları Geri Dönüşüm Kutusu'na gönderir (arka planda).</summary>
+    private async void DeleteSelectedFromDisk()
+    {
+        if (_diskDeleting) return;
+        var sel = Selected();
+        if (sel.Count == 0) return;
+        _diskDeleting = true;
+        try
+        {
+            var targets = sel.Select(i => (i.Id, Path: i.SavePath)).ToList();
+            long total = await Task.Run(() => DiskDeletePlan.TotalExistingSize(targets.Select(t => t.Path)));
+            if (MessageBox.Show(this, DiskDeletePlan.ConfirmText(targets.Count, total), "Diskten Sil", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            int failed = 0; string? firstError = null;
+            foreach (var (id, path) in targets)
+            {
+                await _mgr.RemoveAsync(id, false);   // süren indirmeyi durdurur, geçici parçaları temizler
+                if (string.IsNullOrEmpty(path)) continue;
+                var err = await Task.Run(() => RecycleFile(path));
+                if (err != null) { failed++; firstError ??= err; }
+            }
+            if (failed > 0) MessageBox.Show(this, DiskDeletePlan.ErrorSummary(failed, firstError), "Diskten Sil", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally { _diskDeleting = false; }
+    }
+
+    /// <summary>Dosya yoksa sessizce geçer; başarısızlıkta hata metnini döner.</summary>
+    private static string? RecycleFile(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            return null;
+        }
+        catch (Exception ex) { return ex.Message; }
     }
 
     private async void DeleteCompleted()

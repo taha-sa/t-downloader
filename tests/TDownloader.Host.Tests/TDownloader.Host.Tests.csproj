@@ -23,4 +23,10 @@
     <ProjectReference Include="..\..\src\TDownloader.Host\TDownloader.Host.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- WinForms'suz App mantığı doğrudan derlenir -->
+    <Compile Include="..\..\src\TDownloader.App\Ui\UiLogic.cs" Link="AppUi\UiLogic.cs" />
+    <Compile Include="..\..\src\TDownloader.App\Ui\Format.cs" Link="AppUi\Format.cs" />
+  </ItemGroup>
+
 </Project>
