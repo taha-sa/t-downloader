@@ -117,31 +117,82 @@
       btn.classList.add("vis");
     } else { btn.style.display = "none"; btn.classList.remove("vis"); }
   }
-  // Başka bir sabit/yapışkan öğe (ör. site üst çubuğu) düğmenin altında kalan noktayı örtüyor mu?
-  function coveredAt(x, y) {
+  // ---- sabit/yapışkan öğelerin (site üst/alt çubukları) örtmesi ----
+  // Neden eski denetim çalışmıyordu: tek nokta (düğme merkezi) için elementFromPoint bakılıyordu; düğme görünürken o nokta
+  // BİZİM düğmemizdir (host) ve denetim "örtü yok" diyordu. Ayrıca saydam/pointer-events:none çubuklar tek noktayla bulunamaz.
+  // Şimdi: sabit/yapışkan aday listesi (seyrek yenilenir) + elementsFromPoint yığınındaki sabit atalar, dikdörtgen olarak kırpılır.
+  const COVER_MS = 100, SCAN_MS = 250, ZONE_W = 220, MIN_VIS_H = 60, MIN_VIS_W = 200;
+  let cands = [], scanDirty = true, lastScan = -1e9, lastMeasure = -1e9, coverRects = [];
+  const isFixedish = (n) => { try { const p = window.getComputedStyle(n).position; return p === "fixed" || p === "sticky"; } catch { return false; } };
+  const isOwn = (n) => n === host || !!(host.contains && host.contains(n));
+  const unrelated = (n) => !isOwn(n) && !(n.contains && n.contains(target)) && !(target.contains && target.contains(n));
+  function scanCands(now) {
+    lastScan = now; scanDirty = false;
+    const out = [];
     try {
-      const e = document.elementFromPoint(x, y);
-      if (!e || e === host || e === target || (host.contains && host.contains(e))) return false;
-      for (let n = e, i = 0; n && n.nodeType === 1 && i < 10; n = n.parentElement, i++) {
-        const pos = window.getComputedStyle(n).position;
-        if (pos === "fixed" || pos === "sticky") return !(n.contains(target) || target.contains(n));
+      const all = document.getElementsByTagName("*");
+      const lim = Math.min(all.length, 20000);
+      for (let i = 0; i < lim; i++) { const n = all[i]; if (n !== host && isFixedish(n)) out.push(n); }
+    } catch { /* getElementsByTagName yok */ }
+    cands = out;
+  }
+  const areaRect = (el) => { try { const q = el.getBoundingClientRect(); return q.width > 0 && q.height > 0 ? { l: q.left, t: q.top, r: q.right, b: q.bottom } : null; } catch { return null; } };
+  function measure(r, now) {
+    if (now - lastMeasure < COVER_MS) return;
+    lastMeasure = now;
+    if (scanDirty && now - lastScan >= SCAN_MS) scanCands(now);
+    const out = [];
+    for (const n of cands) { if (n.isConnected !== false && unrelated(n)) { const q = areaRect(n); if (q) out.push(q); } }
+    try {
+      if (typeof document.elementsFromPoint === "function") {
+        const x = Math.max(1, Math.min(innerWidth - 1, r.right - 30));
+        for (const y of [Math.max(r.top, 0) + 2, Math.min(r.bottom, innerHeight) - 2]) {
+          for (const el of document.elementsFromPoint(x, y)) {
+            if (el === target || (el.contains && el.contains(target))) break;      // videoya ulaştık
+            if (isOwn(el) || (target.contains && target.contains(el))) continue;   // kendi host'umuz/menümüz atlanır
+            for (let n = el, i = 0; n && n.nodeType !== 9 && i < 12; n = n.parentElement, i++) {
+              if (isFixedish(n) && unrelated(n)) { const q1 = areaRect(el), q2 = areaRect(n); if (q1) out.push(q1); if (q2) out.push(q2); break; }
+            }
+          }
+        }
       }
-    } catch { /* elementFromPoint yok */ }
-    return false;
+    } catch { /* elementsFromPoint yok */ }
+    coverRects = out;
+  }
+  // Videonun üstünü/altını örten sabit öğelerin sınırları (viewport koordinatı). Her karede ucuz aritmetik.
+  function clipFor(r) {
+    let top = -Infinity, bot = Infinity;
+    const vt = Math.max(r.top, 0), vb = Math.min(r.bottom, innerHeight);
+    for (const q of coverRects) {
+      if (q.r - q.l >= innerWidth * 0.9 && q.b - q.t >= innerHeight * 0.9) continue;       // tüm sayfayı kaplayan kap: çubuk değil
+      if (!(q.l < r.right && q.r > r.right - ZONE_W && q.t < r.bottom && q.b > r.top)) continue;
+      if (q.t <= vt + 1) top = Math.max(top, q.b);
+      if (q.b >= vb - 1) bot = Math.min(bot, q.t);
+    }
+    return { top, bot };
   }
   function place() {
     if (!target || !target.isConnected || !qualifies(target)) return hide();
     const r = target.getBoundingClientRect();
     const [sx, sy] = scrollXY();
     const now = clock();
-    // Düğme görünürken video/kaydırma/pencere değişmediyse (ve kapatan öğe denetimi yakın zamanda yapıldıysa) kare boşa hesaplanmaz.
+    // Düğme görünürken video/kaydırma/pencere değişmediyse (ve örtü ölçümü yakın zamanda yapıldıysa) kare boşa hesaplanmaz.
     const sig = r.left + "," + r.top + "," + r.width + "," + r.height + "," + sx + "," + sy + "," + innerWidth + "," + innerHeight;
-    if (lastSig === sig && now - lastCover < 300) return;
+    if (lastSig === sig && now - lastCover < COVER_MS) return;
     if (!stepTracker(trackerOf(target), r, sx, sy, now)) { setShown(false); if (menuOpen) closeMenu(); return; }
     setShown(true);
-    const bh = btn.offsetHeight || 30;
-    const p = buttonPos(r, btn.offsetWidth, bh, innerWidth, innerHeight);
-    if (!p.visible || coveredAt(p.left + btn.offsetWidth / 2, p.top + bh / 2)) { setShown(false); if (menuOpen) closeMenu(); return; }
+    measure(r, now);
+    const bw = btn.offsetWidth, bh = btn.offsetHeight || 30;
+    const cl = clipFor(r);
+    let p;
+    if (cl.top > r.top || cl.bot < r.bottom) {
+      // örtü var: görünen dikdörtgen = video ∩ viewport ∩ (üst çubukların altı, alt çubukların üstü)
+      const vt = Math.max(r.top, 0, cl.top), vb = Math.min(r.bottom, innerHeight, cl.bot);
+      const vl = Math.max(r.left, 0), vr = Math.min(r.right, innerWidth);
+      const left = vr - bw - 8, top = vt + 8;
+      p = { left, top, visible: vb - vt >= MIN_VIS_H && vr - vl >= MIN_VIS_W && top + bh <= vb };
+    } else p = buttonPos(r, bw, bh, innerWidth, innerHeight);
+    if (!p.visible) { setShown(false); if (menuOpen) closeMenu(); return; }
     btn.style.left = p.left + "px"; btn.style.top = p.top + "px";
     lastSig = sig; lastCover = now;
     if (menuOpen) placeMenu();
@@ -217,7 +268,7 @@
       clearTimeout(hideT); hideT = setTimeout(() => { if (!btn.matches(":hover")) hide(); }, 3500);
     }
   }, { passive: true });
-  addEventListener("scroll", () => { if (target) place(); }, { passive: true, capture: true });
+  addEventListener("scroll", () => { scanDirty = true; if (target) place(); }, { passive: true, capture: true });
   // Görünür alandaki videoların kararlılığı hover'dan önce ölçülür (ilk hover'da 400 ms beklemeyi önler).
   // Zamanlayıcı yalnızca görünür alanda video varken çalışır; yoksa durur.
   function tickOnce() {
@@ -239,7 +290,12 @@
   }
   // Olay vermeden eklenen videolar için seyrek güvenlik ağı (4 sn).
   if (typeof setInterval === "function") setInterval(() => { if (!document.hidden && enabled) discover(); }, 4000);
-  addEventListener("resize", () => { if (target) place(); }, { passive: true });
+  addEventListener("resize", () => { scanDirty = true; if (target) place(); }, { passive: true });
+  // DOM değişimi (yeni çubuk/stil): aday listesi bir sonraki ölçümde (en çok 250 ms'de bir) yenilenir.
+  try {
+    if (typeof MutationObserver === "function" && document.documentElement)
+      new MutationObserver(() => { scanDirty = true; }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+  } catch { /* gözlemci yok */ }
   addEventListener("mousedown", (e) => { if (e.isTrusted && menuOpen && !e.composedPath().includes(host)) { closeMenu(); hide(); } }, true);
   addEventListener("keydown", (e) => { if (e.isTrusted && e.key === "Escape" && menuOpen) { closeMenu(); hide(); } }, true);
   // Sekme/çerçeve gizlenince menü kapansın
@@ -315,7 +371,7 @@
 
   if (typeof globalThis.__TD_TEST__ !== "undefined") {
     globalThis.__TD_TEST__.button = {
-      qualifies, buttonPos, host, btn, menu, drawOptions, groupOf, newTracker, stepTracker, place, inView, ioSeen, videoUnder, syncTick, loop,
+      qualifies, buttonPos, host, btn, menu, drawOptions, groupOf, newTracker, stepTracker, place, measure, inView, ioSeen, videoUnder, syncTick, loop,
       setTarget: (v) => { target = v; }, setClock: (f) => { clock = f; }, resetTrackers: () => { trackers = new WeakMap(); },
     };
   }

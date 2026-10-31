@@ -783,6 +783,64 @@ await test("kalite istekleri: menü kapanınca/sekme değişince qualitiesCancel
   assert.ok(qlist.pending() <= 50);
   qlist.cancelWhere(() => true);
 });
+// ---- düğme: sabit/yarı saydam üst çubuk örtüsü ----
+function overlayHarness(videoRect, { stack, cands = [] } = {}) {
+  const mkNode = (rect, pos, parent = null, style = {}) => {
+    const n = { nodeType: 1, _pos: pos, _style: style, parentElement: parent, rect, isConnected: true,
+      contains(x) { for (let c = x; c; c = c.parentElement) if (c === this) return true; return false; },
+      getBoundingClientRect() { const q = this.rect; return { left: q.l, top: q.t, right: q.r, bottom: q.b, width: q.r - q.l, height: q.b - q.t }; } };
+    return n;
+  };
+  const video = fakeVideo(videoRect); video.contains = (x) => x === video; video.parentElement = null;
+  let stackFn = () => [];
+  const h = loadButton({ doc: { elementsFromPoint: (x, y) => stackFn(x, y), getElementsByTagName: () => cands(h) } });
+  h.sandbox.window.getComputedStyle = (el) => ({ display: "block", visibility: "visible", opacity: "1", position: el._pos || "static", backdropFilter: (el._style || {}).backdropFilter });
+  h.video = video; h.mkNode = mkNode;
+  if (stack) stackFn = () => stack(h);
+  let now = 0; h.b.setClock(() => now); h.tick = (dt) => { now += dt; h.b.place(); };
+  h.b.setTarget(video);
+  return h;
+}
+const bpos = (h) => [parseFloat(h.els.btn.style.left), parseFloat(h.els.btn.style.top)];
+await test("düğme: yarı saydam (rgba + backdrop-filter) sabit üst çubuk videonun üstünü örterken düğme çubuğun ALTINDA, görünen kısmın sağ üstünde", () => {
+  const bar = { l: 0, t: 0, r: 1000, b: 53 };
+  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { cands: () => [h.bar] });   // pointer-events:none: yığında görünmez, aday listesinde bulunur
+  h.bar = h.mkNode(bar, "fixed", null, { backdropFilter: "blur(12px)" });
+  h.tick(0); h.tick(500);
+  assert.equal(h.els.btn.style.display, "flex");
+  assert.deepEqual(bpos(h), [740 - 160 - 8, 53 + 8]);
+});
+await test("düğme: sabit konum öğenin değil ATASININ stilinde; elementsFromPoint ilk eleman olarak kendi host'umuzu döndürse de örtü bulunur", () => {
+  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, {
+    stack: (hh) => [hh.b.host, hh.tab, hh.video],
+  });
+  const wrap = h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "fixed");
+  h.tab = h.mkNode({ l: 300, t: 5, r: 500, b: 45 }, "static", h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "static", wrap));
+  h.tick(0); h.tick(500);
+  assert.equal(h.els.btn.style.display, "flex");
+  assert.deepEqual(bpos(h), [740 - 160 - 8, 53 + 8]);
+});
+await test("düğme: görünen yükseklik 60 px altına inince gizlenir; çubuk altına girdikçe düğme aşağı kayar", () => {
+  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { cands: () => [h.bar] });
+  h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "fixed");
+  h.tick(0); h.tick(500);
+  h.video.rect.t = -100; h.tick(120);                         // video 260 px yüksekliğinde görünür kalır
+  assert.equal(h.els.btn.style.display, "flex");
+  assert.equal(bpos(h)[1], 61);
+  h.video.rect.t = -300; h.tick(120);                         // alt kenar 60: görünen = 60-53 = 7 px
+  assert.equal(h.els.btn.style.display, "none");
+  h.video.rect.t = -250; h.tick(120);                         // görünen = 110-53 = 57 < 60
+  assert.equal(h.els.btn.style.display, "none");
+  h.video.rect.t = -240; h.tick(120);                         // 120-53 = 67
+  assert.equal(h.els.btn.style.display, "flex");
+});
+await test("düğme: örtü yokken (çubuk videonun altında kalmıyor) eski konum: gerçek sağ üst köşe, 8 px içeri", () => {
+  const h = overlayHarness({ l: 100, t: 200, w: 640, h: 360 }, { cands: () => [h.bar] });
+  h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "fixed");
+  h.tick(0); h.tick(500);
+  assert.deepEqual(bpos(h), [740 - 160 - 8, 208]);
+});
+
 await test("button.js: menü kapanınca bekleyen kalite isteği iptal edilir (kaynakta tek gönderim noktası korunur)", () => {
   const src = readFileSync(join(root, "button.js"), "utf8");
   assert.ok(/kind:\s*"qualitiesCancel",\s*rid:\s*pendingRid/.test(src));
