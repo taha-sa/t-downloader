@@ -300,6 +300,17 @@ public sealed class DownloadManager : IAsyncDisposable
         }
     }
 
+    /// <summary>Olayı abone başına korumalı çağırır: bir abonenin istisnası diğerlerini ve kuyruğu etkilemez.</summary>
+    private void Raise<T>(EventHandler<T>? handler, T arg)
+    {
+        if (handler == null) return;
+        foreach (var d in handler.GetInvocationList())
+        {
+            try { ((EventHandler<T>)d)(this, arg); }
+            catch (Exception) { /* abone hatası motoru/kuyruğu durdurmaz */ }
+        }
+    }
+
     // _gate altında çağrılır
     private void Launch(DownloadItem item)
     {
@@ -314,12 +325,19 @@ public sealed class DownloadManager : IAsyncDisposable
             DownloadStatus result;
             try { result = await engine.RunAsync().ConfigureAwait(false); }
             catch (Exception ex) { item.Error = ex.Message; item.Status = DownloadStatus.Failed; result = DownloadStatus.Failed; }
-            lock (_gate) _active.Remove(item.Id);
-            engine.Dispose();
-            RequestSave();
-            if (result == DownloadStatus.Completed) DownloadCompleted?.Invoke(this, item);
-            else if (result == DownloadStatus.Failed) DownloadFailed?.Invoke(this, item);
-            ProcessQueue();
+            try
+            {
+                lock (_gate) _active.Remove(item.Id);
+                engine.Dispose();
+                RequestSave();
+                if (result == DownloadStatus.Completed) Raise(DownloadCompleted, item);
+                else if (result == DownloadStatus.Failed) Raise(DownloadFailed, item);
+            }
+            finally
+            {
+                // Olay abonesi istisna fırlatsa bile kuyruk sürmeli.
+                ProcessQueue();
+            }
         });
         _active[item.Id] = new Active { Stop = engine.Pause, Task = task };
     }
@@ -373,13 +391,19 @@ public sealed class DownloadManager : IAsyncDisposable
             }
             else { item.Error = res?.Error ?? "Bilinmeyen hata."; item.Status = DownloadStatus.Failed; }
 
-            lock (_gate) _active.Remove(item.Id);
-            cts.Dispose();
-            ItemChanged?.Invoke(this, item);
-            RequestSave();
-            if (item.Status == DownloadStatus.Completed) DownloadCompleted?.Invoke(this, item);
-            else if (item.Status == DownloadStatus.Failed) DownloadFailed?.Invoke(this, item);
-            ProcessQueue();
+            try
+            {
+                lock (_gate) _active.Remove(item.Id);
+                cts.Dispose();
+                Raise(ItemChanged, item);
+                RequestSave();
+                if (item.Status == DownloadStatus.Completed) Raise(DownloadCompleted, item);
+                else if (item.Status == DownloadStatus.Failed) Raise(DownloadFailed, item);
+            }
+            finally
+            {
+                ProcessQueue();
+            }
         });
         _active[item.Id] = new Active { Stop = () => { try { cts.Cancel(); } catch (ObjectDisposedException) { } }, Task = task };
     }

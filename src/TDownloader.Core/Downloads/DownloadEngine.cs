@@ -52,6 +52,7 @@ public sealed class DownloadEngine : IDisposable
     private string? _etag;
     private int _splitCount;
     private int _retiredWorkers;
+    private volatile bool _pauseRequested;
     private HostGate _hostGate = null!;
 
     public DownloadItem Item => _item;
@@ -80,6 +81,9 @@ public sealed class DownloadEngine : IDisposable
     /// <summary>İndirmeyi duraklatır; RunAsync kısa süre içinde Paused ile döner.</summary>
     public void Pause()
     {
+        // RunAsync henüz _cts oluşturmadıysa istek kaybolmasın: bayrak RunAsync başında okunur.
+        _pauseRequested = true;
+        Interlocked.MemoryBarrier();
         try { _cts?.Cancel(); } catch (ObjectDisposedException) { }
     }
 
@@ -88,8 +92,10 @@ public sealed class DownloadEngine : IDisposable
     {
         if (Interlocked.Exchange(ref _running, 1) == 1) throw new InvalidOperationException("Motor zaten çalışıyor.");
         _fatal = null;
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(external);
-        var ct = _cts.Token;
+        var cts0 = CancellationTokenSource.CreateLinkedTokenSource(external);
+        Interlocked.Exchange(ref _cts, cts0);   // tam bariyer: Pause() ile Dekker tarzı yarış kapanır
+        if (_pauseRequested) { try { cts0.Cancel(); } catch (ObjectDisposedException) { } }
+        var ct = cts0.Token;
         using var progressStop = new CancellationTokenSource();
         Task? progressTask = null;
         try
@@ -150,6 +156,7 @@ public sealed class DownloadEngine : IDisposable
             _handle = null;
             _item.SpeedBytesPerSec = 0;
             var c = _cts; _cts = null; c?.Dispose();
+            _pauseRequested = false;
             Volatile.Write(ref _running, 0);
         }
     }
