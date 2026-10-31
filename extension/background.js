@@ -24,7 +24,10 @@ let hostVersion = null;
 
 // ---- App -> eklenti ----
 native.onHostMessage((msg) => {
-  if (msg.type === "settings") { settings.applyAppSettings(msg); broadcastCfg(); }
+  if (msg.type === "settings") {
+    settings.applyAppSettings(msg); broadcastCfg();
+    media.resendAll();      // App yeni bağlandığında ilk mesaj budur: açık sayfaların medya listesini yeniden gönder (A8)
+  }
   else if (msg.type === "hideButton" && Number.isInteger(msg.tabId)) geometry.hideTab(msg.tabId);
   else if (msg.type === "pong") hostVersion = msg.version || null;
 });
@@ -45,8 +48,9 @@ chrome.runtime.onInstalled.addListener(menus.createMenus);
 chrome.runtime.onStartup.addListener(menus.createMenus);
 chrome.contextMenus.onClicked.addListener((info, tab) => { menus.onMenuClick(info, tab); });
 
+// status "loading" = ana çerçevede yeni belge (adres değişmese de: F5). Adres değişimi tek başına (pushState) sıfırlamaz.
 chrome.tabs.onUpdated.addListener((tabId, change) => {
-  if (change.status === "loading" && change.url) { qlist.cancelWhere((t) => t === tabId); media.clearTab(tabId); geometry.resetTab(tabId); }
+  if (change.status === "loading") { qlist.cancelWhere((t) => t === tabId); media.navigated(tabId); geometry.resetTab(tabId); }
 });
 chrome.tabs.onRemoved.addListener((tabId) => { qlist.cancelWhere((t) => t === tabId); media.closeTab(tabId); geometry.resetTab(tabId); });
 chrome.tabs.onActivated.addListener(({ tabId, windowId }) => { qlist.cancelWhere((t) => t !== tabId); geometry.onTabActivated(windowId, tabId); });
@@ -66,9 +70,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       (async () => {
         const tab = sender.tab || {};
         native.connect();
-        const [players, cookies] = await Promise.all([probePlayers(tab.id, sender.frameId), media.cookiesForTab(tab.id)]);
         const requestId = qlist.newId(msg.rid);
-        qlist.track(requestId, tab.id);
+        qlist.track(requestId, tab.id);     // await'ten ÖNCE: menü hemen kapanırsa qualitiesCancel bu kimlikle gidebilir (A15)
+        const [players, cookies] = await Promise.all([probePlayers(tab.id, sender.frameId), media.cookiesForTab(tab.id)]);
         const res = await native.request(buildQualities({
           requestId, tabId: tab.id, frameId: sender.frameId ?? 0, pageUrl: tab.url, pageTitle: tab.title,
           frameUrl: sender.url, src: msg.src, players, cookies,
@@ -81,8 +85,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       qlist.cancel(msg.rid);
       return false;
     case "qualitySelect":
-      native.send(buildQualitySelect(msg));
-      sendResponse({ ok: true });
+      sendResponse({ ok: native.send(buildQualitySelect(msg)) });   // gönderilemediyse düğme hata gösterir (A8)
       return false;
     case "alt":
       capture.setAlt(msg.ms);

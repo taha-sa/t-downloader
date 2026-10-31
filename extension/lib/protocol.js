@@ -69,10 +69,22 @@ export function buildQualities(p) {
       .filter((x) => x && typeof x.url === "string" && x.url.length <= 2000).slice(0, 40)
       .map((x) => ({ url: x.url, label: str(x.label).slice(0, 40), height: Number.isFinite(x.height) ? Math.max(0, Math.round(x.height)) : 0 })),
     // Düğme tıklanınca alınan çerezler: { origin: "a=b; c=d" } (en fazla 12 origin). Medya mesajlarıyla çerez gönderilmez.
-    cookies: Object.fromEntries(Object.entries(p.cookies && typeof p.cookies === "object" ? p.cookies : {})
-      .filter(([k, v]) => typeof k === "string" && typeof v === "string" && v.length > 0).slice(0, 12)
-      .map(([k, v]) => [k, v.slice(0, 8000)])),
+    // Her çerez, anahtarındaki origin'in kendi adresi için (chrome.cookies.getAll({url})) okunmuştur.
+    cookies: cleanCookies(p.cookies),
+    // Çerezin hangi host için okunduğu: { origin: "host" }. App çerezi YALNIZCA bu host'a (ve alt alan adlarına) gönderir (A1).
+    cookieHosts: cookieHostsOf(cleanCookies(p.cookies)),
   };
+}
+
+function cleanCookies(c) {
+  return Object.fromEntries(Object.entries(c && typeof c === "object" ? c : {})
+    .filter(([k, v]) => typeof k === "string" && originOf(k) === k && typeof v === "string" && v.length > 0).slice(0, 12)
+    .map(([k, v]) => [k, v.slice(0, 8000)]));
+}
+export function cookieHostsOf(cookies) {
+  const out = {};
+  for (const k of Object.keys(cookies || {})) { const h = hostOf(k); if (h) out[k] = h; }
+  return out;
 }
 
 export function buildQualitySelect(p) {

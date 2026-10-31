@@ -13,7 +13,7 @@ const T = { s: "string", n: "number", b: "boolean" };
 const SCHEMAS = {
   download: { type: "s", requestId: "s", url: "s", referrer: "s", cookies: "s", userAgent: "s", filename: "s", mime: "s", fileSize: "n", explicit: "b" },
   media: { type: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", append: "b", items: "a" },
-  qualities: { type: "s", requestId: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", src: "s", players: "a", cookies: "o" },
+  qualities: { type: "s", requestId: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", src: "s", players: "a", cookies: "o", cookieHosts: "o" },
   qualitySelect: { type: "s", selectionId: "s", index: "n" },
   videoGeometry: {
     type: "s", tabId: "n", windowId: "n", visible: "b", fullscreen: "b", rect: "o",
@@ -753,7 +753,7 @@ await test("çerez yalnızca tıklamada: cookiesForTab origin başına bir kez; 
   assert.deepEqual(map, { "https://cdn1.test": "k=v", "https://cdn2.test": "k=v" });
   assert.equal(calls2, 2);
   validate(proto.buildQualities({ requestId: "q", tabId: 44, cookies: map }));
-  assert.deepEqual(proto.buildQualities({ requestId: "q", tabId: 44, cookies: { a: "x", b: 5 } }).cookies, { a: "x" });
+  assert.deepEqual(proto.buildQualities({ requestId: "q", tabId: 44, cookies: { "https://a.test": "x", "https://b.test": 5, "not-an-origin": "y" } }).cookies, { "https://a.test": "x" });
   media.clearTab(44);
 });
 await test("segment sezgisi: manifest yoksa seg-1.mp4 normal dosyadır", () => {
@@ -787,6 +787,108 @@ await test("button.js: menü kapanınca bekleyen kalite isteği iptal edilir (ka
   const src = readFileSync(join(root, "button.js"), "utf8");
   assert.ok(/kind:\s*"qualitiesCancel",\s*rid:\s*pendingRid/.test(src));
   assert.equal((src.match(/kind:\s*"qualities"/g) || []).length, 1);
+});
+
+// ---- 02-app-ipc-eklenti.md düzeltmeleri ----
+function loadButtonCapturing() {
+  const winLs = {}, btnLs = {}, msgs = [];
+  let shadowMode = null, elFromPointCalls = 0;
+  const els = {};
+  const mkEl = (ls) => {
+    const cls = new Set();
+    return { style: {}, classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), has: (c) => cls.has(c), contains: (c) => cls.has(c) }, offsetWidth: 160, offsetHeight: 22,
+      addEventListener: (t, f) => { (ls[t] ??= []).push(f); }, getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }), matches: () => false,
+      set innerHTML(v) {}, scrollHeight: 100 };
+  };
+  const vid = { tagName: "VIDEO", isConnected: true, closest: () => null, currentSrc: "", src: "", getBoundingClientRect: () => ({ left: 10, top: 10, width: 640, height: 360, right: 650, bottom: 370 }) };
+  const doc = {
+    title: "Sayfa", appendChild() {}, fullscreenElement: null, createElement: () => { const e = mkEl({}); e.attachShadow = (o) => { shadowMode = o.mode; return { set innerHTML(v) {}, getElementById: (id) => (els[id] ??= mkEl(id === "btn" ? btnLs : {})) }; }; return e; },
+    addEventListener() {}, documentElement: null, elementFromPoint: () => null, hidden: false, querySelectorAll: () => [],
+    elementsFromPoint: () => { elFromPointCalls++; return [vid]; },
+  };
+  const win = { innerWidth: 1000, innerHeight: 600, getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1", position: "static" }), addEventListener() {} };
+  win.top = win;
+  const sandbox = { window: win, document: doc, __TD_TEST__: {}, parseFloat, Math, setTimeout: () => 0, clearTimeout, setInterval: () => 0, clearInterval() {}, requestAnimationFrame: () => 0,
+    addEventListener: (t, f) => { (winLs[t] ??= []).push(f); }, innerWidth: 1000, innerHeight: 600, location: { hostname: "site.test" },
+    chrome: { runtime: { sendMessage(m, cb) { msgs.push(m); if (m && m.kind === "cfg" && cb) cb({ showVideoButton: true }); }, onMessage: mkListener(), getURL: (p) => "chrome-extension://x/" + p } } };
+  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  vm.runInContext(readFileSync(join(root, "button.js"), "utf8"), sandbox);
+  return { b: sandbox.__TD_TEST__.button, winLs, btnLs, msgs, els, vid, shadowMode: () => shadowMode, elFromPointCalls: () => elFromPointCalls };
+}
+await test("A2: shadow root 'closed'; sentetik (isTrusted=false) mousemove/click/menü tıklaması menü açmaz, istek/indirme tetiklemez", () => {
+  const h = loadButtonCapturing();
+  assert.equal(h.shadowMode(), "closed");
+  const ev = (trusted, extra = {}) => ({ isTrusted: trusted, clientX: 50, clientY: 50, stopPropagation() {}, preventDefault() {}, composedPath: () => [], ...extra });
+  for (const f of h.winLs.mousemove) f(ev(false));
+  assert.equal(h.elFromPointCalls(), 0, "sentetik mousemove video aramasını bile başlatmaz");
+  for (const f of h.winLs.mousemove) f(ev(true));
+  assert.ok(h.elFromPointCalls() > 0, "gerçek mousemove çalışır");
+  h.b.setTarget(h.vid);
+  for (const f of h.btnLs.click) f(ev(false));
+  assert.equal(h.msgs.filter((m) => m && m.kind === "qualities").length, 0, "sentetik btn.click() kalite isteği göndermez");
+  for (const f of h.btnLs.click) f(ev(true));
+  assert.equal(h.msgs.filter((m) => m && m.kind === "qualities").length, 1, "gerçek tıklama kalite isteği gönderir");
+  h.b.drawOptions({ title: "T", selectionId: "sel1", options: [{ label: "720p", kind: "video", size: 1, isDefault: true }] });
+  const row = { closest: () => ({ dataset: { i: "0" } }) };
+  h.els.menu.onclick(ev(false, { target: row }));
+  assert.equal(h.msgs.filter((m) => m && m.kind === "qualitySelect").length, 0, "sentetik .row.click() indirme başlatmaz");
+  h.els.menu.onclick(ev(true, { target: row }));
+  assert.equal(h.msgs.filter((m) => m && m.kind === "qualitySelect").length, 1);
+  const before = h.msgs.length;
+  for (const f of h.winLs.keydown) f(ev(false, { key: "Escape" }));
+  assert.equal(h.msgs.length, before);
+});
+await test("A8: qualitySelect gönderilemediyse düğme hata gösterir (başarı sayılmaz)", () => {
+  const src = readFileSync(join(root, "button.js"), "utf8");
+  assert.ok(/r\.ok === true/.test(src) && /ulaşılamadı; indirme başlatılamadı/.test(src));
+  const bg = readFileSync(join(root, "background.js"), "utf8");
+  assert.ok(/sendResponse\(\{ ok: native\.send\(buildQualitySelect/.test(bg));
+});
+await test("A17: content.js Alt tuşu/tıklama olayları isTrusted ister", () => {
+  const src = readFileSync(join(root, "content.js"), "utf8");
+  assert.ok(/e\.isTrusted && e\.key === "Alt"/.test(src) && /e\.isTrusted && e\.altKey/.test(src));
+});
+await test("A1: çerez her zaman belirli bir URL için (getAll({url})) okunur; oynatıcı (players) adresleri için ASLA; mesaj host bilgisini taşır", async () => {
+  media.opts.debounceMs = 5;
+  media.onResponse({ tabId: 61, frameId: 0, url: "https://film.test/master.m3u8", statusCode: 200, responseHeaders: [hh("Content-Type", "application/x-mpegURL")] });
+  const asked = []; const orig = chrome.cookies.getAll;
+  chrome.cookies.getAll = async (q) => { asked.push(q); return [{ name: "sid", value: "S" }]; };
+  const cookies = await media.cookiesForTab(61);
+  chrome.cookies.getAll = orig;
+  assert.deepEqual(asked, [{ url: "https://film.test/master.m3u8" }], "yalnızca yakalanan öğenin kendi URL'si");
+  assert.deepEqual(cookies, { "https://film.test": "sid=S" });
+  const q = proto.buildQualities({ requestId: "q61", tabId: 61, cookies, players: [{ url: "https://saldirgan.example/a.m3u8", label: "x", height: 0 }] });
+  validate(q);
+  assert.deepEqual(q.cookies, { "https://film.test": "sid=S" });
+  assert.deepEqual(q.cookieHosts, { "https://film.test": "film.test" });
+  assert.equal(Object.keys(q.cookies).some((k) => k.includes("saldirgan")), false);
+  const bg = readFileSync(join(root, "background.js"), "utf8");
+  assert.equal(/cookies\.getAll/.test(bg), false, "background.js çerezi doğrudan okumaz; yalnızca media.cookiesForTab");
+  media.clearTab(61);
+});
+await test("A8/A9: resendAll append:false ile yeniden yollar; navigasyon (grup belleği boşken de) tabClosed yollar", async () => {
+  media.opts.debounceMs = 5;
+  media.onResponse({ tabId: 62, frameId: 0, url: "https://v.test/film.mp4", statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  sent.length = 0;
+  await media.resendAll();
+  const rs = sent.filter((x) => x.type === "media" && x.tabId === 62);
+  assert.equal(rs.length, 1); assert.equal(rs[0].append, false); assert.equal(rs[0].items.length, 1);
+  sent.length = 0;
+  media.navigated(999);
+  assert.deepEqual(sent.filter((x) => x.type === "tabClosed").map((x) => x.tabId), [999]);
+  media.clearTab(62);
+  const bg = readFileSync(join(root, "background.js"), "utf8");
+  assert.ok(/change\.status === "loading"\) \{ qlist\.cancelWhere/.test(bg), "adres değişmese de (F5) loading sıfırlar");
+});
+await test("A15: kalite isteği kimliği await'ten önce izlenir", () => {
+  const bg = readFileSync(join(root, "background.js"), "utf8");
+  assert.ok(bg.indexOf("qlist.track(requestId") > 0 && bg.indexOf("qlist.track(requestId") < bg.indexOf("Promise.all([probePlayers"));
+});
+await test("A12: gizli pencere (incognito) indirmesi yakalanmaz", async () => {
+  sent.length = 0; calls.length = 0;
+  await capture.onDownloadCreated({ id: 777, url: "https://x.test/gizli.zip", incognito: true, state: "in_progress", startTime: new Date().toISOString() });
+  assert.equal(sent.filter((x) => x.type === "download").length, 0);
+  assert.equal(calls.length, 0, "tarayıcı indirmesine dokunulmaz");
 });
 
 console.log(`\n${passed} test geçti`);

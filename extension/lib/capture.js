@@ -103,6 +103,7 @@ export async function waitForFilename(item) {
 export async function onDownloadCreated(item) {
   const url = item.finalUrl || item.url || "";
   if (!url || NON_HTTP.test(url)) return;                 // blob:/data: -> tarayıcıda kalsın
+  if (item.incognito) return;                             // gizli pencere: App'e/diske URL yazılmaz, yanlış çerez deposu okunmaz (A12)
   if (!isFreshDownload(item)) return;                     // geçmişten gelen/tekrarlanan kayıt
   if (bypass.delete(item.url)) return;
   if (isAltActive()) return;                              // Alt basılı -> tarayıcıda kalsın

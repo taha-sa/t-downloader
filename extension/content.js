@@ -142,10 +142,11 @@
 
   // ---- Alt tuşu: tarayıcının kendi indirmesine izin ver ----
   const alt = (ms) => post({ kind: "alt", ms });
-  window.addEventListener("keydown", (e) => { if (e.key === "Alt") alt(10000); }, true);
-  window.addEventListener("keyup", (e) => { if (e.key === "Alt") alt(0); }, true);
-  window.addEventListener("blur", () => alt(0));
-  const altClick = (e) => { if (e.altKey) alt(3000); };
+  // Yalnızca gerçek kullanıcı olayları (isTrusted): sayfa sentetik olayla tüm tarayıcının yakalamasını kapatamaz (A17).
+  window.addEventListener("keydown", (e) => { if (e.isTrusted && e.key === "Alt") alt(10000); }, true);
+  window.addEventListener("keyup", (e) => { if (e.isTrusted && e.key === "Alt") alt(0); }, true);
+  window.addEventListener("blur", (e) => { if (e.isTrusted) alt(0); });
+  const altClick = (e) => { if (e.isTrusted && e.altKey) alt(3000); };
   window.addEventListener("mousedown", altClick, true);
   window.addEventListener("click", altClick, true);
 

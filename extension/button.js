@@ -72,7 +72,8 @@
   const host = document.createElement("div");
   host.id = "tdownloader-overlay";
   host.style.cssText = "all:initial;position:fixed;z-index:2147483647;left:0;top:0;width:0;height:0;";
-  const sh = host.attachShadow({ mode: "open" });
+  // "closed": sayfa betiği host.shadowRoot ile düğmeye/menüye erişip tıklama simüle edemez (A2). Ek olarak tüm işleyiciler isTrusted ister.
+  const sh = host.attachShadow({ mode: "closed" });
   sh.innerHTML = `<style>
     *{box-sizing:border-box;font:600 13px system-ui,"Segoe UI",Tahoma,sans-serif}
     #btn{position:fixed;display:none;align-items:center;gap:5px;padding:3px 8px 3px 5px;background:rgba(245,196,0,.75);color:#111;border:1px solid rgba(17,17,17,.7);
@@ -206,7 +207,7 @@
   }
   let lastMove = -1e9;
   addEventListener("mousemove", (e) => {
-    if (!enabled || menuOpen) return;
+    if (!e.isTrusted || !enabled || menuOpen) return;   // sayfanın sentetik mousemove'u düğmeyi/menüyü tetikleyemez
     const t = clock();
     if (t - lastMove < 60) return;                       // fare olayı sağanağında en çok ~16 tarama/sn
     lastMove = t;
@@ -239,8 +240,8 @@
   // Olay vermeden eklenen videolar için seyrek güvenlik ağı (4 sn).
   if (typeof setInterval === "function") setInterval(() => { if (!document.hidden && enabled) discover(); }, 4000);
   addEventListener("resize", () => { if (target) place(); }, { passive: true });
-  addEventListener("mousedown", (e) => { if (menuOpen && !e.composedPath().includes(host)) { closeMenu(); hide(); } }, true);
-  addEventListener("keydown", (e) => { if (e.key === "Escape" && menuOpen) { closeMenu(); hide(); } }, true);
+  addEventListener("mousedown", (e) => { if (e.isTrusted && menuOpen && !e.composedPath().includes(host)) { closeMenu(); hide(); } }, true);
+  addEventListener("keydown", (e) => { if (e.isTrusted && e.key === "Escape" && menuOpen) { closeMenu(); hide(); } }, true);
   // Sekme/çerçeve gizlenince menü kapansın
   document.addEventListener("visibilitychange", () => { if (document.hidden) { closeMenu(); hide(); } });
 
@@ -263,11 +264,20 @@
     });
     menu.innerHTML = h;
     menu.onclick = (e) => {
+      if (!e.isTrusted) return;                        // yalnızca gerçek kullanıcı tıklaması indirme başlatır (A2)
       const row = e.target.closest(".row"); if (!row) return;
-      const i = +row.dataset.i;
-      send({ kind: "qualitySelect", selectionId: res.selectionId, index: i });
-      drawMessage(res.title || "Video", "✓ T-Downloader'a gönderildi");
-      setTimeout(() => { closeMenu(); hide(); }, 1100);
+      const i = +row.dataset.i, my = token;
+      drawMessage(res.title || "Video", "Gönderiliyor…");
+      send({ kind: "qualitySelect", selectionId: res.selectionId, index: i }, (r) => {
+        if (my !== token) return;                      // menü bu arada kapandı
+        if (r && r.ok === true) {
+          drawMessage(res.title || "Video", "✓ T-Downloader'a gönderildi");
+          setTimeout(() => { if (my === token) { closeMenu(); hide(); } }, 1100);
+        } else {
+          drawMessage(res.title || "Video", "T-Downloader'a ulaşılamadı; indirme başlatılamadı. Uygulama çalışıyor mu?", "err");
+          setTimeout(() => { if (my === token) { closeMenu(); hide(); } }, 4000);
+        }
+      });
     };
     placeMenu();
   }
@@ -291,13 +301,14 @@
         : (r.error || "Bu video okunamadı.");
       drawMessage(title, `${esc(msg)}<div class="row" id="retry" style="margin:8px -12px -10px"><span>↻ Tekrar dene</span></div>`, "err");
       const rt = sh.getElementById("retry");
-      if (rt) rt.onclick = () => { closeMenu(); openMenu(); };
+      if (rt) rt.onclick = (e) => { if (e.isTrusted) { closeMenu(); openMenu(); } };
     };
     setTimeout(() => fin(null), 100000);
     send({ kind: "qualities", src, rid }, fin);
   }
   btn.addEventListener("click", (e) => {
     e.stopPropagation(); e.preventDefault();
+    if (!e.isTrusted) return;                          // sayfanın btn.click()/dispatchEvent'i menü açamaz, kalite isteği gönderemez (A2)
     if (menuOpen) { closeMenu(); return; }
     if (target) openMenu();
   }, true);

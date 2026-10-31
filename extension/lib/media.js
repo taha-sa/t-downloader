@@ -44,6 +44,8 @@ export async function cookieHeaderFor(url) {
 }
 
 // Düğme tıklanınca: sekmedeki öğelerin origin'leri için çerez başlığı (origin başına bir kez, en fazla 12 origin).
+// Çerez HER ZAMAN belirli bir URL için (tarayıcının kendi kapsamıyla: chrome.cookies.getAll({url})) okunur ve anahtarı o URL'nin
+// origin'idir. Sayfanın verdiği oynatıcı (players) adresleri için çerez OKUNMAZ: sayfa başka sitenin çerezini isteyemez.
 export async function cookiesForTab(tabId) {
   const samples = new Map();   // origin -> örnek url
   for (const g of groups.values()) {
@@ -129,8 +131,9 @@ async function flush(key) {
   try { tab = await chrome.tabs.get(g.tabId); } catch { return; }
   const items = [...g.fresh.values()];
   g.fresh.clear();                                  // yalnızca YENİ öğeler gider; tekrar gönderilmez
+  let ok = true;
   for (const part of chunkItems(items)) {
-    native.send(buildMedia({
+    ok = native.send(buildMedia({
       tabId: g.tabId,
       frameId: g.frameId,
       frameUrl: g.frameUrl,
@@ -138,7 +141,27 @@ async function flush(key) {
       pageTitle: tab.title || "",
       items: part,
       append: true,
-    }));
+    })) && ok;
+  }
+  if (!ok) for (const it of items) g.fresh.set(it.url, it);   // gönderilemedi (bağlantı yok): "gönderilmiş" sayılmaz; yeniden bağlanınca resendAll yollar
+}
+
+// App (yeniden) bağlandı ya da eklenti yeniden başladı: tüm etkin sekme gruplarının güncel listesi append:false ile yeniden gönderilir
+// (App'in listesi eksik kalmasın). İlk parça listeyi DEĞİŞTİRİR, sonrakiler ekler.
+export async function resendAll() {
+  for (const [key, g] of [...groups]) {
+    if (g.items.size === 0) continue;
+    let tab = {};
+    try { tab = await chrome.tabs.get(g.tabId); } catch { continue; }
+    g.fresh.clear();
+    let first = true;
+    for (const part of chunkItems([...g.items.values()])) {
+      native.send(buildMedia({
+        tabId: g.tabId, frameId: g.frameId, frameUrl: g.frameUrl, pageUrl: tab.url || "", pageTitle: tab.title || "",
+        items: part, append: !first,
+      }));
+      first = false;
+    }
   }
 }
 
@@ -159,6 +182,10 @@ export function closeTab(tabId) {
   clearTab(tabId);
   native.send({ type: "tabClosed", tabId });
 }
+
+// Sekme yeni belgeye gitti/yenilendi: eklenti durumu atılır ve App'e HER ZAMAN tabClosed (sıfırlama) gider; service worker uyuyup
+// grup belleği kaybolmuş olsa bile App'te eski sayfanın medyası kalmaz (A9).
+export function navigated(tabId) { closeTab(tabId); }
 
 export const _debug = () => ({ groups: groups.size, tabs: tabCount.size, manifests: tabManifest.size, headers: sentHeaders.size });
 
