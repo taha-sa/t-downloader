@@ -18,11 +18,16 @@ public sealed class TestHttpServer : IDisposable
     public TestHttpServer(byte[] data)
     {
         Data = data;
-        var l = new TcpListener(IPAddress.Loopback, 0); l.Start();
-        int port = ((IPEndPoint)l.LocalEndpoint).Port; l.Stop();
+        int port = 0;
+        for (int attempt = 0; ; attempt++)
+        {
+            var l = new TcpListener(IPAddress.Loopback, 0); l.Start();
+            port = ((IPEndPoint)l.LocalEndpoint).Port; l.Stop();
+            _listener.Prefixes.Clear();
+            _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+            try { _listener.Start(); break; } catch (HttpListenerException) when (attempt < 20) { }
+        }
         Url = $"http://127.0.0.1:{port}/file";
-        _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-        _listener.Start();
         _loop = Task.Run(AcceptLoop);
     }
 

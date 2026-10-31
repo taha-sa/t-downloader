@@ -23,11 +23,17 @@ public sealed class ScriptServer : IDisposable
     public ScriptServer(byte[] data)
     {
         Data = data;
-        var t = new TcpListener(IPAddress.Loopback, 0); t.Start();
-        int port = ((IPEndPoint)t.LocalEndpoint).Port; t.Stop();
+        // Boş port seçip dinleyiciyi açma arasında başka test aynı portu alabilir: birkaç kez dene.
+        int port = 0;
+        for (int attempt = 0; ; attempt++)
+        {
+            var t = new TcpListener(IPAddress.Loopback, 0); t.Start();
+            port = ((IPEndPoint)t.LocalEndpoint).Port; t.Stop();
+            _l.Prefixes.Clear();
+            _l.Prefixes.Add($"http://127.0.0.1:{port}/");
+            try { _l.Start(); break; } catch (HttpListenerException) when (attempt < 20) { }
+        }
         Url = $"http://127.0.0.1:{port}/file";
-        _l.Prefixes.Add($"http://127.0.0.1:{port}/");
-        _l.Start();
         _ = Task.Run(Loop);
     }
 

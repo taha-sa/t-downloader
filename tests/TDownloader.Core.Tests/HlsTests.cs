@@ -24,11 +24,15 @@ public sealed class HlsTestServer : IDisposable
 
     public HlsTestServer()
     {
-        var t = new TcpListener(IPAddress.Loopback, 0); t.Start();
-        Port = ((IPEndPoint)t.LocalEndpoint).Port; t.Stop();
-        _l.Prefixes.Add($"http://127.0.0.1:{Port}/");
-        _l.Prefixes.Add($"http://localhost:{Port}/");
-        _l.Start();
+        for (int attempt = 0; ; attempt++)
+        {
+            var t = new TcpListener(IPAddress.Loopback, 0); t.Start();
+            int port = ((IPEndPoint)t.LocalEndpoint).Port; t.Stop();
+            _l.Prefixes.Clear();
+            _l.Prefixes.Add($"http://127.0.0.1:{port}/");
+            _l.Prefixes.Add($"http://localhost:{port}/");
+            try { _l.Start(); Port = port; break; } catch (HttpListenerException) when (attempt < 20) { }
+        }
         _ = Task.Run(Loop);
     }
 

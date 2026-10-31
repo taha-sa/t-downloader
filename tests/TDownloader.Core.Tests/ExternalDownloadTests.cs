@@ -40,9 +40,11 @@ public sealed class ExternalDownloadTests : IDisposable
         mgr.ProgressChanged += (_, p) => progress.Add(p);
         var done = new TaskCompletionSource<DownloadItem>();
         mgr.DownloadCompleted += (_, i) => done.TrySetResult(i);
-        var item = mgr.AddExternal(new AddExternalRequest("https://ornek.test/v", "Klip.mp4", "best"));
+        // StartNow:false — hızlı sahte çalıştırıcı bitirip kategoriyi (Music) değiştirmeden başlangıç değerleri doğrulanır.
+        var item = mgr.AddExternal(new AddExternalRequest("https://ornek.test/v", "Klip.mp4", "best", StartNow: false));
         Assert.Equal(DownloadKind.External, item.Kind);
         Assert.Equal(Categories.Video, item.Category);
+        mgr.Start(item.Id);
         var fin = await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(DownloadStatus.Completed, fin.Status);
         Assert.EndsWith("Klip.m4a", fin.SavePath);

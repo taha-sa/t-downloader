@@ -90,6 +90,8 @@ public class HlsResumeTests : IDisposable
         Assert.True(Directory.Exists(hls), "duraklatınca hls klasörü korunmalı");
         Assert.True(File.Exists(Path.Combine(hls, "hls-state.json")));
         var have = Directory.GetFiles(hls, "*.seg").Select(f => int.Parse(Path.GetFileNameWithoutExtension(f))).ToHashSet();
+        await Task.Delay(300);   // iptal anında yoldaki isteklerin sunucu günlüğüne geç düşmesi, devam sayımını bozmasın
+        have = Directory.GetFiles(hls, "*.seg").Select(f => int.Parse(Path.GetFileNameWithoutExtension(f))).ToHashSet();
         Assert.InRange(have.Count, afterSegments, N - 1);
         Assert.Empty(Directory.GetFiles(hls, "*.tmp"));          // yarım dosya bırakılmaz
         return have;
