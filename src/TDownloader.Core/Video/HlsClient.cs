@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -208,8 +209,14 @@ public sealed class HlsClient
     {
         private readonly Action<ExternalProgress> _report;
         private readonly Stopwatch _sw = Stopwatch.StartNew();
-        private readonly Queue<(long t, long b)> _win = new();
+        private readonly Util.SlidingSpeed _win = new(128, 4.0);
+        private long _lastEmitMs = -1000, _shown;
+        private double _speed;
+        public const int MinReportMs = 250;
+        /// <summary>Tamamlanmış parçaların baytı (gerçek toplam).</summary>
         public long Bytes;
+        /// <summary>Şu an inmekte olan parçalardan okunan bayt (parça bitince/başarısız olunca düşülür).</summary>
+        public long Live;
         public int Total;
         public double DoneDur, TotalDur;
         public Progress(Action<ExternalProgress> report) { _report = report; }
@@ -219,22 +226,38 @@ public sealed class HlsClient
             lock (this) { Bytes += bytes; DoneDur += dur; }
             if (bytes > 0) Report(0, 0);
         }
-        public void AddBytes(long add) { lock (this) Bytes += add; }
+        public void AddBytes(long add, long releaseLive = 0) { lock (this) { Bytes += add; Live -= releaseLive; } }
         public (long Bytes, double DoneDur, double TotalDur) Snapshot() { lock (this) return (Bytes, DoneDur, TotalDur); }
-        public void Report(long add, double dur)
+
+        /// <summary>Parça indirilirken okunan baytlar (negatif: yeniden deneme için geri alma). En çok 250 ms'de bir bildirir.</summary>
+        public void AddLive(long delta, bool countTotals)
         {
             lock (this)
             {
-                Bytes += add; DoneDur += dur;
-                long now = _sw.ElapsedMilliseconds;
-                _win.Enqueue((now, Bytes));
-                while (_win.Count > 1 && now - _win.Peek().t > 4000) _win.Dequeue();
-                var first = _win.Peek();
-                double speed = now > first.t ? (Bytes - first.b) * 1000.0 / (now - first.t) : 0;
-                long est = DoneDur > 0 && TotalDur > 0 ? (long)(Bytes / DoneDur * TotalDur) : -1;
-                double? eta = speed > 1 && est > 0 ? Math.Max(0, (est - Bytes) / speed) : null;
-                _report(new ExternalProgress(Bytes, est, speed, eta));
+                Live += delta;
+                if (!countTotals || delta <= 0) return;
+                if (_sw.ElapsedMilliseconds - _lastEmitMs >= MinReportMs) Emit();
             }
+        }
+
+        public void Report(long add, double dur, long releaseLive = 0)
+        {
+            lock (this) { Bytes += add; DoneDur += dur; Live -= releaseLive; Emit(); }
+        }
+
+        // Kilit altında çağrılır.
+        private void Emit()
+        {
+            long now = _sw.ElapsedMilliseconds;
+            _lastEmitMs = now;
+            long cur = Bytes + Live;
+            // Gösterilen değer geri gitmez (gerçek toplam Bytes'ta bozulmadan durur).
+            if (cur > _shown) _shown = cur;
+            _speed = _win.Add(now / 1000.0, _shown);
+            long est = DoneDur > 0 && TotalDur > 0 ? (long)(Bytes / DoneDur * TotalDur) : -1;
+            if (est > 0 && est < _shown) est = _shown;
+            double? eta = _speed > 1 && est > 0 ? Math.Max(0, (est - _shown) / _speed) : null;
+            _report(new ExternalProgress(_shown, est, _speed, eta));
         }
         /// <summary>İndirme bitti, birleştirme/dönüştürme sürüyor: çubuk %100'de kalır, Phase aşamayı söyler.</summary>
         public void ReportPhase(string phase)
@@ -536,9 +559,9 @@ public sealed class HlsClient
             finally { keyLock.Release(); }
         }
 
-        async Task<byte[]> Fetch(HlsSegment s, CancellationToken tk)
+        async Task<byte[]> Fetch(HlsSegment s, CancellationToken tk, Action<long>? onBytes)
         {
-            var data = await FetchBytesAsync(s.Url, ctx, cookieHost, s.ByteOffset, s.ByteLength, opt, tk).ConfigureAwait(false);
+            var data = await FetchBytesAsync(s.Url, ctx, cookieHost, s.ByteOffset, s.ByteLength, opt, tk, onBytes).ConfigureAwait(false);
             if (s.Key is { Method: "AES-128" } key && key.Uri != null)
             {
                 var k = await GetKey(key.Uri, tk).ConfigureAwait(false);
@@ -548,14 +571,14 @@ public sealed class HlsClient
             return fmp4 ? data : StripFakeHeader(data);
         }
 
-        async Task<byte[]> FetchSegment(int idx, CancellationToken tk)
+        async Task<byte[]> FetchSegment(int idx, CancellationToken tk, Action<long>? onBytes)
         {
             int refreshes = 0;
             while (true)
             {
                 int gen = Volatile.Read(ref generation);
                 var seg = Volatile.Read(ref segs)[idx];
-                try { return await Fetch(seg, tk).ConfigureAwait(false); }
+                try { return await Fetch(seg, tk, onBytes).ConfigureAwait(false); }
                 catch (HlsException ex) when (ex.HttpStatus is 401 or 403 && refreshes < 2)
                 {
                     refreshes++;
@@ -611,10 +634,15 @@ public sealed class HlsClient
                         linked.Token.ThrowIfCancellationRequested();
                         int idx = missing[k];
                         var duration = Volatile.Read(ref segs)[idx].Duration;
-                        var data = await FetchSegment(idx, linked.Token).ConfigureAwait(false);
+                        long counted = 0;
+                        void OnBytes(long n) { Interlocked.Add(ref counted, n); prog.AddLive(n, countTotals); }
+                        byte[] data;
+                        try { data = await FetchSegment(idx, linked.Token, OnBytes).ConfigureAwait(false); }
+                        catch { prog.AddBytes(0, Interlocked.Read(ref counted)); throw; }
+                        long released = Interlocked.Read(ref counted);
                         await HlsStateStore.WriteAtomicAsync(HlsStateStore.SegPath(workDir, prefix, idx), data, linked.Token).ConfigureAwait(false);
                         store.SegmentDone(prefix);
-                        if (countTotals) prog.Report(data.Length, duration); else prog.AddBytes(data.Length);
+                        if (countTotals) prog.Report(data.Length, duration, released); else prog.AddBytes(data.Length, released);
                         if (countTotals && Volatile.Read(ref spaceChecked) == 0
                             && Interlocked.Increment(ref finished) >= Math.Min(4, missing.Count)
                             && Interlocked.CompareExchange(ref spaceChecked, 1, 0) == 0)
@@ -671,7 +699,7 @@ public sealed class HlsClient
         await src.CopyToAsync(dest, 1 << 16, ct).ConfigureAwait(false);
     }
 
-    private async Task<byte[]> FetchBytesAsync(string url, MediaContext ctx, string cookieHost, long offset, long length, Options opt, CancellationToken ct)
+    private async Task<byte[]> FetchBytesAsync(string url, MediaContext ctx, string cookieHost, long offset, long length, Options opt, CancellationToken ct, Action<long>? onBytes = null)
     {
         int attempt = 0;
         var delay = opt.RetryDelay ?? TimeSpan.FromMilliseconds(500);
@@ -693,7 +721,24 @@ public sealed class HlsClient
                     if (code is 401 or 403 or 404 or 410) throw new HlsException($"Sunucu parçayı vermedi (HTTP {code}).", false, code);
                     throw HttpStatusException.From(resp);
                 }
-                return await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
+                if (onBytes == null) return await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
+                // Akış okuma: okunan baytlar anında bildirilir; hata olursa bu denemenin baytları geri alınır.
+                long got = 0;
+                var rented = ArrayPool<byte>.Shared.Rent(32 * 1024);
+                try
+                {
+                    long cl = resp.Content.Headers.ContentLength ?? 0;
+                    using var ms = new MemoryStream(cl > 0 && cl < int.MaxValue ? (int)cl : 0);
+                    await using var stream = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+                    int n;
+                    while ((n = await stream.ReadAsync(rented.AsMemory(), cts.Token).ConfigureAwait(false)) > 0)
+                    {
+                        ms.Write(rented, 0, n); got += n; onBytes(n);
+                    }
+                    return ms.ToArray();
+                }
+                catch { if (got > 0) onBytes(-got); throw; }
+                finally { ArrayPool<byte>.Shared.Return(rented); }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (HlsException) { throw; }

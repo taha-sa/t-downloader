@@ -54,7 +54,7 @@ public sealed class YtDlpClient : IExternalRunner
         return a;
     }
 
-    public static List<string> BuildDownloadArgs(string url, string format, string outputTemplate, string? referer, string? ffmpeg, MediaContext? ctx = null)
+    public static List<string> BuildDownloadArgs(string url, string format, string outputTemplate, string? referer, string? ffmpeg, MediaContext? ctx = null, bool progressDelta = false)
     {
         var a = new List<string>
         {
@@ -64,6 +64,7 @@ public sealed class YtDlpClient : IExternalRunner
             "--print", "after_move:" + YtDlpParsing.FilePrefix + "%(filepath)s",
         };
         a.AddRange(new[] { "--retries", "10", "--fragment-retries", "10", "--concurrent-fragments", "4", "--socket-timeout", "30" });
+        if (progressDelta) { a.Add("--progress-delta"); a.Add("0.25"); }
         if (!string.IsNullOrWhiteSpace(ffmpeg)) { a.Add("--ffmpeg-location"); a.Add(ffmpeg); }
         AddContextArgs(a, referer, ctx);
         a.Add("--"); a.Add(url);
@@ -122,10 +123,11 @@ public sealed class YtDlpClient : IExternalRunner
         var dir = Path.GetDirectoryName(item.SavePath)!;
         Directory.CreateDirectory(dir);
         string template = Path.Combine(dir, Path.GetFileNameWithoutExtension(item.SavePath)) + ".%(ext)s";
-        var args = BuildDownloadArgs(item.Url, item.ExternalFormat ?? "bv*+ba/b", template, item.Referrer, FindFfmpeg(), VideoRunner.ContextOf(item));
+        var args = BuildDownloadArgs(item.Url, item.ExternalFormat ?? "bv*+ba/b", template, item.Referrer, FindFfmpeg(), VideoRunner.ContextOf(item), SupportsProgressDelta(exe));
         using var p = new Process { StartInfo = Psi(exe, args) };
         var err = new StringBuilder();
         string? finalPath = null;
+        var agg = new YtDlpProgressAggregator(YtDlpProgressAggregator.ExpectedStreams(item.ExternalFormat ?? "bv*+ba/b"));
         try { p.Start(); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         { return new ExternalResult(false, "yt-dlp başlatılamadı: " + ex.Message, null); }
@@ -139,7 +141,7 @@ public sealed class YtDlpClient : IExternalRunner
             while ((line = await p.StandardOutput.ReadLineAsync().ConfigureAwait(false)) != null)
             {
                 var pr = YtDlpParsing.ParseProgressLine(line);
-                if (pr != null) { report(new ExternalProgress(pr.Downloaded, pr.Total, pr.Speed, pr.EtaSeconds)); continue; }
+                if (pr != null) { report(agg.Add(pr)); continue; }
                 finalPath = YtDlpParsing.ParseFilePathLine(line) ?? finalPath;
             }
         });
@@ -155,6 +157,25 @@ public sealed class YtDlpClient : IExternalRunner
             return new ExternalResult(false, YtDlpParsing.MapError(err.ToString()), null);
         return new ExternalResult(true, null, finalPath);
     }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> DeltaSupport = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>yt-dlp --help çıktısında --progress-delta var mı (eski sürümler bilinmeyen bayrakta hata verir). Sonuç önbelleğe alınır.</summary>
+    public static bool SupportsProgressDelta(string exe)
+        => DeltaSupport.GetOrAdd(exe, e =>
+        {
+            try
+            {
+                using var p = new Process { StartInfo = Psi(e, new[] { "--help" }) };
+                p.Start();
+                try { p.StandardInput.Close(); } catch (IOException) { }
+                var errT = p.StandardError.ReadToEndAsync();
+                var outT = p.StandardOutput.ReadToEndAsync();
+                if (!p.WaitForExit(10_000)) { Kill(p); return false; }
+                return outT.GetAwaiter().GetResult().Contains("--progress-delta", StringComparison.Ordinal);
+            }
+            catch (Exception) { return false; }
+        });
 
     private static void Kill(Process p)
     {

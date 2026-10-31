@@ -9,7 +9,7 @@ public sealed record QualityOption(string Label, string Format, string Ext, int 
 
 public sealed record VideoInfo(string Title, List<QualityOption> Options);
 
-public sealed record YtDlpProgress(string Status, long Downloaded, long Total, double Speed, double? EtaSeconds);
+public sealed record YtDlpProgress(string Status, long Downloaded, long Total, double Speed, double? EtaSeconds, string? StreamId = null);
 
 /// <summary>yt-dlp çıktılarını (JSON, ilerleme satırları, hata metni) ayrıştıran saf fonksiyonlar.</summary>
 public static class YtDlpParsing
@@ -20,7 +20,7 @@ public static class YtDlpParsing
 
     /// <summary>--progress-template değeri; ProgressPrefix ile başlar, alanlar | ile ayrılır.</summary>
     public const string ProgressTemplate =
-        "download:" + ProgressPrefix + "%(progress.status)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s";
+        "download:" + ProgressPrefix + "%(progress.status)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(info.format_id)s";
 
     // ---------------------------------------------------------------- ilerleme
 
@@ -33,7 +33,8 @@ public static class YtDlpParsing
         if (parts.Length < 6) return null;
         long? dl = L(parts[1]), total = L(parts[2]), est = L(parts[3]);
         double? speed = D(parts[4]), eta = D(parts[5]);
-        return new YtDlpProgress(parts[0].Trim(), dl ?? 0, total ?? est ?? -1, speed ?? 0, eta);
+        string? sid = parts.Length > 6 && parts[6].Trim() is { Length: > 0 } x && x is not ("NA" or "None") ? x : null;
+        return new YtDlpProgress(parts[0].Trim(), dl ?? 0, total ?? est ?? -1, speed ?? 0, eta, sid);
     }
 
     /// <summary>--print after_move:TDL_FILE:... satırından nihai dosya yolu.</summary>
@@ -159,5 +160,64 @@ public static class YtDlpParsing
         }
         var last = text.Split('\n').Select(l => l.Trim()).LastOrDefault(l => l.Length > 0);
         return last == null ? "yt-dlp başarısız oldu." : last.Length > 300 ? last[..300] + "…" : last;
+    }
+}
+
+/// <summary>
+/// Video+ses gibi ayrı akışların ilerleme satırlarını tek toplam ilerlemeye çevirir (yüzde ikinci akışta sıfırlanmaz,
+/// asla geri gitmez) ve hızı kayan ortalamadan geçirir. Beklenen akış sayısı biçim dizgesinden ("137+140") bulunur.
+/// </summary>
+public sealed class YtDlpProgressAggregator
+{
+    private sealed class Stream { public string Key = ""; public long Downloaded, Total = -1; public bool Done; }
+    private readonly List<Stream> _streams = new();
+    private readonly int _expected;
+    private readonly Util.SlidingSpeed _win = new(16, 4.0);
+    private readonly System.Diagnostics.Stopwatch _sw = System.Diagnostics.Stopwatch.StartNew();
+    private long _shownDl, _shownTotal = -1;
+
+    public YtDlpProgressAggregator(int expectedStreams = 1) { _expected = Math.Max(1, expectedStreams); }
+
+    /// <summary>"bv*+ba/b", "137+140" gibi biçimden ilk seçeneğin akış sayısı.</summary>
+    public static int ExpectedStreams(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format)) return 1;
+        var first = format.Split('/')[0];
+        return 1 + first.Count(c => c == '+');
+    }
+
+    public Queue.ExternalProgress Add(YtDlpProgress p, double? nowSeconds = null)
+    {
+        double now = nowSeconds ?? _sw.Elapsed.TotalSeconds;
+        var cur = _streams.Count > 0 ? _streams[^1] : null;
+        bool isNew = cur == null
+            || (p.StreamId != null && cur.Key != p.StreamId)
+            || (p.StreamId == null && (cur.Done || (cur.Downloaded > 0 && p.Downloaded < cur.Downloaded / 2)));
+        if (isNew) { cur = new Stream { Key = p.StreamId ?? "#" + _streams.Count }; _streams.Add(cur); }
+        cur!.Downloaded = Math.Max(cur.Downloaded, p.Downloaded);
+        if (p.Total > 0) cur.Total = Math.Max(cur.Total, p.Total);
+        if (string.Equals(p.Status, "finished", StringComparison.OrdinalIgnoreCase))
+        {
+            cur.Done = true;
+            if (cur.Total < cur.Downloaded) cur.Total = cur.Downloaded;
+        }
+
+        long dl = 0, total = 0; bool known = true; long knownSum = 0;
+        foreach (var s in _streams)
+        {
+            dl += s.Downloaded;
+            if (s.Total > 0) { total += s.Total; knownSum += s.Total; } else known = false;
+        }
+        if (known && _streams.Count < _expected && knownSum > 0)
+            total += (long)(knownSum / (double)_streams.Count * 0.1 * (_expected - _streams.Count));   // henüz başlamayan akış için ~%10 tahmin
+        if (!known) total = -1;
+        if (total > 0 && total < dl) total = dl;
+
+        if (dl > _shownDl) _shownDl = dl;
+        if (total > 0 && total < _shownTotal) total = _shownTotal;   // toplam küçülüp yüzdeyi oynatmasın
+        if (total > 0) _shownTotal = total;
+        double speed = _win.Add(now, _shownDl);
+        double? eta = speed > 1 && total > 0 ? Math.Max(0, (total - _shownDl) / speed) : null;
+        return new Queue.ExternalProgress(_shownDl, total, speed, eta);
     }
 }

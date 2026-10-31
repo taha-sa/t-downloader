@@ -504,6 +504,8 @@ public sealed class DownloadEngine : IDisposable
         double lastT = 0;
         long lastTotal = SumDownloaded();
         double speed = 0;
+        var window = new Util.SlidingSpeed(16, 4.0);
+        window.Add(0, lastTotal);
         try
         {
             using var timer = new PeriodicTimer(_opt.ProgressInterval);
@@ -512,15 +514,14 @@ public sealed class DownloadEngine : IDisposable
                 double t = sw.Elapsed.TotalSeconds, dt = Math.Max(0.001, t - lastT);
                 lastT = t;
                 long cur = SumDownloaded();
-                double inst = (cur - lastTotal) / dt;
                 lastTotal = cur;
-                speed = speed <= 0 ? inst : speed * 0.6 + inst * 0.4;
+                speed = window.Add(t, cur);   // son ~4 sn kayan pencere ortalaması
                 foreach (var w in _workers)
                 {
                     long b = Interlocked.Read(ref w.Bytes);
                     double wi = (b - w.LastBytes) / dt;
                     w.LastBytes = b;
-                    w.Speed = w.Speed <= 0 ? wi : w.Speed * 0.6 + wi * 0.4;
+                    w.Speed = w.Speed <= 0 ? wi : w.Speed * 0.85 + wi * 0.15;
                 }
                 if (sw.ElapsedMilliseconds - lastSave >= _opt.StateSaveInterval.TotalMilliseconds)
                 {

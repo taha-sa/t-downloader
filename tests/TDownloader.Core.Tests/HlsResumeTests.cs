@@ -82,7 +82,9 @@ public class HlsResumeTests : IDisposable
         using var cts = new CancellationTokenSource();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(item, p =>
         {
-            if (p.Downloaded >= (long)afterSegments * SegBytes) cts.Cancel();
+            // Bayt bazlı ilerleme parça bitmeden de artar; eşik için diskte tamamlanmış parça sayısına bakılır.
+            var d = HlsDir(root, item);
+            if (Directory.Exists(d) && Directory.GetFiles(d, "*.seg").Length >= afterSegments) cts.Cancel();
         }, cts.Token));
         var hls = HlsDir(root, item);
         Assert.True(Directory.Exists(hls), "duraklatınca hls klasörü korunmalı");
