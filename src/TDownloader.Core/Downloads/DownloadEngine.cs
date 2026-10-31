@@ -51,6 +51,7 @@ public sealed class DownloadEngine : IDisposable
     private bool _ranges;
     private string? _etag;
     private int _splitCount;
+    private int _retiredWorkers;
 
     public DownloadItem Item => _item;
     /// <summary>Dinamik bölmenin kaç kez gerçekleştiği.</summary>
@@ -251,13 +252,13 @@ public sealed class DownloadEngine : IDisposable
                     long? cl = resp.Content.Headers.ContentLength;
                     return (cl ?? -1, false, etag);
                 }
-                throw new HttpRequestException($"HTTP {(int)resp.StatusCode}", null, resp.StatusCode);
+                throw HttpStatusException.From(resp);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) when (IsRetryable(ex))
             {
                 if (++attempt > _opt.MaxRetries) throw;
-                await Task.Delay(Backoff(attempt), ct).ConfigureAwait(false);
+                await Task.Delay(Backoff(attempt, ex), ct).ConfigureAwait(false);
             }
         }
     }
@@ -271,9 +272,26 @@ public sealed class DownloadEngine : IDisposable
             while (!ct.IsCancellationRequested)
             {
                 Segment? seg = TakeSegment(w);
-                if (seg == null) break;
+                if (seg == null)
+                {
+                    // Tüm parçalar bitmediyse bekle: başka bir işçi emekli olursa parçasını devralabilmeliyiz.
+                    if (!HasUnfinishedSegment()) break;
+                    w.State = ConnectionState.Idle;
+                    await Task.Delay(25, ct).ConfigureAwait(false);
+                    continue;
+                }
                 w.Seg = seg;
-                await DownloadSegmentAsync(w, seg, ct).ConfigureAwait(false);
+                try
+                {
+                    await DownloadSegmentAsync(w, seg, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex) when (IsRetryable(ex))
+                {
+                    // Bağlantı hatası bütçesi doldu: yalnızca BU işçi emekli olur, parçası kuyruğa döner.
+                    RetireWorker(w, seg, ex);
+                    return;
+                }
             }
             w.State = ct.IsCancellationRequested ? ConnectionState.Idle : ConnectionState.Done;
         }
@@ -283,9 +301,31 @@ public sealed class DownloadEngine : IDisposable
         }
         catch (Exception ex)
         {
+            // Kalıcı hata (401/403/404/410, Range desteklenmiyor, disk hatası...): tüm indirme başarısız.
             w.State = ConnectionState.Failed;
             Interlocked.CompareExchange(ref _fatal, ex, null);
             try { _cts?.Cancel(); } catch (ObjectDisposedException) { }
+        }
+    }
+
+    private void RetireWorker(Worker w, Segment seg, Exception ex)
+    {
+        lock (_gate) { seg.Assigned = false; seg.Reserved = seg.Position; }
+        w.State = ConnectionState.Failed;
+        if (Interlocked.Increment(ref _retiredWorkers) >= _workers.Count)
+        {
+            // Hiç işçi kalmadı: hepsi art arda başarısız oldu.
+            Interlocked.CompareExchange(ref _fatal, ex, null);
+            try { _cts?.Cancel(); } catch (ObjectDisposedException) { }
+        }
+    }
+
+    private bool HasUnfinishedSegment()
+    {
+        lock (_gate)
+        {
+            foreach (var s in _segments) if (s.Position < s.End) return true;
+            return false;
         }
     }
 
@@ -350,7 +390,7 @@ public sealed class DownloadEngine : IDisposable
                     cts.CancelAfter(_opt.ReadTimeout);
                     using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
                     if (!resp.IsSuccessStatusCode)
-                        throw new HttpRequestException($"HTTP {(int)resp.StatusCode}", null, resp.StatusCode);
+                        throw HttpStatusException.From(resp);
                     if (_ranges && resp.StatusCode != HttpStatusCode.PartialContent)
                         throw new NonRetryableException("Sunucu Range isteğine parçalı yanıt vermedi.");
 
@@ -401,7 +441,7 @@ public sealed class DownloadEngine : IDisposable
                     if (++attempt > _opt.MaxRetries) throw;
                     w.State = ConnectionState.Retrying;
                     w.Retries++;
-                    await Task.Delay(Backoff(attempt), ct).ConfigureAwait(false);
+                    await Task.Delay(Backoff(attempt, ex), ct).ConfigureAwait(false);
                 }
             }
         }
@@ -423,10 +463,15 @@ public sealed class DownloadEngine : IDisposable
             or System.Net.Sockets.SocketException;
     }
 
-    private TimeSpan Backoff(int attempt)
+    /// <summary>Üstel bekleme + jitter; 429/503'te sunucunun Retry-After süresi alt sınır olur.</summary>
+    private TimeSpan Backoff(int attempt, Exception? ex = null)
     {
         var ms = _opt.RetryBaseDelay.TotalMilliseconds * Math.Pow(2, Math.Min(attempt - 1, 5));
-        return TimeSpan.FromMilliseconds(Math.Min(ms, 30_000));
+        ms = Math.Min(ms, 30_000);
+        ms *= 1.0 + Random.Shared.NextDouble() * 0.5;
+        if (ex is HttpStatusException { RetryAfter: { } ra })
+            ms = Math.Max(ms, Math.Min(ra.TotalMilliseconds, HttpStatusException.MaxRetryAfter.TotalMilliseconds));
+        return TimeSpan.FromMilliseconds(ms);
     }
 
     // ------------------------------------------------------------------ ilerleme / durum

@@ -54,6 +54,28 @@ internal sealed class NonRetryableException : Exception
     public NonRetryableException(string m) : base(m) { }
 }
 
+/// <summary>HTTP durum kodlu hata; 429/503 için sunucunun Retry-After süresini taşır.</summary>
+internal sealed class HttpStatusException : HttpRequestException
+{
+    public static readonly TimeSpan MaxRetryAfter = TimeSpan.FromMinutes(2);
+    public TimeSpan? RetryAfter { get; }
+
+    private HttpStatusException(string message, HttpStatusCode code, TimeSpan? retryAfter) : base(message, null, code)
+    {
+        RetryAfter = retryAfter;
+    }
+
+    public static HttpStatusException From(HttpResponseMessage resp)
+    {
+        TimeSpan? ra = null;
+        var h = resp.Headers.RetryAfter;
+        if (h?.Delta is { } d) ra = d;
+        else if (h?.Date is { } dt) ra = dt - DateTimeOffset.UtcNow;
+        if (ra is { } r && r < TimeSpan.Zero) ra = TimeSpan.Zero;
+        return new HttpStatusException($"HTTP {(int)resp.StatusCode}", resp.StatusCode, ra);
+    }
+}
+
 internal sealed class SegmentState { public long Start { get; set; } public long End { get; set; } public long Position { get; set; } }
 
 internal sealed class EngineState
