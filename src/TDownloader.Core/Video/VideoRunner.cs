@@ -26,9 +26,14 @@ public sealed class VideoRunner : IExternalRunner
         Directory.CreateDirectory(dir);
         string outBase = Path.Combine(dir, Path.GetFileNameWithoutExtension(item.SavePath));
         string? error;
+        // Parçalar DwnlData\<id>\hls\ altında saklanır: duraklat/yarıda kalma sonrası yalnızca eksik parçalar iner.
+        string idDir = Path.Combine(_yt.Paths.DwnlDataDir, item.Id);
+        string hlsDir = Path.Combine(idDir, "hls");
         try
         {
-            var path = await _hls.DownloadAsync(variant, audio, ContextOf(item), outBase, new HlsClient.Options(_yt.FindFfmpeg()), report, ct).ConfigureAwait(false);
+            var opt = new HlsClient.Options(_yt.FindFfmpeg(), WorkDir: hlsDir, Log: m => System.Diagnostics.Debug.WriteLine(m));
+            var path = await _hls.DownloadAsync(variant, audio, ContextOf(item), outBase, opt, report, ct).ConfigureAwait(false);
+            TryDeleteEmpty(idDir);
             return new ExternalResult(true, null, path);
         }
         catch (OperationCanceledException) { throw; }
@@ -46,6 +51,18 @@ public sealed class VideoRunner : IExternalRunner
             Cookie = item.Cookie, UserAgent = item.UserAgent, Kind = DownloadKind.External,
             ExternalFormat = height > 0 ? $"bv*[height<={height}]+ba/b[height<={height}]/b" : "bv*+ba/b",
         };
-        return await _yt.RunAsync(fallback, report, ct).ConfigureAwait(false);
+        var res = await _yt.RunAsync(fallback, report, ct).ConfigureAwait(false);
+        if (res.Success)
+        {
+            try { if (Directory.Exists(hlsDir)) Directory.Delete(hlsDir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            TryDeleteEmpty(idDir);
+        }
+        return res;
+    }
+
+    private static void TryDeleteEmpty(string dir)
+    {
+        try { if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any()) Directory.Delete(dir); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }

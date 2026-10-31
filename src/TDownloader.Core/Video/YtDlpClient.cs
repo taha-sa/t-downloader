@@ -28,6 +28,8 @@ public sealed class YtDlpClient : IExternalRunner
         _settings = settings; _paths = paths; _appBase = appBaseDir ?? AppContext.BaseDirectory;
     }
 
+    public AppPaths Paths => _paths;
+
     public string? FindYtDlp() => ToolLocator.Find("yt-dlp", _settings().YtDlpPath, _paths.ToolsDir, _appBase);
     public string? FindFfmpeg() => ToolLocator.Find("ffmpeg", _settings().FfmpegPath, _paths.ToolsDir, _appBase);
 

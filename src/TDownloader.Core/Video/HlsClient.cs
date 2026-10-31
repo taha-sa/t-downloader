@@ -146,7 +146,12 @@ public sealed class HlsClient
 
     // ---------------------------------------------------------------- indirme
 
-    public sealed record Options(string? FfmpegPath, int Parallel = 6, int Retries = 4, TimeSpan? RetryDelay = null);
+    /// <param name="WorkDir">Kalıcı çalışma klasörü (ör. DwnlData\&lt;id&gt;\hls). Verilirse parçalar burada saklanır ve
+    /// duraklat/yarıda kalma sonrası yalnızca eksik parçalar indirilir; yalnızca başarıda silinir. Verilmezse
+    /// outBase + ".hlstmp" kullanılır ve her durumda silinir.</param>
+    /// <param name="Log">İsteğe bağlı tanı günlüğü (devam/baştan başlama kararları).</param>
+    public sealed record Options(string? FfmpegPath, int Parallel = 6, int Retries = 4, TimeSpan? RetryDelay = null,
+        string? WorkDir = null, Action<string>? Log = null);
 
     private sealed class Progress
     {
@@ -157,6 +162,13 @@ public sealed class HlsClient
         public int Total;
         public double DoneDur, TotalDur;
         public Progress(Action<ExternalProgress> report) { _report = report; }
+        /// <summary>Devamda önceden inmiş parçaları hız penceresini bozmadan sayar ve ilk ilerlemeyi bildirir.</summary>
+        public void Seed(long bytes, double dur)
+        {
+            lock (this) { Bytes += bytes; DoneDur += dur; }
+            if (bytes > 0) Report(0, 0);
+        }
+        public void AddBytes(long add) { lock (this) Bytes += add; }
         public void Report(long add, double dur)
         {
             lock (this)
@@ -176,22 +188,25 @@ public sealed class HlsClient
 
     /// <summary>
     /// Format = <see cref="MakeFormat"/>. Çıktı: outBase + ".mp4" (ffmpeg varsa) veya ".ts"/".mp4" ham birleşim.
-    /// Dönen yol son dosyadır.
+    /// Dönen yol son dosyadır. Parçalar çalışma klasöründe ayrı dosyalar olarak durur (bkz. <see cref="Options.WorkDir"/>).
     /// </summary>
     public async Task<string> DownloadAsync(string variantUrl, string? audioUrl, MediaContext? ctx, string outBase, Options opt,
         Action<ExternalProgress> report, CancellationToken ct)
     {
         ctx ??= MediaContext.Empty;
-        string tmpDir = outBase + ".hlstmp";
+        bool persistent = opt.WorkDir != null;
+        string tmpDir = opt.WorkDir ?? (outBase + ".hlstmp");
         Directory.CreateDirectory(tmpDir);
         var prog = new Progress(report);
+        var store = new HlsStateStore(tmpDir, variantUrl, audioUrl);
+        bool success = false;
         try
         {
-            var videoRaw = await DownloadTrackAsync(variantUrl, ctx, Path.Combine(tmpDir, "v"), opt, prog, ct, countTotals: true).ConfigureAwait(false);
+            var videoRaw = await DownloadTrackAsync(variantUrl, ctx, tmpDir, "", opt, prog, store, ct, countTotals: true).ConfigureAwait(false);
             (string path, bool fmp4)? audioRaw = null;
             if (audioUrl != null && opt.FfmpegPath != null)
             {
-                try { audioRaw = await DownloadTrackAsync(audioUrl, ctx, Path.Combine(tmpDir, "a"), opt, prog, ct, countTotals: false).ConfigureAwait(false); }
+                try { audioRaw = await DownloadTrackAsync(audioUrl, ctx, tmpDir, "a-", opt, prog, store, ct, countTotals: false).ConfigureAwait(false); }
                 catch (HlsException) { audioRaw = null; }   // ayrı ses alınamazsa görüntüyle yetin
             }
 
@@ -206,21 +221,27 @@ public sealed class HlsClient
                 if (audioRaw != null) { args.AddRange(new[] { "-map", "0:v:0?", "-map", "1:a:0?" }); }
                 args.AddRange(new[] { "-movflags", "+faststart", final });
                 if (await RunFfmpegAsync(ffmpeg, args, ct).ConfigureAwait(false) && File.Exists(final) && new FileInfo(final).Length > 0)
-                    return final;
+                { success = true; return final; }
                 // ffmpeg başarısız (ör. ses bsf'i uymadı): ham birleşimi koru
                 if (File.Exists(final)) { try { File.Delete(final); } catch (IOException) { } }
                 args = new List<string> { "-y", "-hide_banner", "-loglevel", "error", "-i", videoRaw.path, "-c", "copy", final };
                 if (await RunFfmpegAsync(ffmpeg, args, ct).ConfigureAwait(false) && File.Exists(final) && new FileInfo(final).Length > 0)
-                    return final;
+                { success = true; return final; }
             }
             string raw = outBase + (videoRaw.fmp4 ? ".mp4" : ".ts");
             if (File.Exists(raw)) File.Delete(raw);
             File.Move(videoRaw.path, raw);
+            success = true;
             return raw;
         }
         finally
         {
-            try { Directory.Delete(tmpDir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            // Kalıcı kipte yalnızca başarıda silinir: duraklat/hata sonrası inmiş parçalar devam için saklanır.
+            if (!persistent || success)
+            {
+                try { Directory.Delete(tmpDir, true); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+            else store.Save();
         }
     }
 
@@ -245,9 +266,10 @@ public sealed class HlsClient
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { return false; }
     }
 
-    private async Task<(string path, bool fmp4)> DownloadTrackAsync(string playlistUrl, MediaContext ctx, string outPath, Options opt,
-        Progress prog, CancellationToken ct, bool countTotals)
+    private async Task<(string path, bool fmp4)> DownloadTrackAsync(string playlistUrl, MediaContext ctx, string workDir, string prefix, Options opt,
+        Progress prog, HlsStateStore store, CancellationToken ct, bool countTotals)
     {
+        // Devamda playlist HER ZAMAN yeniden çekilir: imzalı eski segment URL'leri kullanılmaz.
         string text = await GetTextAsync(playlistUrl, ctx, ct).ConfigureAwait(false);
         if (!HlsParser.LooksLikeHls(text)) throw new HlsException("Adres bir HLS playlist'i değil.");
         string mediaUrl = playlistUrl;
@@ -267,64 +289,142 @@ public sealed class HlsClient
 
         bool fmp4 = media.Map != null || media.Segments[0].Url.Split('?')[0].EndsWith(".m4s", StringComparison.OrdinalIgnoreCase)
                     || media.Segments[0].Url.Split('?')[0].EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
-        if (countTotals) { lock (prog) { prog.Total = media.Segments.Count; prog.TotalDur = media.TotalDuration; } }
+        int count = media.Segments.Count;
+        if (countTotals) { lock (prog) { prog.Total = count; prog.TotalDur = media.TotalDuration; } }
+
+        // ---- önceki durumla karşılaştır
+        var cur = HlsStateStore.Describe(prefix, playlistUrl, media, fmp4);
+        var prev = store.TryLoadTrack(prefix);
+        if (prev != null)
+        {
+            bool sameList = prev.Count == cur.Count && prev.DurationsHash == cur.DurationsHash && prev.Fmp4 == cur.Fmp4
+                            && prev.PlaylistUrl == cur.PlaylistUrl && prev.HasMap == cur.HasMap;
+            if (!sameList)
+            {
+                opt.Log?.Invoke($"HLS devam: playlist uyuşmuyor (parça {prev.Count}->{cur.Count}); önceki parçalar silindi, baştan başlanıyor.");
+                HlsStateStore.WipeTrack(workDir, prefix);
+            }
+            else if (prev.UrlsHash != cur.UrlsHash)
+                opt.Log?.Invoke("HLS devam: parça adresleri değişmiş (imzalı URL), sayı/süre aynı; mevcut parçalar korunuyor.");
+            else
+                opt.Log?.Invoke("HLS devam: playlist aynı; yalnızca eksik parçalar indirilecek.");
+        }
+        else HlsStateStore.WipeTrack(workDir, prefix);   // durum yok: artık/yetim dosyalara güvenme
+        HlsStateStore.DeleteTemps(workDir, prefix);
+        store.SetTrack(cur);
+        store.Save();
 
         var keyCache = new Dictionary<string, byte[]>();
         var keyLock = new SemaphoreSlim(1, 1);
         string cookieHost = new Uri(mediaUrl).Host;
 
-        async Task<byte[]> GetKey(string uri)
+        async Task<byte[]> GetKey(string uri, CancellationToken tk)
         {
-            await keyLock.WaitAsync(ct).ConfigureAwait(false);
+            await keyLock.WaitAsync(tk).ConfigureAwait(false);
             try
             {
                 if (keyCache.TryGetValue(uri, out var k)) return k;
-                k = await FetchBytesAsync(uri, ctx, cookieHost, 0, -1, opt, ct).ConfigureAwait(false);
-                if (k.Length != 16) throw new HlsException("AES anahtarı geçersiz (" + k.Length + " bayt).");
+                string cacheFile = Path.Combine(workDir, "key-" + HlsStateStore.ShortHash(uri) + ".key");
+                try
+                {
+                    k = await FetchBytesAsync(uri, ctx, cookieHost, 0, -1, opt, tk).ConfigureAwait(false);
+                    if (k.Length != 16) throw new HlsException("AES anahtarı geçersiz (" + k.Length + " bayt).");
+                    if (opt.WorkDir != null) { try { File.WriteAllBytes(cacheFile, k); } catch (IOException) { } }
+                }
+                catch (HlsException) when (opt.WorkDir != null && File.Exists(cacheFile) && new FileInfo(cacheFile).Length == 16)
+                {
+                    k = File.ReadAllBytes(cacheFile);   // anahtar adresi süresi dolmuş olabilir: önbellek
+                }
                 return keyCache[uri] = k;
             }
             finally { keyLock.Release(); }
         }
 
-        async Task<byte[]> Fetch(HlsSegment s)
+        async Task<byte[]> Fetch(HlsSegment s, CancellationToken tk)
         {
-            var data = await FetchBytesAsync(s.Url, ctx, cookieHost, s.ByteOffset, s.ByteLength, opt, ct).ConfigureAwait(false);
+            var data = await FetchBytesAsync(s.Url, ctx, cookieHost, s.ByteOffset, s.ByteLength, opt, tk).ConfigureAwait(false);
             if (s.Key is { Method: "AES-128" } key && key.Uri != null)
             {
-                var k = await GetKey(key.Uri).ConfigureAwait(false);
+                var k = await GetKey(key.Uri, tk).ConfigureAwait(false);
                 var iv = key.Iv ?? SequenceIv(s.Sequence);
                 data = Decrypt(data, k, iv);
             }
             return fmp4 ? data : StripFakeHeader(data);
         }
 
-        using var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write, FileShare.Read, 1 << 16);
-        if (media.Map != null)
+        // init segment (fMP4)
+        string initFile = Path.Combine(workDir, prefix + "init.map");
+        if (media.Map != null && !(File.Exists(initFile) && new FileInfo(initFile).Length > 0))
         {
             var init = await FetchBytesAsync(media.Map.Url, ctx, cookieHost, media.Map.ByteOffset, media.Map.ByteLength, opt, ct).ConfigureAwait(false);
-            await fs.WriteAsync(init, ct).ConfigureAwait(false);
+            await HlsStateStore.WriteAtomicAsync(initFile, init, ct).ConfigureAwait(false);
         }
 
-        // Sıralı yazım, sınırlı paralel indirme: en çok Parallel parça uçuşta.
-        int par = Math.Clamp(opt.Parallel, 1, 16);
-        var inflight = new Queue<(Task<byte[]> t, double dur)>();
-        int next = 0;
-        while (next < media.Segments.Count || inflight.Count > 0)
+        // ---- inmiş parçalar: kaynak gerçeği dosya varlığı + boyut > 0
+        var missing = new List<int>();
+        long seedBytes = 0; double seedDur = 0; int done = 0;
+        for (int i = 0; i < count; i++)
         {
-            while (next < media.Segments.Count && inflight.Count < par)
-            {
-                var seg = media.Segments[next++];
-                inflight.Enqueue((Task.Run(() => Fetch(seg), ct), seg.Duration));
-            }
-            var (task, dur) = inflight.Dequeue();
-            byte[] data;
-            try { data = await task.ConfigureAwait(false); }
-            catch { foreach (var (t, _) in inflight) _ = t.ContinueWith(x => _ = x.Exception, TaskContinuationOptions.OnlyOnFaulted); throw; }
-            await fs.WriteAsync(data, ct).ConfigureAwait(false);
-            if (countTotals) prog.Report(data.Length, dur); else { lock (prog) { prog.Bytes += data.Length; } }
+            var fi = new FileInfo(HlsStateStore.SegPath(workDir, prefix, i));
+            if (fi.Exists && fi.Length > 0) { seedBytes += fi.Length; seedDur += media.Segments[i].Duration; done++; }
+            else missing.Add(i);
         }
-        await fs.FlushAsync(ct).ConfigureAwait(false);
+        if (done > 0) opt.Log?.Invoke($"HLS: {done}/{count} parça zaten inmiş, {missing.Count} parça indirilecek.");
+        if (countTotals) prog.Seed(seedBytes, seedDur); else prog.AddBytes(seedBytes);
+        store.SetCompleted(prefix, done);
+
+        // ---- eksikleri sınırlı paralellikle indir
+        if (missing.Count > 0)
+        {
+            int par = Math.Clamp(opt.Parallel, 1, 16);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            int cursor = -1;
+            Exception? firstError = null;
+            async Task Worker()
+            {
+                try
+                {
+                    while (true)
+                    {
+                        int k = Interlocked.Increment(ref cursor);
+                        if (k >= missing.Count) return;
+                        linked.Token.ThrowIfCancellationRequested();
+                        int idx = missing[k];
+                        var seg = media.Segments[idx];
+                        var data = await Fetch(seg, linked.Token).ConfigureAwait(false);
+                        await HlsStateStore.WriteAtomicAsync(HlsStateStore.SegPath(workDir, prefix, idx), data, linked.Token).ConfigureAwait(false);
+                        store.SegmentDone(prefix);
+                        if (countTotals) prog.Report(data.Length, seg.Duration); else prog.AddBytes(data.Length);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (ex is not OperationCanceledException) Interlocked.CompareExchange(ref firstError, ex, null);
+                    try { linked.Cancel(); } catch (ObjectDisposedException) { }
+                }
+            }
+            await Task.WhenAll(Enumerable.Range(0, Math.Min(par, missing.Count)).Select(_ => Task.Run(Worker))).ConfigureAwait(false);
+            store.Save();
+            ct.ThrowIfCancellationRequested();
+            if (firstError != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstError).Throw();
+        }
+
+        // ---- sırayla birleştir
+        string outPath = Path.Combine(workDir, prefix == "" ? "merged.v" : "merged.a");
+        using (var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write, FileShare.Read, 1 << 16))
+        {
+            if (media.Map != null) await CopyFileAsync(initFile, fs, ct).ConfigureAwait(false);
+            for (int i = 0; i < count; i++)
+                await CopyFileAsync(HlsStateStore.SegPath(workDir, prefix, i), fs, ct).ConfigureAwait(false);
+            await fs.FlushAsync(ct).ConfigureAwait(false);
+        }
         return (outPath, fmp4);
+    }
+
+    private static async Task CopyFileAsync(string path, Stream dest, CancellationToken ct)
+    {
+        await using var src = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
+        await src.CopyToAsync(dest, 1 << 16, ct).ConfigureAwait(false);
     }
 
     private async Task<byte[]> FetchBytesAsync(string url, MediaContext ctx, string cookieHost, long offset, long length, Options opt, CancellationToken ct)
