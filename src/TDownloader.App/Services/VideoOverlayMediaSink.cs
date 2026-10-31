@@ -21,6 +21,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         public readonly Dictionary<int, List<MediaItem>> Frames = new();
         public readonly Dictionary<string, long> Seen = new(StringComparer.Ordinal);   // url -> geliş sırası
         public long Counter;
+        public DateTime LastUsed = DateTime.UtcNow;
         public IEnumerable<MediaItem> Items => Frames.Values.SelectMany(x => x);
     }
 
@@ -39,9 +40,14 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     private IntPtr _menuBrowser;
     private string _menuTitle = "";
 
-    // yt-dlp bilgisi sayfa açılınca arka planda alınır; menü açılınca hazır olur.
+    // Kalite bilgisi: kilitli, sınırlı (son 50) ve ömürlü (10 dk) önbellek; aynı kaynak için devam eden iş paylaşılır,
+    // tüm bekleyenler vazgeçince iş iptal edilir (yt-dlp süreci öldürülür). Anahtar imzasız URL.
+    private const int InfoCapacity = 50, MaxTabs = 64;
     private static readonly TimeSpan InfoTtl = TimeSpan.FromMinutes(10);
-    private readonly Dictionary<string, (DateTime At, Task<VideoInfo> Task)> _info = new(StringComparer.Ordinal);
+    private readonly SharedTaskCache<VideoInfo> _info = new(InfoCapacity, InfoTtl);
+    // Aynı anda en fazla 2 yt-dlp -J (CPU/bellek/ağ patlamasını önler).
+    private readonly SemaphoreSlim _ytGate = new(2, 2);
+    private readonly Dictionary<string, (int TabId, CancellationTokenSource Cts)> _running = new();   // requestId -> iptal
 
     public VideoOverlayMediaSink(YtDlpClient yt) { _yt = yt; }
 
@@ -67,11 +73,33 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     public void OnMedia(MediaMessage m) => Post(() =>
     {
         var t = Tab(m.TabId);
-        t.Frames[m.FrameId] = m.Items ?? new();
+        // Append=true: yalnızca yeni öğeler gelir, mevcut listeye eklenir; değilse çerçeve listesi değiştirilir (boş = temizle).
+        t.Frames.TryGetValue(m.FrameId, out var existing);
+        t.Frames[m.FrameId] = MediaMerge.Merge(existing, m);
         foreach (var i in m.Items ?? new()) if (!t.Seen.ContainsKey(i.Url)) t.Seen[i.Url] = ++t.Counter;
+        if (t.Seen.Count > 300)   // sınırsız büyümesin: artık hiçbir çerçevede olmayan adresleri at
+        {
+            var live = new HashSet<string>(t.Items.Select(i => i.Url), StringComparer.Ordinal);
+            foreach (var k in t.Seen.Keys.Where(k => !live.Contains(k)).ToList()) t.Seen.Remove(k);
+        }
         if (!string.IsNullOrEmpty(m.PageUrl)) t.PageUrl = m.PageUrl;
         if (!string.IsNullOrEmpty(m.PageTitle)) t.PageTitle = m.PageTitle;
     });
+
+    public void OnTabClosed(int tabId) => Post(() =>
+    {
+        _tabs.Remove(tabId);
+        _hiddenTabs.Remove(tabId);
+        foreach (var kv in _running.Where(r => r.Value.TabId == tabId).ToList()) CancelRunning(kv.Key);
+        if (_tabId == tabId) { _tabId = -1; _raw = null; HideWin(); }
+    });
+
+    public void OnQualitiesCancel(string requestId) => Post(() => CancelRunning(requestId));
+
+    private void CancelRunning(string requestId)
+    {
+        if (_running.Remove(requestId, out var r)) { try { r.Cts.Cancel(); } catch (ObjectDisposedException) { } }
+    }
 
     // Eklenti saniyede onlarca konum mesajı gönderebilir; UI thread'ine yalnızca sekme başına en sonuncusu gider.
     private readonly TDownloader.Core.Util.LatestCoalescer<int, VideoGeometryMessage> _geo = new();
@@ -106,7 +134,16 @@ public sealed class VideoOverlayMediaSink : IMediaSink
 
     private TabState Tab(int id)
     {
-        if (!_tabs.TryGetValue(id, out var t)) _tabs[id] = t = new TabState();
+        if (!_tabs.TryGetValue(id, out var t))
+        {
+            _tabs[id] = t = new TabState();
+            if (_tabs.Count > MaxTabs)   // üst sınır: en uzun süredir kullanılmayan (etkin olmayan) sekme atılır
+            {
+                var old = _tabs.Where(p => p.Key != id && p.Key != _tabId).OrderBy(p => p.Value.LastUsed).Select(p => p.Key).FirstOrDefault(-1);
+                if (old != -1) { _tabs.Remove(old); _hiddenTabs.Remove(old); }
+            }
+        }
+        t.LastUsed = DateTime.UtcNow;
         return t;
     }
 
@@ -259,28 +296,23 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     /// Önbellekteki (veya yeni başlatılan) kalite bilgisi görevi. HLS akışları önce master playlist'ten doğrudan okunur
     /// (yt-dlp'siz, çok hızlı); olmazsa yt-dlp'ye düşer. Başarısız/eskimiş görev yeniden başlatılır.
     /// </summary>
-    private Task<VideoInfo> InfoFor(string source, MediaContext ctx, bool hls, string? title)
-    {
-        var now = DateTime.UtcNow;
-        if (_info.TryGetValue(source, out var e) && now - e.At < InfoTtl && !e.Task.IsFaulted && !e.Task.IsCanceled)
-            return e.Task;
-        foreach (var k in _info.Where(p => now - p.Value.At >= InfoTtl).Select(p => p.Key).ToList()) _info.Remove(k);
-        var t = Task.Run(async () =>
+    private Task<VideoInfo> InfoFor(string source, MediaContext ctx, bool hls, string? title, CancellationToken waiter = default) =>
+        _info.GetOrStart(QualityCacheKey.For(source), async ct =>
         {
             if (hls)
             {
-                try { return await _hls.GetInfoAsync(source, ctx, title).ConfigureAwait(false); }
+                try { return await _hls.GetInfoAsync(source, ctx, title, ct).ConfigureAwait(false); }
                 catch (HlsException ex) when (ex.IsDrm) { throw new YtDlpException(ex.Message); }
                 catch (Exception ex) when (ex is HlsException or HttpRequestException or OperationCanceledException or UriFormatException)
                 {
+                    ct.ThrowIfCancellationRequested();
                     if (_yt.FindYtDlp() == null) throw new YtDlpException("Akış okunamadı: " + ex.Message);
                 }
             }
-            return await _yt.GetInfoAsync(source, ctx.Referer, default, ctx).ConfigureAwait(false);
-        });
-        _info[source] = (now, t);
-        return t;
-    }
+            await _ytGate.WaitAsync(ct).ConfigureAwait(false);
+            try { return await _yt.GetInfoAsync(source, ctx.Referer, ct, ctx).ConfigureAwait(false); }
+            finally { _ytGate.Release(); }
+        }, waiter);
 
     private void ShowMenu()
     {
@@ -410,16 +442,6 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     private MediaLog? _mlog;
     private MediaLog Mlog => _mlog ??= new MediaLog(((_svc as AppServices)?.Paths ?? AppPaths.Default).MediaLogFile);
 
-    private Task<VideoInfo> Cached(string key, Func<Task<VideoInfo>> make)
-    {
-        var now = DateTime.UtcNow;
-        if (_info.TryGetValue(key, out var e) && now - e.At < InfoTtl && !e.Task.IsFaulted && !e.Task.IsCanceled) return e.Task;
-        foreach (var k in _info.Where(p => now - p.Value.At >= InfoTtl).Select(p => p.Key).ToList()) _info.Remove(k);
-        var t = Task.Run(make);
-        _info[key] = (now, t);
-        return t;
-    }
-
     private static string MimeFromUrl(string url) => Path.GetExtension(url.Split('?', '#')[0]).ToLowerInvariant() switch
     {
         ".webm" => "video/webm", ".mkv" => "video/x-matroska", ".mov" => "video/quicktime", ".m4v" => "video/x-m4v", _ => "video/mp4",
@@ -436,12 +458,17 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         static QualitiesResultMessage Fail(string id, string msg, string code) => new(id, false, msg, code, null, null, null);
         if (_svc == null) return Fail(q.RequestId, "Uygulama hazır değil.", "error");
 
-        var tcs = new TaskCompletionSource<(Sources S, string? Title, string? Page, Snap Snap)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<(Sources S, string? Title, string? Page, Snap Snap, CancellationToken Ct)>(TaskCreationOptions.RunContinuationsAsynchronously);
         Post(() =>
         {
             try
             {
+                var cts = new CancellationTokenSource();
+                _running[q.RequestId] = (q.TabId, cts);
                 var tab = Tab(q.TabId);
+                // Çerezler medya mesajlarıyla gelmez; düğme tıklanınca tek seferde (origin -> başlık) gelir ve öğelere uygulanır.
+                if (q.Cookies is { Count: > 0 })
+                    foreach (var fk in tab.Frames.Keys.ToList()) tab.Frames[fk] = MediaCookies.Apply(tab.Frames[fk], q.Cookies);
                 if (!string.IsNullOrEmpty(q.PageUrl)) tab.PageUrl = q.PageUrl;
                 if (!string.IsNullOrEmpty(q.PageTitle)) tab.PageTitle = q.PageTitle;
                 var s = Resolve(tab, q.FrameId);
@@ -454,11 +481,19 @@ public sealed class VideoOverlayMediaSink : IMediaSink
                 var mine = hlsAll.Where(x => x.Frame == q.FrameId).ToList();
                 var hls = (mine.Count > 0 ? mine : hlsAll).Select(x => x.Item).DistinctBy(i => i.Url)
                     .OrderByDescending(i => tab.Seen.GetValueOrDefault(i.Url)).ToList();
-                tcs.TrySetResult((s, tab.PageTitle, tab.PageUrl, new Snap(all, hls, q.FrameUrl)));
+                tcs.TrySetResult((s, tab.PageTitle, tab.PageUrl, new Snap(all, hls, q.FrameUrl), cts.Token));
             }
             catch (Exception ex) { tcs.TrySetException(ex); }
         });
-        var (src, pageTitle, pageUrl, snap) = await tcs.Task.ConfigureAwait(false);
+        var (src, pageTitle, pageUrl, snap, reqCt) = await tcs.Task.ConfigureAwait(false);
+        try { return await BuildQualitiesAsync(q, src, pageTitle, pageUrl, snap, reqCt).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (reqCt.IsCancellationRequested) { return Fail(q.RequestId, "İptal edildi.", "error"); }
+        finally { Post(() => { if (_running.Remove(q.RequestId, out var r)) r.Cts.Dispose(); }); }
+    }
+
+    private async Task<QualitiesResultMessage> BuildQualitiesAsync(QualitiesMessage q, Sources src, string? pageTitle, string? pageUrl, Snap snap, CancellationToken reqCt)
+    {
+        static QualitiesResultMessage Fail(string id, string msg, string code) => new(id, false, msg, code, null, null, null);
 
         // Tanı günlüğü: bu sekme/çerçeve için bilinenler (host+yol; sorgu/imza/çerez YOK).
         var players = (q.Players ?? new()).Where(p => IsHttp(p.Url)).Take(40).ToList();
@@ -497,11 +532,11 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             hlsSource = cands[0].Url;
             ctx = snap.Hls.Count > 0 ? ContextOf(snap.Hls[0], pageUrl)
                 : new MediaContext(string.IsNullOrEmpty(q.FrameUrl) ? pageUrl : q.FrameUrl, null, null, null);
-            string key = "set|" + string.Join("|", cands.Select(c => c.Url));
+            string key = QualityCacheKey.ForSet(cands.Select(c => c.Url));
             try
             {
-                bool fresh = !_info.ContainsKey(key);
-                var info = await Cached(key, () => _hls.GetInfoSetAsync(cands, ctx, pageTitle, probeMaster: true, l => Mlog.Write("  " + l))).ConfigureAwait(false);
+                bool fresh = !_info.Contains(key);
+                var info = await _info.GetOrStart(key, _ => _hls.GetInfoSetAsync(cands, ctx, pageTitle, probeMaster: true, l => Mlog.Write("  " + l)), reqCt).ConfigureAwait(false);
                 if (!fresh) Mlog.Write("  (kalite listesi önbellekten)");
                 if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
                 streamOpts.AddRange(info.Options.Where(o => !o.Other));
@@ -510,6 +545,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             catch (HlsException ex) when (ex.IsDrm) { error = ex.Message; code = "error"; }
             catch (Exception ex) when (ex is HlsException or HttpRequestException or OperationCanceledException or UriFormatException)
             {
+                reqCt.ThrowIfCancellationRequested();
                 Mlog.Write("  hls-set başarısız: " + ex.Message);
                 // yt-dlp'ye düş (varsa): en yeni akış adresiyle
                 if (_yt.FindYtDlp() == null) { error = "Akış okunamadı: " + ex.Message; code = "error"; }
@@ -517,10 +553,11 @@ public sealed class VideoOverlayMediaSink : IMediaSink
                 {
                     try
                     {
-                        var info = await InfoFor(cands[0].Url, ctx, true, pageTitle).ConfigureAwait(false);
+                        var info = await InfoFor(cands[0].Url, ctx, true, pageTitle, reqCt).ConfigureAwait(false);
                         if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
                         streamOpts.AddRange(info.Options);
                     }
+                    catch (OperationCanceledException) when (reqCt.IsCancellationRequested) { throw; }
                     catch (YtDlpException yex) { error = yex.Message; code = "error"; }
                     catch (Exception yex) { error = yex.Message; code = "error"; }
                 }
@@ -534,10 +571,11 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             {
                 try
                 {
-                    var info = await InfoFor(streamSource, ctx, src.Hls, pageTitle).ConfigureAwait(false);
+                    var info = await InfoFor(streamSource, ctx, src.Hls, pageTitle, reqCt).ConfigureAwait(false);
                     if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
                     streamOpts.AddRange(info.Options);
                 }
+                catch (OperationCanceledException) when (reqCt.IsCancellationRequested) { throw; }
                 catch (YtDlpNotFoundException) { error = "yt-dlp bulunamadı."; code = "no_ytdlp"; }
                 catch (YtDlpException ex) { error = ex.Message; code = "error"; }
                 catch (Exception ex) { error = ex.Message; code = "error"; }

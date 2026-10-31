@@ -81,3 +81,21 @@ Yerel düğme penceresi (`videoGeometry` akışı) yalnızca `UseNativeVideoButt
   `accepted:true` dönerse eklenti tarayıcıdaki kopyayı iptal eder (çift indirme olmaz).
 - Sağ tık "Tüm linkleri indir": en fazla 10 isteklik paralel gruplar (seri 5 sn beklemesi yok).
 
+### Medya mesajı (artımlı) ve çerezler
+- `media.append` (bool, isteğe bağlı, varsayılan false): `true` ise `items` yalnızca YENİ öğelerdir ve App çerçevenin mevcut listesine ekler
+  (aynı URL atlanır, çerçeve başına en fazla 100); `false`/yok ise App çerçeve listesini DEĞİŞTİRİR (boş liste = temizle; sayfa değişince eklenti böyle gönderir).
+- `media.items[].cookies` artık GÖNDERİLMEZ (eski eklenti gönderirse App yine kullanır). Çerez yalnızca düğme tıklanınca,
+  `qualities.cookies` = `{ "<origin>": "a=b; c=d" }` (en fazla 12 origin) ile gelir; App bunları sekmedeki çerezsiz öğelere origin'ine göre uygular.
+- Eklenti, 600 KB'ı aşan `media` mesajını birden çok `append:true` mesajına böler (Host sınırı 1 MB). Host → tarayıcı yönünde 1 MB'ı aşan
+  `qualitiesResult` kırpılarak (seçenek listesi yarılanır) gönderilir ve `host.log`'a yazılır; kırpılamayan mesaj da log'lanır.
+- Parça (HLS/DASH segmenti) adresleri (`.ts`, `.m4s`, `video/mp2t`, manifest görülen sekmede `seg-N`/`chunk_N`...) medya listesine girmez.
+  `webRequest` yalnızca `media`, `xmlhttprequest`, `other`, `sub_frame` kaynak türlerinde dinlenir; statik kaynaklar (resim/css/js/yazı tipi) başlıklara bakılmadan elenir.
+  Sekme başına öğe üst sınırı 120, çerçeve başına 50, toplam grup 200.
+
+### Kalite istekleri
+- `{ "type":"qualities", ..., "cookies":{...} }` (yukarıya bakın). `requestId` düğmeden gelebilir.
+- `{ "type":"qualitiesCancel", "requestId" }` (eklenti → App): menü kapandı/sekme değişti/sekme kapandı; App ilgili yt-dlp sürecini öldürür
+  (başka bekleyen yoksa). App kalite bilgisini kilitli, en çok 50 kayıtlı ve 10 dk ömürlü önbellekte tutar (anahtar imzasız URL),
+  aynı kaynak için devam eden işi paylaşır ve aynı anda en fazla 2 `yt-dlp -J` çalıştırır.
+- `{ "type":"tabClosed", "tabId" }` (eklenti → App): sekme kapandı; App o sekmenin medya durumunu ve bekleyen kalite isteklerini temizler.
+

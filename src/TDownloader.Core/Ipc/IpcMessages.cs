@@ -17,6 +17,8 @@ namespace TDownloader.Core.Ipc;
 [JsonDerivedType(typeof(QualitiesMessage), "qualities")]
 [JsonDerivedType(typeof(QualitiesResultMessage), "qualitiesResult")]
 [JsonDerivedType(typeof(QualitySelectMessage), "qualitySelect")]
+[JsonDerivedType(typeof(QualitiesCancelMessage), "qualitiesCancel")]
+[JsonDerivedType(typeof(TabClosedMessage), "tabClosed")]
 public abstract record IpcMessage;
 
 public sealed record PingMessage : IpcMessage;
@@ -35,7 +37,11 @@ public sealed record DownloadResultMessage(string RequestId, bool Accepted) : Ip
 /// </summary>
 public sealed record MediaItem(string Url, string? Mime, string Kind, string? Referer = null, string? Origin = null, string? Cookies = null, string? UserAgent = null, long Size = -1);
 
-public sealed record MediaMessage(int TabId, int FrameId, string? PageUrl, string? PageTitle, List<MediaItem> Items, string? FrameUrl = null) : IpcMessage;
+/// <summary>
+/// Append=true: Items yalnızca YENİ öğelerdir, App mevcut çerçeve listesine ekler; false: App çerçeve listesini değiştirir
+/// (boş liste = temizle). Eski eklentiler Append göndermez (= değiştir).
+/// </summary>
+public sealed record MediaMessage(int TabId, int FrameId, string? PageUrl, string? PageTitle, List<MediaItem> Items, string? FrameUrl = null, bool Append = false) : IpcMessage;
 
 public sealed record RectInfo(double Left, double Top, double Right, double Bottom);
 public sealed record SizeInfo(double Width, double Height);
@@ -47,7 +53,13 @@ public sealed record VideoGeometryMessage(
 
 /// <summary>Sayfa içi düğme kalite listesi ister (eklenti -> App). Src: videonun currentSrc'si (http/https ise).</summary>
 public sealed record QualitiesMessage(string RequestId, int TabId, int FrameId, string? PageUrl, string? PageTitle, string? FrameUrl, string? Src,
-    List<PlayerSource>? Players = null) : IpcMessage;
+    List<PlayerSource>? Players = null, Dictionary<string, string>? Cookies = null) : IpcMessage;
+
+/// <summary>Kalite listesi isteğini iptal eder (menü kapandı/sekme değişti); App yt-dlp sürecini öldürür (eklenti -> App).</summary>
+public sealed record QualitiesCancelMessage(string RequestId) : IpcMessage;
+
+/// <summary>Sekme kapandı (eklenti -> App): App o sekmenin medya durumunu temizler.</summary>
+public sealed record TabClosedMessage(int TabId) : IpcMessage;
 
 /// <summary>Düğme tıklanınca eklentinin oynatıcı yapılandırmasından okuduğu kaynak (jwplayer/video.js/HLS.js/Playerjs/&lt;source&gt;).</summary>
 public sealed record PlayerSource(string Url, string? Label = null, int Height = 0);

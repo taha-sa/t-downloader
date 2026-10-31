@@ -167,9 +167,38 @@ public sealed class HostRunner
         }
     }
 
+    /// <summary>
+    /// Tarayıcıya giden mesaj 1 MB sınırını aşıyorsa kırpar (sessizce düşürmez): kalite listesi seçenekleri yarılanır;
+    /// kırpılamayan mesaj için null döner. Dönen baytlar sınır içindedir.
+    /// </summary>
+    public static byte[]? FitForBrowser(IpcMessage msg, out string? note)
+    {
+        note = null;
+        var bytes = Encoding.UTF8.GetBytes(IpcSerializer.Serialize(msg));
+        if (bytes.Length <= NativeMessaging.MaxMessageBytes) return bytes;
+        if (msg is QualitiesResultMessage { Options: { Count: > 1 } opts } q)
+        {
+            int n = opts.Count;
+            while (n > 1)
+            {
+                n /= 2;
+                var trimmed = Encoding.UTF8.GetBytes(IpcSerializer.Serialize(q with { Options = opts.Take(n).ToList() }));
+                if (trimmed.Length <= NativeMessaging.MaxMessageBytes)
+                {
+                    note = $"qualitiesResult {bytes.Length} bayt > sınır; seçenekler {opts.Count} -> {n} kırpıldı.";
+                    return trimmed;
+                }
+            }
+        }
+        note = $"{msg.GetType().Name} {bytes.Length} bayt > sınır ve kırpılamadı; düşürüldü.";
+        return null;
+    }
+
     private async Task WriteToBrowserAsync(IpcMessage msg, CancellationToken ct)
     {
-        var bytes = Encoding.UTF8.GetBytes(IpcSerializer.Serialize(msg));
+        var bytes = FitForBrowser(msg, out var note);
+        if (note != null) _log.Write("Giden mesaj: " + note);
+        if (bytes == null) return;
         await _outLock.WaitAsync(ct).ConfigureAwait(false);
         try { await NativeMessaging.WriteAsync(_stdout, bytes, ct).ConfigureAwait(false); }
         catch (MessageTooLargeException ex) { _log.Write("Giden mesaj reddedildi: " + ex.Message); }

@@ -42,10 +42,13 @@ export function buildMedia(p) {
     pageUrl: str(p.pageUrl),
     pageTitle: str(p.pageTitle),
     frameUrl: str(p.frameUrl),
-    // referer/origin/cookies/userAgent: iframe oynatıcıdan gelen akış için istek başlıkları (CONTRACT.md, isteğe bağlı alanlar)
+    // append:true -> items yalnızca YENİ öğelerdir, App mevcut listeye ekler; false/yok -> App listeyi değiştirir (boş liste = temizle).
+    append: p.append === true,
+    // referer/origin/userAgent: iframe oynatıcıdan gelen akış için istek başlıkları. Çerez öğeyle GİTMEZ; yalnızca kalite
+    // isteğinde (qualities.cookies, düğme tıklanınca) alınır.
     items: (p.items || []).map((i) => ({
       url: i.url, mime: str(i.mime), kind: i.kind,
-      referer: str(i.referer), origin: str(i.origin), cookies: str(i.cookies), userAgent: str(i.userAgent),
+      referer: str(i.referer), origin: str(i.origin), userAgent: str(i.userAgent),
       size: Number.isFinite(i.size) ? i.size : -1,        // bilinen toplam bayt (Content-Range/Content-Length), yoksa -1
     })),
   };
@@ -65,6 +68,10 @@ export function buildQualities(p) {
     players: (Array.isArray(p.players) ? p.players : [])
       .filter((x) => x && typeof x.url === "string" && x.url.length <= 2000).slice(0, 40)
       .map((x) => ({ url: x.url, label: str(x.label).slice(0, 40), height: Number.isFinite(x.height) ? Math.max(0, Math.round(x.height)) : 0 })),
+    // Düğme tıklanınca alınan çerezler: { origin: "a=b; c=d" } (en fazla 12 origin). Medya mesajlarıyla çerez gönderilmez.
+    cookies: Object.fromEntries(Object.entries(p.cookies && typeof p.cookies === "object" ? p.cookies : {})
+      .filter(([k, v]) => typeof k === "string" && typeof v === "string" && v.length > 0).slice(0, 12)
+      .map(([k, v]) => [k, v.slice(0, 8000)])),
   };
 }
 
@@ -103,6 +110,26 @@ export function originOf(url) {
   try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? u.origin : ""; } catch { return ""; }
 }
 
+// Kesin akış PARÇALARI (HLS/DASH segmenti): medya listesine tek tek girmez.
+const SEGMENT_EXT = /\.(?:ts|m4s|cmfv|cmfa|cmft|m4f|fmp4)(?:$|[?#])/i;
+const SEGMENT_MIME = /^(?:video\/mp2t|video\/iso\.segment|audio\/iso\.segment|video\/vnd\.dlna\.mpeg-tts)$/;
+// Manifest görülmüş bir sekmede parça gibi adlandırılmış dosyalar (seg-12.mp4, chunk_0003.aac, /00017.m4a ...).
+const SEGMENT_NAME = /(?:^|[\/_.-])(?:(?:seg|segment|chunk|frag|fragment)[-_]?\d+|init(?:[-_.]|$))|[\/_-]\d{3,}\.(?:mp4|m4a|m4v|aac|mp3)(?:$|[?#])|\/\d+\.(?:mp4|m4a|m4v|aac)(?:$|[?#])/i;
+export function isSegment(url, contentType = "", hasManifest = false) {
+  const u = url || "";
+  const ct = (contentType || "").split(";")[0].trim().toLowerCase();
+  if (SEGMENT_EXT.test(u) || SEGMENT_MIME.test(ct)) return true;
+  if (!hasManifest) return false;
+  return SEGMENT_NAME.test(u.split(/[?#]/)[0]) || /\.aac(?:$|[?#])/i.test(u);
+}
+
+// Medya olması imkansız statik kaynaklar (başlıkları incelemeye bile gerek yok). m3u8/mpd adresleri hariç tutulur.
+const NOISE_URL = /\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|css|m?js|map|woff2?|ttf|otf|eot|vtt|srt)(?:$|[?#])/i;
+export function isNoiseUrl(url) {
+  const u = url || "";
+  return NOISE_URL.test(u) && !HLS_URL.test(u) && !DASH_URL.test(u);
+}
+
 export function classifyMedia(url, contentType = "", contentLength = -1) {
   const path = (url || "").split(/[?#]/)[0].toLowerCase();
   const ct = (contentType || "").split(";")[0].trim().toLowerCase();
@@ -112,7 +139,7 @@ export function classifyMedia(url, contentType = "", contentLength = -1) {
   if (isMime || MEDIA_EXT.test(url || "")) {
     // Çok küçük yanıtlar (ses efekti, parça başlığı vb.) gürültüdür.
     if (contentLength >= 0 && contentLength < 50 * 1024) return null;
-    if (ct.startsWith("video/mp2t")) return null; // HLS parçaları
+    if (isSegment(url, ct)) return null;          // HLS/DASH parçaları (.ts/.m4s, video/mp2t ...)
     return "file";
   }
   return null;

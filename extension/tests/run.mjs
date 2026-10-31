@@ -12,8 +12,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const T = { s: "string", n: "number", b: "boolean" };
 const SCHEMAS = {
   download: { type: "s", requestId: "s", url: "s", referrer: "s", cookies: "s", userAgent: "s", filename: "s", mime: "s", fileSize: "n", explicit: "b" },
-  media: { type: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", items: "a" },
-  qualities: { type: "s", requestId: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", src: "s", players: "a" },
+  media: { type: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", append: "b", items: "a" },
+  qualities: { type: "s", requestId: "s", tabId: "n", frameId: "n", pageUrl: "s", pageTitle: "s", frameUrl: "s", src: "s", players: "a", cookies: "o" },
   qualitySelect: { type: "s", selectionId: "s", index: "n" },
   videoGeometry: {
     type: "s", tabId: "n", windowId: "n", visible: "b", fullscreen: "b", rect: "o",
@@ -32,7 +32,7 @@ function validate(msg) {
   }
   if (msg.type === "download") assert.equal(msg.type, "download");
   if (msg.type === "media") for (const i of msg.items) {
-    assert.deepEqual(Object.keys(i).sort(), ["cookies", "kind", "mime", "origin", "referer", "size", "url", "userAgent"]);
+    assert.deepEqual(Object.keys(i).sort(), ["kind", "mime", "origin", "referer", "size", "url", "userAgent"]);
     assert.ok(["hls", "dash", "file"].includes(i.kind));
   }
   if (msg.type === "videoGeometry") {
@@ -96,6 +96,7 @@ const proto = await import(url("lib/protocol.js"));
 const settings = await import(url("lib/settings.js"));
 const { readPlayers } = await import(url("lib/players.js"));
 const menus = await import(url("lib/menus.js"));
+const qlist = await import(url("lib/qualities.js"));
 assert.equal(capture.opts.timeoutMs, 15000, "App soğuk başlangıcı için 15 sn");
 
 capture.nameWait.totalMs = 150; capture.nameWait.stepMs = 30;
@@ -273,7 +274,7 @@ await test("iframe oynatıcı: Referer/Origin/çerez ve frameUrl akışla gider"
   const [a, b] = m.items;
   assert.equal(a.referer, "https://player.cdn.test/");
   assert.equal(a.origin, "https://player.cdn.test");
-  assert.equal(a.cookies, "a=1; b=2");
+  assert.equal(a.cookies, undefined, "çerez medya mesajıyla gitmez");
   assert.equal(a.userAgent, "TestUA/1.0");
   assert.equal(b.referer, "https://player.cdn.test/embed/abc");
   assert.equal(b.origin, "https://player.cdn.test");
@@ -609,6 +610,121 @@ await test("media: 206 Content-Range toplam boyutu kullanılır; boyut mesajda g
   media.clearTab(21);                                      // sayfa değişince App'e boş liste gider
   const e = sent.find((x) => x.type === "media" && x.tabId === 21);
   assert.deepEqual(e && e.items, []);
+});
+
+// ---- performans: segment/gürültü elemesi, artımlı media, çerez yalnızca tıklamada ----
+const hh = (n, v) => ({ name: n, value: v });
+const mediaMsgs = (tabId) => sent.filter((x) => x.type === "media" && x.tabId === tabId);
+await test("parça (.ts/.m4s/video/mp2t) ve statik kaynaklar listeye girmez; kota dolmaz", async () => {
+  sent.length = 0; media.opts.debounceMs = 20;
+  const before = { ...media.stats };
+  media.onResponse({ tabId: 40, frameId: 0, url: "https://c.test/v/master.m3u8", statusCode: 200, responseHeaders: [hh("Content-Type", "application/vnd.apple.mpegurl")] });
+  for (let i = 0; i < 400; i++) {
+    media.onResponse({ tabId: 40, frameId: 0, url: `https://c.test/v/seg-${i}.m4s`, statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "900000")] });
+    media.onResponse({ tabId: 40, frameId: 0, url: `https://c.test/v/${i}.ts`, statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp2t"), hh("Content-Length", "900000")] });
+    media.onResponse({ tabId: 40, frameId: 0, url: `https://c.test/v/chunk_${String(i).padStart(4, "0")}.mp4`, statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "900000")] });
+    media.onResponse({ tabId: 40, frameId: 0, url: `https://c.test/img/${i}.jpg`, statusCode: 200, responseHeaders: [hh("Content-Type", "image/jpeg")] });
+  }
+  media.onResponse({ tabId: 40, frameId: 0, url: "https://c.test/v/movie.mp4", statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "50000000")] });
+  await sleep(100);
+  const items = mediaMsgs(40).flatMap((m) => m.items);
+  assert.deepEqual(items.map((i) => i.url), ["https://c.test/v/master.m3u8", "https://c.test/v/movie.mp4"]);
+  assert.ok(media.stats.segments - before.segments >= 400);
+  assert.ok(media.stats.noise - before.noise >= 400);
+  media.clearTab(40);
+});
+await test("media artımlıdır: yalnızca yeni öğeler (append:true); tekrarlanan öğe yeniden gönderilmez", async () => {
+  sent.length = 0;
+  media.onResponse({ tabId: 41, frameId: 0, url: "https://v.test/a.mp4", statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  await sleep(80);
+  media.onResponse({ tabId: 41, frameId: 0, url: "https://v.test/b.mp4", statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  media.onResponse({ tabId: 41, frameId: 0, url: "https://v.test/a.mp4", statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  await sleep(80);
+  const ms = mediaMsgs(41);
+  assert.equal(ms.length, 2);
+  validate(ms[0]); validate(ms[1]);
+  assert.deepEqual(ms.map((m) => m.items.map((i) => i.url.slice(-5))), [["a.mp4"], ["b.mp4"]]);
+  assert.ok(ms.every((m) => m.append === true));
+  sent.length = 0; media.clearTab(41);
+  const clr = mediaMsgs(41)[0];
+  assert.equal(clr.append, false);                       // temizleme: App listeyi değiştirir
+  assert.deepEqual(clr.items, []);
+});
+await test("büyük media mesajı 1 MB sınırına karşı bölünür (sessizce düşmez)", () => {
+  const items = Array.from({ length: 50 }, (_, i) => ({ url: "https://v.test/" + "x".repeat(15000) + i + ".mp4", mime: "video/mp4", kind: "file" }));
+  const chunks = media.chunkItems(items, 200 * 1024);
+  assert.ok(chunks.length >= 4);
+  assert.equal(chunks.flat().length, 50);
+  assert.ok(chunks.every((c) => JSON.stringify(proto.buildMedia({ tabId: 1, items: c })).length < 220 * 1024));
+});
+await test("sekme başına öğe kotası ve grup üst sınırı", async () => {
+  sent.length = 0; media.opts.debounceMs = 5;
+  const oldTab = media.opts.maxTabItems; media.opts.maxTabItems = 30;
+  for (let f = 0; f < 3; f++) for (let i = 0; i < 40; i++)
+    media.onResponse({ tabId: 42, frameId: f, url: `https://v.test/f${f}/${i}.mp4`, statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  await sleep(60);
+  assert.equal(mediaMsgs(42).flatMap((m) => m.items).length, 30);
+  media.opts.maxTabItems = oldTab;
+  const oldG = media.opts.maxGroups; media.opts.maxGroups = 10;
+  for (let t = 100; t < 150; t++) media.onResponse({ tabId: t, frameId: 0, url: `https://v.test/${t}.mp4`, statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  assert.ok(media._debug().groups <= 10);
+  media.opts.maxGroups = oldG;
+  for (let t = 100; t < 150; t++) media.clearTab(t);
+  media.clearTab(42);
+  await sleep(30);
+});
+await test("closeTab: durum temizlenir ve App'e tabClosed gider", () => {
+  sent.length = 0;
+  media.onResponse({ tabId: 43, frameId: 0, url: "https://v.test/c.mp4", statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  media.closeTab(43);
+  assert.ok(sent.some((x) => x.type === "tabClosed" && x.tabId === 43));
+});
+await test("çerez yalnızca tıklamada: cookiesForTab origin başına bir kez; qualities.cookies şeması", async () => {
+  media.opts.debounceMs = 5;
+  media.onResponse({ tabId: 44, frameId: 0, url: "https://cdn1.test/a.mp4", statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  media.onResponse({ tabId: 44, frameId: 0, url: "https://cdn1.test/b.mp4", statusCode: 200, responseHeaders: [hh("Content-Type", "video/mp4"), hh("Content-Length", "9000000")] });
+  media.onResponse({ tabId: 44, frameId: 0, url: "https://cdn2.test/x.m3u8", statusCode: 200, responseHeaders: [hh("Content-Type", "application/x-mpegURL")] });
+  let calls2 = 0; const orig = chrome.cookies.getAll;
+  chrome.cookies.getAll = async () => { calls2++; return [{ name: "k", value: "v" }]; };
+  const map = await media.cookiesForTab(44);
+  chrome.cookies.getAll = orig;
+  assert.deepEqual(map, { "https://cdn1.test": "k=v", "https://cdn2.test": "k=v" });
+  assert.equal(calls2, 2);
+  validate(proto.buildQualities({ requestId: "q", tabId: 44, cookies: map }));
+  assert.deepEqual(proto.buildQualities({ requestId: "q", tabId: 44, cookies: { a: "x", b: 5 } }).cookies, { a: "x" });
+  media.clearTab(44);
+});
+await test("segment sezgisi: manifest yoksa seg-1.mp4 normal dosyadır", () => {
+  assert.equal(proto.isSegment("https://a/seg-1.mp4", "video/mp4", false), false);
+  assert.equal(proto.isSegment("https://a/seg-1.mp4", "video/mp4", true), true);
+  assert.equal(proto.isSegment("https://a/x.m4s", "video/mp4", false), true);
+  assert.equal(proto.isSegment("https://a/film.mp4", "video/mp4", true), false);
+  assert.equal(proto.isNoiseUrl("https://a/x.png?v=1"), true);
+  assert.equal(proto.isNoiseUrl("https://a/x.m3u8"), false);
+  assert.equal(proto.isNoiseUrl("https://a/get.php?id=1"), false);
+});
+
+await test("kalite istekleri: menü kapanınca/sekme değişince qualitiesCancel gider; tamamlananlar izlenmez", () => {
+  sent.length = 0;
+  const a = qlist.newId("abc12345"), b = qlist.newId("bad id!"), c = qlist.newId(undefined);
+  assert.equal(a, "abc12345"); assert.notEqual(b, "bad id!"); assert.ok(c.startsWith("q"));
+  qlist.track("r-a", 10); qlist.track("r-b", 11); qlist.track("r-c", 11);
+  assert.equal(qlist.pending(), 3);
+  qlist.done("r-c");
+  assert.equal(qlist.cancel("r-a"), true);
+  assert.equal(qlist.cancel("r-a"), false);                                   // ikinci kez gönderilmez
+  const gone = qlist.cancelWhere((tab) => tab === 11);                         // sekme değişti/kapandı
+  assert.deepEqual(gone, ["r-b"]);
+  assert.deepEqual(sent.filter((x) => x.type === "qualitiesCancel").map((x) => x.requestId), ["r-a", "r-b"]);
+  assert.equal(qlist.pending(), 0);
+  for (let i = 0; i < 80; i++) qlist.track("x" + i + "____", i);
+  assert.ok(qlist.pending() <= 50);
+  qlist.cancelWhere(() => true);
+});
+await test("button.js: menü kapanınca bekleyen kalite isteği iptal edilir (kaynakta tek gönderim noktası korunur)", () => {
+  const src = readFileSync(join(root, "button.js"), "utf8");
+  assert.ok(/kind:\s*"qualitiesCancel",\s*rid:\s*pendingRid/.test(src));
+  assert.equal((src.match(/kind:\s*"qualities"/g) || []).length, 1);
 });
 
 console.log(`\n${passed} test geçti`);

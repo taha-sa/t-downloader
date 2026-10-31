@@ -52,6 +52,14 @@ public sealed class IpcCoordinator : IAsyncDisposable
                 });
                 return Task.FromResult<IpcMessage?>(null);
 
+            case QualitiesCancelMessage qc:
+                try { _svc.Media.OnQualitiesCancel(qc.RequestId); } catch (Exception) { }
+                return Task.FromResult<IpcMessage?>(null);
+
+            case TabClosedMessage tc:
+                try { _svc.Media.OnTabClosed(tc.TabId); } catch (Exception) { }
+                return Task.FromResult<IpcMessage?>(null);
+
             case QualitySelectMessage qs:
                 try { _svc.Media.OnQualitySelect(qs); } catch (Exception) { }
                 return Task.FromResult<IpcMessage?>(null);

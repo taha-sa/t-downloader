@@ -151,7 +151,12 @@
   }
   function hide() { if (menuOpen) return; setShown(false); target = null; }
   function hideAll() { closeMenu(); setShown(false); target = null; }
-  function closeMenu() { menuOpen = false; menu.style.display = "none"; btn.classList.remove("on"); token++; }
+  // Kalite listesi okunurken menü kapanırsa (veya sekme/çerçeve gizlenirse) bekleyen istek iptal edilir (App yt-dlp'yi öldürür).
+  let pendingRid = null;
+  function closeMenu() {
+    menuOpen = false; menu.style.display = "none"; btn.classList.remove("on"); token++;
+    if (pendingRid) { send({ kind: "qualitiesCancel", rid: pendingRid }); pendingRid = null; }
+  }
 
   const videoAt = (x, y) => [...document.querySelectorAll("video")].find((v) => {
     const r = v.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
@@ -219,8 +224,11 @@
     drawMessage(title, `<span class="spin">⟳</span> Kaliteler okunuyor…`);
     const src = v && /^https?:/i.test(v.currentSrc || v.src || "") ? (v.currentSrc || v.src) : "";
     let done = false;
+    const rid = "q" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    pendingRid = rid;
     const fin = (r) => {
       if (done || my !== token) return; done = true;
+      if (pendingRid === rid) pendingRid = null;
       if (r && r.ok && r.options && r.options.length) return drawOptions(r);
       const code = r && r.errorCode;
       const msg = !r ? "T-Downloader yanıt vermedi. Uygulama çalışıyor mu?"
@@ -231,7 +239,7 @@
       if (rt) rt.onclick = () => { closeMenu(); openMenu(); };
     };
     setTimeout(() => fin(null), 100000);
-    send({ kind: "qualities", src }, fin);
+    send({ kind: "qualities", src, rid }, fin);
   }
   btn.addEventListener("click", (e) => {
     e.stopPropagation(); e.preventDefault();

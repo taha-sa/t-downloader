@@ -19,6 +19,10 @@ public interface IMediaSink
     Task<QualitiesResultMessage> GetQualitiesAsync(QualitiesMessage message);
     /// <summary>Menüden seçilen satır: indirme onay penceresini açar.</summary>
     void OnQualitySelect(QualitySelectMessage message);
+    /// <summary>Sekme kapandı: o sekmenin medya durumu ve bekleyen kalite istekleri temizlenir.</summary>
+    void OnTabClosed(int tabId);
+    /// <summary>Menü kapandı/sekme değişti: bekleyen kalite isteği iptal edilir (yt-dlp süreci öldürülür).</summary>
+    void OnQualitiesCancel(string requestId);
     void Detach();
 }
 
@@ -31,6 +35,8 @@ public sealed class NullMediaSink : IMediaSink
     public Task<QualitiesResultMessage> GetQualitiesAsync(QualitiesMessage m) =>
         Task.FromResult(new QualitiesResultMessage(m.RequestId, false, "Video desteği yok.", "error", null, null, null));
     public void OnQualitySelect(QualitySelectMessage message) { }
+    public void OnTabClosed(int tabId) { }
+    public void OnQualitiesCancel(string requestId) { }
     public void Detach() { }
 }
 

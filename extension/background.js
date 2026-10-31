@@ -5,6 +5,7 @@ import * as capture from "./lib/capture.js";
 import * as media from "./lib/media.js";
 import * as geometry from "./lib/geometry.js";
 import * as menus from "./lib/menus.js";
+import * as qlist from "./lib/qualities.js";
 import { buildQualities, buildQualitySelect } from "./lib/protocol.js";
 import { readPlayers } from "./lib/players.js";
 
@@ -45,10 +46,10 @@ chrome.runtime.onStartup.addListener(menus.createMenus);
 chrome.contextMenus.onClicked.addListener((info, tab) => { menus.onMenuClick(info, tab); });
 
 chrome.tabs.onUpdated.addListener((tabId, change) => {
-  if (change.status === "loading" && change.url) { media.clearTab(tabId); geometry.resetTab(tabId); }
+  if (change.status === "loading" && change.url) { qlist.cancelWhere((t) => t === tabId); media.clearTab(tabId); geometry.resetTab(tabId); }
 });
-chrome.tabs.onRemoved.addListener((tabId) => { media.clearTab(tabId); geometry.resetTab(tabId); });
-chrome.tabs.onActivated.addListener(({ tabId, windowId }) => { geometry.onTabActivated(windowId, tabId); });
+chrome.tabs.onRemoved.addListener((tabId) => { qlist.cancelWhere((t) => t === tabId); media.closeTab(tabId); geometry.resetTab(tabId); });
+chrome.tabs.onActivated.addListener(({ tabId, windowId }) => { qlist.cancelWhere((t) => t !== tabId); geometry.onTabActivated(windowId, tabId); });
 chrome.windows.onBoundsChanged?.addListener((w) => { geometry.resendWindow(w.id); });
 
 // ---- content script ve popup mesajları ----
@@ -65,15 +66,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       (async () => {
         const tab = sender.tab || {};
         native.connect();
-        const players = await probePlayers(tab.id, sender.frameId);
-        const requestId = `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        const [players, cookies] = await Promise.all([probePlayers(tab.id, sender.frameId), media.cookiesForTab(tab.id)]);
+        const requestId = qlist.newId(msg.rid);
+        qlist.track(requestId, tab.id);
         const res = await native.request(buildQualities({
           requestId, tabId: tab.id, frameId: sender.frameId ?? 0, pageUrl: tab.url, pageTitle: tab.title,
-          frameUrl: sender.url, src: msg.src, players,
+          frameUrl: sender.url, src: msg.src, players, cookies,
         }), (m) => m.type === "qualitiesResult" && m.requestId === requestId, 100000);
+        qlist.done(requestId);
         sendResponse(res ? { ...res } : { ok: false, errorCode: "silent", error: "T-Downloader yanıt vermedi. Uygulama çalışıyor mu?" });
       })();
       return true;
+    case "qualitiesCancel":
+      qlist.cancel(msg.rid);
+      return false;
     case "qualitySelect":
       native.send(buildQualitySelect(msg));
       sendResponse({ ok: true });
