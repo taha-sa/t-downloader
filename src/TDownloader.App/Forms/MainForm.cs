@@ -419,17 +419,20 @@ public sealed class MainForm : Form
     {
         _progress.TryGetValue(it.Id, out var p);
         bool active = it.Status == DownloadStatus.Downloading;
-        li.ImageIndex = _shell.IndexFor(it.FileName);
-        li.SubItems[0].Text = it.FileName;
-        li.SubItems[1].Text = it.Status is DownloadStatus.Queued or DownloadStatus.Downloading ? "•" : "";
-        li.SubItems[2].Text = it.TotalSize > 0 ? Fmt.Size(it.TotalSize) : "";
-        li.SubItems[3].Text = StatusText(it, true);
-        li.SubItems[4].Text = active && p != null ? Fmt.Eta(p.Eta) : "";
-        li.SubItems[5].Text = active ? Fmt.Speed(p?.SpeedBytesPerSec ?? it.SpeedBytesPerSec) : "";
-        li.SubItems[6].Text = Fmt.Date(it.LastTryAt);
-        li.SubItems[7].Text = Fmt.Date(it.AddedAt);
-        li.SubItems[8].Text = it.Description ?? "";
-        li.ForeColor = it.Status == DownloadStatus.Failed ? Theme.Danger : Theme.Text;
+        int img = _shell.IndexFor(it.FileName);
+        if (li.ImageIndex != img) li.ImageIndex = img;
+        void Set(int c, string v) { var s = li.SubItems[c]; if (s.Text != v) s.Text = v; }
+        Set(0, it.FileName);
+        Set(1, it.Status is DownloadStatus.Queued or DownloadStatus.Downloading ? "•" : "");
+        Set(2, it.TotalSize > 0 ? Fmt.Size(it.TotalSize) : "");
+        Set(3, StatusText(it, true));
+        Set(4, active && p != null ? Fmt.Eta(p.Eta) : "");
+        Set(5, active ? Fmt.Speed(p?.SpeedBytesPerSec ?? it.SpeedBytesPerSec) : "");
+        Set(6, Fmt.Date(it.LastTryAt));
+        Set(7, Fmt.Date(it.AddedAt));
+        Set(8, it.Description ?? "");
+        var fc = it.Status == DownloadStatus.Failed ? Theme.Danger : Theme.Text;
+        if (li.ForeColor != fc) li.ForeColor = fc;
     }
 
     private void Flush()
@@ -438,7 +441,7 @@ public sealed class MainForm : Form
         lock (_dirtyLock) { ids = _dirty.ToArray(); _dirty.Clear(); }
         if (ids.Length > 0)
         {
-            _list.BeginUpdate();
+            // BeginUpdate/EndUpdate yok: EndUpdate tüm listeyi geçersiz kılar (titreme); yalnızca değişen hücreler yeniden çizilir.
             foreach (var id in ids)
             {
                 var it = _mgr.Get(id);
@@ -456,7 +459,6 @@ public sealed class MainForm : Form
                 }
             }
             if (_sortCol == Array.FindIndex(Cols, c => c.Key == "status") || _sortCol >= 0) { /* sıralama yalnızca kullanıcı isteyince */ }
-            _list.EndUpdate();
         }
         UpdateStatus();
     }
@@ -467,10 +469,11 @@ public sealed class MainForm : Form
         int active = items.Count(i => i.Status == DownloadStatus.Downloading);
         double speed = items.Where(i => i.Status == DownloadStatus.Downloading)
             .Sum(i => _progress.TryGetValue(i.Id, out var p) ? p.SpeedBytesPerSec : 0);
-        _stActive.Text = $"Aktif: {active}";
-        _stSpeed.Text = "Hız: " + (speed > 0 ? Fmt.Speed(speed) : "0 B/sn");
-        _stTotal.Text = $"Toplam: {items.Count}";
-        _stMain.Text = _list.SelectedItems.Count > 0 ? $"{_list.SelectedItems.Count} öğe seçili" : "Hazır";
+        static void T(ToolStripStatusLabel l, string v) { if (l.Text != v) l.Text = v; }
+        T(_stActive, $"Aktif: {active}");
+        T(_stSpeed, "Hız: " + (speed > 0 ? Fmt.Speed(speed) : "0 B/sn"));
+        T(_stTotal, $"Toplam: {items.Count}");
+        T(_stMain, _list.SelectedItems.Count > 0 ? $"{_list.SelectedItems.Count} öğe seçili" : "Hazır");
     }
 
     private void OnCompleted(DownloadItem i)

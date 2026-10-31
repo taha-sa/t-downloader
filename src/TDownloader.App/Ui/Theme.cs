@@ -241,6 +241,7 @@ public sealed class BufferedListView : ListView
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
+        SendMessage(Handle, 0x1036 /*LVM_SETEXTENDEDSTYLE*/, (IntPtr)0x10000, (IntPtr)0x10000); // LVS_EX_DOUBLEBUFFER
         // Not: Explorer koyu teması uygulanmaz; fare altındaki satıra mavimsi sistem tonu çizdiği için (yan etki: açık renkli kaydırma çubuğu).
         _filler?.ReleaseHandle();
         var hdr = SendMessage(Handle, 0x101F /*LVM_GETHEADER*/, IntPtr.Zero, IntPtr.Zero);
