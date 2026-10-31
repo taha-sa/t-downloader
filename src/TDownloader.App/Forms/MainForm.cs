@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using TDownloader.App.Services;
 using TDownloader.App.Ui;
 using TDownloader.Core.Downloads;
+using TDownloader.Core.Ipc;
 using TDownloader.Core.Queue;
 using TDownloader.Core.Settings;
 
@@ -42,7 +43,15 @@ public sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 400 };
     private ToolStripMenuItem? _viewCats;
 
+    // Büyük liste: satır önbelleği (tüm öğeler, bir kez üretilir) + o an listede görünenler; kategori değişince satırlar
+    // yeniden üretilmez, önbellekten süzülür. _items: App tarafı O(1) arama (DownloadManager.Get O(n)); sayaçlar artımlı.
     private readonly Dictionary<string, ListViewItem> _rows = new();
+    private readonly HashSet<string> _shown = new();
+    private readonly Dictionary<string, DownloadItem> _items = new();
+    private readonly DownloadStats _stats = new();
+    private readonly List<string> _removeQueue = new();
+    private bool _removePosted;
+    private bool _bulk;
     private readonly ConcurrentDictionary<string, DownloadProgress> _progress = new();
     private readonly HashSet<string> _dirty = new();
     private readonly object _dirtyLock = new();
@@ -94,10 +103,11 @@ public sealed class MainForm : Form
 
         _extensionDir = FindExtensionDir();
         RestoreUiState();
+        foreach (var i in _mgr.Items) { _items[i.Id] = i; _stats.Set(i.Id, i.Status == DownloadStatus.Downloading, 0); }
         RebuildList();
 
         _mgr.ItemAdded += (_, i) => UiPost(() => AddRow(i));
-        _mgr.ItemRemoved += (_, i) => UiPost(() => RemoveRow(i.Id));
+        _mgr.ItemRemoved += (_, i) => QueueRemove(i.Id);
         _mgr.ItemChanged += (_, i) => MarkDirty(i.Id);
         _mgr.ProgressChanged += (_, p) => { _progress[p.Id] = p; MarkDirty(p.Id); };
         _mgr.DownloadCompleted += (_, i) => UiPost(() => OnCompleted(i));
@@ -324,8 +334,17 @@ public sealed class MainForm : Form
         foreach (var c in Cols) _list.Columns.Add(new ColumnHeader { Name = c.Key, Text = c.Title, Width = Scaled(c.Width), TextAlign = c.Align });
         _list.ColumnClick += (_, e) => SortBy(e.Column, _sortCol != e.Column || !_sortAsc);
         _list.DoubleClick += (_, _) => OnListDoubleClick();
-        _list.SelectedIndexChanged += (_, _) => UpdateStatus();
-        _list.KeyDown += (_, e) => { if (e.KeyCode == Keys.A && e.Control) foreach (ListViewItem i in _list.Items) i.Selected = true; };
+        _list.SelectedIndexChanged += (_, _) => { if (!_bulk) UpdateStatus(); };
+        _list.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.A || !e.Control) return;
+            // Toplu seçim: öğe başına SelectedIndexChanged/güncelleme yok; tek BeginUpdate + tek durum güncellemesi.
+            _bulk = true; _list.BeginUpdate();
+            try { foreach (ListViewItem i in _list.Items) i.Selected = true; }
+            finally { _list.EndUpdate(); _bulk = false; }
+            UpdateStatus();
+            e.Handled = true;
+        };
 
         _ctx.Items.AddRange(new ToolStripItem[]
         {
@@ -373,32 +392,57 @@ public sealed class MainForm : Form
         _ => true,
     };
 
+    private ListViewItem RowFor(DownloadItem i)
+    {
+        if (_rows.TryGetValue(i.Id, out var li)) return li;
+        li = new ListViewItem(new string[Cols.Length]) { Tag = i, Name = i.Id };
+        _rows[i.Id] = li;
+        FillRow(li, i);
+        return li;
+    }
+
     private void RebuildList()
     {
         _list.BeginUpdate();
-        _list.Items.Clear(); _rows.Clear();
-        foreach (var i in _mgr.Items.OrderBy(x => x.AddedAt)) if (Match(i)) AddRowCore(i);
+        _list.Items.Clear(); _shown.Clear();
+        var rows = new List<ListViewItem>();
+        foreach (var i in _items.Values.OrderBy(x => x.AddedAt))
+            if (Match(i)) { rows.Add(RowFor(i)); _shown.Add(i.Id); }
+        _list.Items.AddRange(rows.ToArray());
         ApplySort();
         _list.EndUpdate();
         UpdateStatus();
     }
 
-    private void AddRow(DownloadItem i) { if (Match(i) && !_rows.ContainsKey(i.Id)) { AddRowCore(i); UpdateStatus(); } }
-
-    private void AddRowCore(DownloadItem i)
+    private void AddRow(DownloadItem i)
     {
-        var li = new ListViewItem(new string[Cols.Length]) { Tag = i, Name = i.Id };
-        _rows[i.Id] = li;
-        FillRow(li, i);
-        _list.Items.Add(li);
+        _items[i.Id] = i;
+        _stats.Set(i.Id, i.Status == DownloadStatus.Downloading, 0);
+        if (Match(i) && _shown.Add(i.Id)) _list.Items.Add(RowFor(i));
+        UpdateStatus();
     }
 
-    private void RemoveRow(string id)
+    // Silmeler toplanır: tek UI geçişinde işlenir; çoğunlukla büyük toplu silmede liste tek seferde yeniden kurulur (O(n)).
+    private void QueueRemove(string id)
     {
-        if (_rows.Remove(id, out var li)) li.Remove();
-        _progress.TryRemove(id, out _);
-        if (_dialogs.TryGetValue(id, out var d)) d.Close();
-        UpdateStatus();
+        bool post;
+        lock (_removeQueue) { _removeQueue.Add(id); post = !_removePosted; _removePosted = true; }
+        if (post) UiPost(DrainRemovals);
+    }
+
+    private void DrainRemovals()
+    {
+        string[] ids;
+        lock (_removeQueue) { ids = _removeQueue.ToArray(); _removeQueue.Clear(); _removePosted = false; }
+        bool bulk = ids.Length >= 20;
+        foreach (var id in ids)
+        {
+            _items.Remove(id); _stats.Remove(id);
+            if (_rows.Remove(id, out var li) && _shown.Remove(id) && !bulk) li.Remove();
+            _progress.TryRemove(id, out _);
+            if (_dialogs.TryGetValue(id, out var d)) d.Close();
+        }
+        if (bulk) RebuildList(); else UpdateStatus();
     }
 
     private static string StatusText(DownloadItem it, bool withPct)
@@ -444,36 +488,39 @@ public sealed class MainForm : Form
             // BeginUpdate/EndUpdate yok: EndUpdate tüm listeyi geçersiz kılar (titreme); yalnızca değişen hücreler yeniden çizilir.
             foreach (var id in ids)
             {
-                var it = _mgr.Get(id);
-                if (it == null) continue;
+                if (!_items.TryGetValue(id, out var it)) continue;   // eklenme/silinme UI kuyruğunda; sonra işlenir
+                bool match = Match(it);
                 if (_rows.TryGetValue(id, out var li))
                 {
-                    if (!Match(it)) { li.Remove(); _rows.Remove(id); }
-                    else FillRow(li, it);
+                    FillRow(li, it);
+                    bool shown = _shown.Contains(id);
+                    if (match && !shown) { _list.Items.Add(li); _shown.Add(id); }
+                    else if (!match && shown) { li.Remove(); _shown.Remove(id); }
                 }
-                else if (Match(it)) AddRowCore(it);
+                else if (match) { _shown.Add(id); _list.Items.Add(RowFor(it)); }
+                bool active = it.Status == DownloadStatus.Downloading;
+                _progress.TryGetValue(id, out var p);
+                _stats.Set(id, active, p?.SpeedBytesPerSec ?? 0);
                 if (_dialogs.TryGetValue(id, out var dlg))
                 {
                     dlg.RefreshItem(it);
-                    if (_progress.TryGetValue(id, out var p) && it.Status == DownloadStatus.Downloading) dlg.ApplyProgress(p);
+                    if (p != null && active) dlg.ApplyProgress(p);
                 }
+                if (!active) _progress.TryRemove(id, out _);   // biten/duran indirmenin ilerleme kaydı tutulmaz
             }
-            if (_sortCol == Array.FindIndex(Cols, c => c.Key == "status") || _sortCol >= 0) { /* sıralama yalnızca kullanıcı isteyince */ }
         }
         UpdateStatus();
     }
 
+    // Sayaçlar artımlı tutulur (_stats): her çağrıda Items kopyası / LINQ yok -> O(1).
     private void UpdateStatus()
     {
-        var items = _mgr.Items;
-        int active = items.Count(i => i.Status == DownloadStatus.Downloading);
-        double speed = items.Where(i => i.Status == DownloadStatus.Downloading)
-            .Sum(i => _progress.TryGetValue(i.Id, out var p) ? p.SpeedBytesPerSec : 0);
         static void T(ToolStripStatusLabel l, string v) { if (l.Text != v) l.Text = v; }
-        T(_stActive, $"Aktif: {active}");
-        T(_stSpeed, "Hız: " + (speed > 0 ? Fmt.Speed(speed) : "0 B/sn"));
-        T(_stTotal, $"Toplam: {items.Count}");
-        T(_stMain, _list.SelectedItems.Count > 0 ? $"{_list.SelectedItems.Count} öğe seçili" : "Hazır");
+        T(_stActive, $"Aktif: {_stats.Active}");
+        T(_stSpeed, "Hız: " + (_stats.Speed > 0 ? Fmt.Speed(_stats.Speed) : "0 B/sn"));
+        T(_stTotal, $"Toplam: {_stats.Total}");
+        int sel = _list.SelectedIndices.Count;
+        T(_stMain, sel > 0 ? $"{sel} öğe seçili" : "Hazır");
     }
 
     private void OnCompleted(DownloadItem i)
@@ -533,23 +580,16 @@ public sealed class MainForm : Form
     private void AddUrl()
     {
         string? initial = null;
-        try
-        {
-            if (Clipboard.ContainsText()) { var t = Clipboard.GetText().Trim(); if (IsHttp(t)) initial = t; }
-        }
-        catch (ExternalException) { }
+        if (StaCall.TryRun(ReadClipboardText, ClipboardTimeoutMs, out var clip) && clip != null && IsHttp(clip)) initial = clip;
         using var d = new AddUrlDialog(initial);
         if (d.ShowDialog(Visible ? this : null) == DialogResult.OK) _ = PromptDownloadAsync(d.Url, null, null, null, null, -1, force: true);
     }
 
     private void AddFromClipboard()
     {
-        try
-        {
-            if (Clipboard.ContainsText() && IsHttp(Clipboard.GetText().Trim())) _ = PromptDownloadAsync(Clipboard.GetText().Trim(), null, null, null, null, -1, force: true);
-            else MessageBox.Show(this, "Panoda geçerli bir http/https bağlantısı yok.", "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (ExternalException) { }
+        if (StaCall.TryRun(ReadClipboardText, ClipboardTimeoutMs, out var clip) && clip != null && IsHttp(clip))
+            _ = PromptDownloadAsync(clip, null, null, null, null, -1, force: true);
+        else MessageBox.Show(this, "Panoda geçerli bir http/https bağlantısı yok.", "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private static bool IsHttp(string t) => Uri.TryCreate(t, UriKind.Absolute, out var u) && (u.Scheme == "http" || u.Scheme == "https") && !t.Contains('\n');
@@ -574,6 +614,7 @@ public sealed class MainForm : Form
                 _recentPrompts.Remove(k);
             if (_recentPrompts.ContainsKey(url)) return false;
             _recentPrompts[url] = now;
+            BoundedDictionary.TrimOldest(_recentPrompts, 500, v => v);   // sınırsız büyümesin
             return true;
         }
     }
@@ -870,19 +911,32 @@ public sealed class MainForm : Form
         return _mgr.Settings.FileTypes.Contains(ext, StringComparer.OrdinalIgnoreCase) || Categories.FromFileName(name) != Categories.General;
     }
 
+    // Pano başka bir uygulamada meşgulken Clipboard.* saniyelerce bloklayabilir: okuma ayrı STA iş parçacığında, kısa süre sınırıyla.
+    private const int ClipboardTimeoutMs = 400;
+
+    private static string? ReadClipboardText()
+    {
+        try { return Clipboard.ContainsText() ? Clipboard.GetText().Trim() : null; }
+        catch (ExternalException) { return null; }
+    }
+
     private void CheckClipboard()
     {
         if (_clipBusy || !_mgr.Settings.ClipboardMonitor) return;
-        string text;
-        try { if (!Clipboard.ContainsText()) return; text = Clipboard.GetText().Trim(); }
-        catch (ExternalException) { return; }
-        if (!IsHttp(text) || text == _lastClip || !Downloadable(text)) return;
-        _lastClip = text;
         _clipBusy = true;
-        try
+        _ = Task.Run(() =>
         {
-            _ = PromptDownloadAsync(text, null, null, null, null, -1, force: true);   // pencerenin kendisi onay penceresidir
-        }
-        finally { _clipBusy = false; }
+            StaCall.TryRun(ReadClipboardText, ClipboardTimeoutMs, out var text);
+            UiPost(() =>
+            {
+                try
+                {
+                    if (text == null || !IsHttp(text) || text == _lastClip || !Downloadable(text)) return;
+                    _lastClip = text;
+                    _ = PromptDownloadAsync(text, null, null, null, null, -1, force: true);   // pencerenin kendisi onay penceresidir
+                }
+                finally { _clipBusy = false; }
+            });
+        });
     }
 }
