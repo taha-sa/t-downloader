@@ -173,11 +173,9 @@ public sealed class EngineResilienceTests : IDisposable
     [Fact]
     public async Task HostGate_QueuesFifo_ThrottlesAndRestores()
     {
-        var old = HostGate.RestoreAfter;
-        HostGate.RestoreAfter = TimeSpan.FromMilliseconds(200);
-        try
+        // Statik HostGate.RestoreAfter'a dokunulmaz (testler arası sızıntı olmasın): süre örnek başına verilir.
         {
-            var g = new HostGate(2);
+            var g = new HostGate(2) { RestoreAfterOverride = TimeSpan.FromMilliseconds(200) };
             var a = await g.AcquireAsync(CancellationToken.None);
             var b = await g.AcquireAsync(CancellationToken.None);
             var third = g.AcquireAsync(CancellationToken.None).AsTask();
@@ -199,6 +197,5 @@ public sealed class EngineResilienceTests : IDisposable
             await Task.Delay(300);
             Assert.Equal(2, g.Limit);
         }
-        finally { HostGate.RestoreAfter = old; }
     }
 }

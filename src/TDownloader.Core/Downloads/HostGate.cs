@@ -15,6 +15,8 @@ internal sealed class HostGate
 
     private readonly object _l = new();
     private readonly LinkedList<TaskCompletionSource> _waiters = new();
+    /// <summary>Yalnızca test: bu örnek için geri yükleme süresi (statik <see cref="RestoreAfter"/> paylaşımını önler).</summary>
+    internal TimeSpan? RestoreAfterOverride { get; set; }
     private int _max, _limit, _active;
     private DateTime _restoreAt = DateTime.MinValue, _lastThrottle = DateTime.MinValue;
 
@@ -53,7 +55,7 @@ internal sealed class HostGate
             if (now - _lastThrottle < ThrottleDedupe) return;
             _lastThrottle = now;
             _limit = Math.Max(1, _limit / 2);
-            _restoreAt = now + RestoreAfter;
+            _restoreAt = now + (RestoreAfterOverride ?? RestoreAfter);
         }
     }
 
