@@ -70,6 +70,9 @@ public sealed class IpcServer : IAsyncDisposable
     /// </summary>
     public Func<IpcMessage, IpcConnection, Task<IpcMessage?>>? MessageHandler { get; set; }
 
+    /// <summary>Teşhis günlüğü (kabul döngüsü hataları).</summary>
+    public Action<string>? Log { get; set; }
+
     public event EventHandler<IpcConnection>? ClientConnected;
     public event EventHandler<IpcConnection>? ClientDisconnected;
 
@@ -93,14 +96,20 @@ public sealed class IpcServer : IAsyncDisposable
             try
             {
                 pipe = new NamedPipeServerStream(_pipeName, PipeDirection.InOut,
-                    NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                    NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);   // başka kullanıcı oturumu bağlanamaz / sunucuyu taklit edemez
                 await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
                 var conn = new IpcConnection(pipe);
                 lock (_lock) _connections.Add(conn);
                 _ = Task.Run(() => ClientLoopAsync(conn, ct));
             }
             catch (OperationCanceledException) { pipe?.Dispose(); break; }
-            catch (IOException) { pipe?.Dispose(); await Task.Delay(200, CancellationToken.None).ConfigureAwait(false); }
+            catch (Exception ex)
+            {
+                // UnauthorizedAccessException (başka oturum aynı adı tutuyor) dahil HİÇBİR hata kabul döngüsünü öldürmez: günlüğe yaz, bekle, yeniden dene.
+                pipe?.Dispose();
+                Log?.Invoke("Pipe kabul hatası: " + ex.GetType().Name + ": " + ex.Message);
+                try { await Task.Delay(500, ct).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
+            }
         }
     }
 
@@ -186,7 +195,7 @@ public sealed class IpcClient : IDisposable
         while (true)
         {
             var remaining = deadline - DateTime.UtcNow;
-            var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
             try
             {
                 int ms = (int)Math.Clamp(remaining.TotalMilliseconds, 1, 500);

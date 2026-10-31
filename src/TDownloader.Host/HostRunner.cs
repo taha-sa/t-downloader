@@ -12,7 +12,9 @@ public sealed record HostOptions(
 
 /// <summary>
 /// Native messaging (stdin/stdout) ile App named pipe'ı arasında iki yönlü köprü.
-/// App yoksa başlatmayı dener; olmazsa download isteklerine accepted:false döner, diğerlerini sessizce düşürür.
+/// App'i YALNIZCA kullanıcı eylemi mesajları (download, qualities) için başlatır; ping/media/tabClosed/videoGeometry/
+/// qualitiesCancel/qualitySelect App'i asla başlatmaz (kullanıcı tepsiden "Çıkış" yaptıysa App geri gelmesin).
+/// App'e ulaşılamazsa download için accepted:false, qualities için ok:false yanıtı döner; diğerleri sessizce düşer.
 /// </summary>
 public sealed class HostRunner
 {
@@ -59,9 +61,10 @@ public sealed class HostRunner
         if (msg == null) { _log.Write("Anlaşılmayan tarayıcı mesajı atlandı."); return; }
 
         // En fazla iki deneme: mevcut bağlantı kopmuşsa yeniden bağlanıp bir kez daha yaz.
+        bool mayLaunch = MayLaunchApp(msg);
         for (int attempt = 0; attempt < 2; attempt++)
         {
-            var client = await EnsureConnectedAsync(ct).ConfigureAwait(false);
+            var client = await EnsureConnectedAsync(mayLaunch, ct).ConfigureAwait(false);
             if (client == null) break;
             try { await client.SendAsync(msg, ct).ConfigureAwait(false); return; }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
@@ -77,6 +80,13 @@ public sealed class HostRunner
             _log.Write($"App yok; download {d.RequestId} reddedildi (tarayıcı kendi indirsin).");
             await WriteToBrowserAsync(new DownloadResultMessage(d.RequestId, false), ct).ConfigureAwait(false);
         }
+        else if (msg is QualitiesMessage q)
+        {
+            // Yanıtsız bırakılırsa düğme menüsü 100 sn "Kaliteler okunuyor" döner: hemen hata dön.
+            _log.Write($"App yok; qualities {q.RequestId} hata ile yanıtlandı.");
+            await WriteToBrowserAsync(new QualitiesResultMessage(q.RequestId, false,
+                "T-Downloader çalışmıyor veya başlatılamadı. Uygulamayı açıp tekrar deneyin.", "error", null, null, null), ct).ConfigureAwait(false);
+        }
         else
         {
             // ping dahil: cevap verilmez; eklenti zaman aşımıyla "App yok" sonucuna varır.
@@ -84,7 +94,10 @@ public sealed class HostRunner
         }
     }
 
-    private async Task<IpcClient?> EnsureConnectedAsync(CancellationToken ct)
+    /// <summary>Yalnızca kullanıcı eylemi mesajları App'i başlatabilir (ping/media/tabClosed/... asla).</summary>
+    public static bool MayLaunchApp(IpcMessage msg) => msg is DownloadMessage or QualitiesMessage;
+
+    private async Task<IpcClient?> EnsureConnectedAsync(bool mayLaunch, CancellationToken ct)
     {
         await _connLock.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -96,10 +109,11 @@ public sealed class HostRunner
             // bekleme + yeniden başlatma yok (50 indirme x 300 ms = 15 sn takılma). Yine de App elle açılmış olabilir:
             // cooldown'da yalnızca tek ucuz (1 ms) deneme yapılır.
             bool inCooldown = DateTime.UtcNow - _lastLaunchFailure < _opt.RetryCooldown;
+            bool cheap = inCooldown || !mayLaunch;      // başlatma yoksa uzun bekleme de yok: yalnızca ucuz bağlanma denemesi
             var c = new IpcClient(_opt.PipeName);
-            if (await c.ConnectAsync(inCooldown ? TimeSpan.FromMilliseconds(1) : TimeSpan.FromMilliseconds(300), ct).ConfigureAwait(false))
+            if (await c.ConnectAsync(cheap ? TimeSpan.FromMilliseconds(mayLaunch ? 1 : 50) : TimeSpan.FromMilliseconds(300), ct).ConfigureAwait(false))
                 return Adopt(c);
-            if (inCooldown) { c.Dispose(); return null; }
+            if (cheap) { c.Dispose(); return null; }
 
             if (!TryLaunchApp()) { _lastLaunchFailure = DateTime.UtcNow; c.Dispose(); return null; }
 
