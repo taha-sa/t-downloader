@@ -298,6 +298,7 @@ public sealed class HlsClient
         {
             using var p = Process.Start(psi);
             if (p == null) return false;
+            Util.ProcessJob.Assign(p);   // uygulama çökerse ffmpeg yetim kalmasın
             try { p.StandardInput.Close(); } catch (IOException) { }
             _ = p.StandardOutput.ReadToEndAsync(ct);
             _ = p.StandardError.ReadToEndAsync(ct);

@@ -93,6 +93,7 @@ public sealed class YtDlpClient : IExternalRunner
         try { p.Start(); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         { throw new YtDlpException("yt-dlp başlatılamadı: " + ex.Message); }
+        Util.ProcessJob.Assign(p);   // uygulama çökerse süreç yetim kalmasın
         try { p.StandardInput.Close(); } catch (IOException) { }
         var outTask = p.StandardOutput.ReadToEndAsync(ct);
         var errTask = p.StandardError.ReadToEndAsync(ct);
@@ -128,6 +129,7 @@ public sealed class YtDlpClient : IExternalRunner
         try { p.Start(); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         { return new ExternalResult(false, "yt-dlp başlatılamadı: " + ex.Message, null); }
+        Util.ProcessJob.Assign(p);   // uygulama çökerse süreç yetim kalmasın
         try { p.StandardInput.Close(); } catch (IOException) { }
         using var reg = ct.Register(() => Kill(p));
 

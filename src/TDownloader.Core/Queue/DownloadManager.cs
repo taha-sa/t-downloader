@@ -260,6 +260,9 @@ public sealed class DownloadManager : IAsyncDisposable
         if (act != null) { act.Stop(); await act.Task.ConfigureAwait(false); }
         lock (_gate) _items.Remove(item);
         try { var d = Path.Combine(Paths.DwnlDataDir, id); if (Directory.Exists(d)) Directory.Delete(d, true); } catch { }
+        // yt-dlp hedef klasörde .part/.ytdl/.part-FragN bırakır; tamamlanmamış harici indirme silinirken temizle.
+        if (item.Kind == DownloadKind.External && item.Status != DownloadStatus.Completed)
+            Util.ExternalCleanup.DeleteYtDlpLeftovers(item.SavePath);
         if (deleteFile)
         {
             try { if (File.Exists(item.SavePath)) File.Delete(item.SavePath); } catch { }
