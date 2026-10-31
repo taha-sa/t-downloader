@@ -79,4 +79,26 @@ public sealed class PersistenceTests : IDisposable
         Assert.Empty(mgr.Items);
         Assert.Null(mgr.LoadWarning);
     }
+
+    [Fact]
+    public void Load_SkipsNullEntries_AndIdsThatCouldEscapeDwnlData()
+    {
+        var mgr = NewMgr();
+        Directory.CreateDirectory(mgr.Paths.Root);
+        File.WriteAllText(mgr.Paths.DownloadsFile,
+            "[null,{\"id\":\"../../Windows\",\"url\":\"http://127.0.0.1:1/a\",\"fileName\":\"a\",\"savePath\":\"C:/x/a\",\"status\":\"paused\"}," +
+            "{\"id\":\"abc123\",\"url\":\"http://127.0.0.1:1/b\",\"fileName\":\"b\",\"savePath\":\"C:/x/b\",\"status\":\"downloading\"}]");
+        mgr.Load();
+        var it = Assert.Single(mgr.Items);
+        Assert.Equal("abc123", it.Id);
+        Assert.Equal(DownloadStatus.Paused, it.Status);
+    }
+
+    [Theory]
+    [InlineData("ERROR: addrmore failed", false)]
+    [InlineData("ERROR: This video is DRM protected", true)]
+    public void MapError_DrmMatchesWholeWordOnly(string stderr, bool drm)
+    {
+        Assert.Equal(drm, TDownloader.Core.Video.YtDlpParsing.MapError(stderr).Contains("DRM korumalı"));
+    }
 }

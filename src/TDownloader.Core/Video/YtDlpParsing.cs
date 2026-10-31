@@ -140,12 +140,12 @@ public static class YtDlpParsing
     {
         var text = stderr ?? "";
         string lower = text.ToLowerInvariant();
-        if (lower.Contains("drm")) return "Bu içerik DRM korumalı olduğu için indirilemez.";
+        if (System.Text.RegularExpressions.Regex.IsMatch(lower, @"\bdrm\b")) return "Bu içerik DRM korumalı olduğu için indirilemez.";
         if (lower.Contains("ffmpeg") && (lower.Contains("not found") || lower.Contains("not installed") || lower.Contains("no such file")))
             return "ffmpeg bulunamadı. Video ve ses birleştirilemiyor; Seçenekler > Video sekmesinden ffmpeg yolunu belirtin.";
         if (lower.Contains("unsupported url")) return "Bu adres yt-dlp tarafından desteklenmiyor.";
         if (lower.Contains("sign in") || lower.Contains("not a bot") || lower.Contains("login required") || lower.Contains("age-restricted") || lower.Contains("members-only"))
-            return "Bu video için oturum açmak gerekiyor (çerezler bu sürümde yt-dlp'ye aktarılmıyor).";
+            return "Bu video için oturum açmak gerekiyor (tarayıcıdan oturum çerezi alınamadı veya süresi doldu).";
         if (lower.Contains("video unavailable") || lower.Contains("private video") || lower.Contains("has been removed") || lower.Contains("not available in your country"))
             return "Video kullanılamıyor (özel, silinmiş veya bölgenize kapalı olabilir).";
         if (lower.Contains("http error 403")) return "Sunucu erişimi reddetti (HTTP 403).";

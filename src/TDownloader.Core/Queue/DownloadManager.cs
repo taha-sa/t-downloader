@@ -126,6 +126,7 @@ public sealed class DownloadManager : IAsyncDisposable
             _items.Clear();
             foreach (var i in list ?? new())
             {
+                if (i == null || string.IsNullOrEmpty(i.Id) || !i.Id.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is (char)45 or (char)95)) continue;   // null öğe / yol bileşeni olamayacak kimlik (C18, C22)
                 if (i.Status is DownloadStatus.Downloading or DownloadStatus.Queued) i.Status = DownloadStatus.Paused;
                 _items.Add(i);
             }
