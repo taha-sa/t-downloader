@@ -49,6 +49,8 @@ public sealed record SettingsMessage(bool InterceptEnabled, int MinFileSizeKb, L
 public static class IpcSerializer
 {
     public const string PipeName = "TDownloader.Ipc";
+    /// <summary>Test/yalıtım: TDOWNLOADER_PIPE ortam değişkeni verilmişse sunucu o adla dinler.</summary>
+    public static string ActivePipeName => Environment.GetEnvironmentVariable("TDOWNLOADER_PIPE") is { Length: > 0 } p ? p : PipeName;
 
     public static string Serialize(IpcMessage message) =>
         JsonSerializer.Serialize<IpcMessage>(message, JsonDefaults.Options);

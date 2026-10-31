@@ -7,8 +7,10 @@ namespace TDownloader.App;
 
 internal static class Program
 {
-    private const string MutexName = @"Local\TDownloader.SingleInstance";
-    private const string ShowEventName = @"Local\TDownloader.ShowWindow";
+    // TDOWNLOADER_PIPE: test/yalıtım için ayrı örnek (mutex, olay ve pipe adı soneki).
+    private static readonly string Sfx = Environment.GetEnvironmentVariable("TDOWNLOADER_PIPE") ?? "";
+    private static readonly string MutexName = @"Local\TDownloader.SingleInstance" + Sfx;
+    private static readonly string ShowEventName = @"Local\TDownloader.ShowWindow" + Sfx;
 
     [STAThread]
     private static void Main(string[] args)

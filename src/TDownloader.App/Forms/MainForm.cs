@@ -52,7 +52,6 @@ public sealed class MainForm : Form
     private bool _sortAsc = true;
     private bool _exiting;
     private bool _startHidden;
-    private bool _trayHintShown;
     private string _lastClip = "";
     private bool _clipBusy;
     private string? _extensionDir;
@@ -90,7 +89,7 @@ public sealed class MainForm : Form
 
         _tray = BuildTray();
         _sched = new SchedulerService(svc);
-        _sched.Notify += msg => _tray.ShowBalloonTip(4000, "Zamanlayıcı", msg, ToolTipIcon.Info);
+        _sched.Notify += msg => UiPost(() => _stMain.Text = msg);   // balon yok: durum çubuğunda göster
         _sched.ExitRequested += ExitApp;
 
         _extensionDir = FindExtensionDir();
@@ -102,7 +101,7 @@ public sealed class MainForm : Form
         _mgr.ItemChanged += (_, i) => MarkDirty(i.Id);
         _mgr.ProgressChanged += (_, p) => { _progress[p.Id] = p; MarkDirty(p.Id); };
         _mgr.DownloadCompleted += (_, i) => UiPost(() => OnCompleted(i));
-        _mgr.DownloadFailed += (_, i) => UiPost(() => { MarkDirty(i.Id); _tray.ShowBalloonTip(4000, "İndirme başarısız", $"{i.FileName}\n{i.Error}", ToolTipIcon.Error); });
+        _mgr.DownloadFailed += (_, i) => UiPost(() => MarkDirty(i.Id));   // hata ana listede durum olarak görünür; balon yok
         _timer.Tick += (_, _) => Flush();
         _timer.Start();
         _ = Handle; // gizli başlangıçta bile tutamaç (pano dinleyici, BeginInvoke) hazır olsun
@@ -128,8 +127,6 @@ public sealed class MainForm : Form
         }
         base.SetVisibleCore(value);
     }
-
-    public void Notify(string title, string message) => UiPost(() => _tray.ShowBalloonTip(3000, title, message, ToolTipIcon.Info));
 
     public void ShowMain()
     {
@@ -479,7 +476,6 @@ public sealed class MainForm : Form
     private void OnCompleted(DownloadItem i)
     {
         MarkDirty(i.Id);
-        _tray.ShowBalloonTip(3000, "İndirme tamamlandı", i.FileName, ToolTipIcon.Info);
         if (_dialogs.TryGetValue(i.Id, out var d))
         {
             d.RefreshItem(i);
@@ -540,14 +536,14 @@ public sealed class MainForm : Form
         }
         catch (ExternalException) { }
         using var d = new AddUrlDialog(initial);
-        if (d.ShowDialog(Visible ? this : null) == DialogResult.OK) ShowFileInfo(d.Url, null, null, null, null, -1);
+        if (d.ShowDialog(Visible ? this : null) == DialogResult.OK) _ = PromptDownloadAsync(d.Url, null, null, null, null, -1, force: true);
     }
 
     private void AddFromClipboard()
     {
         try
         {
-            if (Clipboard.ContainsText() && IsHttp(Clipboard.GetText().Trim())) ShowFileInfo(Clipboard.GetText().Trim(), null, null, null, null, -1);
+            if (Clipboard.ContainsText() && IsHttp(Clipboard.GetText().Trim())) _ = PromptDownloadAsync(Clipboard.GetText().Trim(), null, null, null, null, -1, force: true);
             else MessageBox.Show(this, "Panoda geçerli bir http/https bağlantısı yok.", "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (ExternalException) { }
@@ -555,33 +551,72 @@ public sealed class MainForm : Form
 
     private static bool IsHttp(string t) => Uri.TryCreate(t, UriKind.Absolute, out var u) && (u.Scheme == "http" || u.Scheme == "https") && !t.Contains('\n');
 
-    /// <summary>Tarayıcı yakalama yolu (IPC): ayarlara göre diyaloğu gösterir. UI thread dışından çağrılabilir.</summary>
-    public Task<bool> PromptDownloadAsync(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize)
+    // Birden çok istek aynı anda gelirse pencereler üst üste binmez: sırayla (kuyruk) gösterilir.
+    private readonly SemaphoreSlim _promptGate = new(1, 1);
+
+    /// <summary>
+    /// Tarayıcı/video/pano/URL Ekle yolu: "Dosya İndirme Bilgisi" penceresi açılır; kullanıcı onaylamadan indirme başlamaz.
+    /// true = eklendi (başlat veya daha sonra), false = iptal. UI thread dışından da çağrılabilir.
+    /// </summary>
+    public async Task<bool> PromptDownloadAsync(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize, bool force = false)
     {
-        var tcs = new TaskCompletionSource<bool>();
-        UiPost(() =>
+        if (!IsHttp(url)) return false;
+        return await RunPromptAsync(() =>
         {
+            if (!force && !_mgr.Settings.ShowFileInfoOnCapture)
+            {
+                var item = _mgr.Add(new AddDownloadRequest(url, fileName, null, referrer, cookies, userAgent, null, fileSize, true));
+                OpenProgress(item);
+                return true;
+            }
+            return ShowFileInfo(url, referrer, cookies, userAgent, fileName, fileSize);
+        });
+    }
+
+    /// <summary>yt-dlp (External) indirmesi: kalite seçildikten sonra aynı pencereyi gösterir.</summary>
+    public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption opt)
+    {
+        string stem = DownloadManager.SanitizeFileName(title.Length <= 120 ? title : title[..119] + "…");
+        string name = stem + "." + opt.Ext;
+        return RunPromptAsync(() =>
+        {
+            using var dlg = new FileInfoDialog(_mgr, source, name, opt.Size, probeSize: false, referrer: referer, description: "yt-dlp: " + opt.Label);
+            var r = dlg.ShowDialog();
+            if (r is not (DialogResult.Yes or DialogResult.No)) return false;
             try
             {
-                if (!IsHttp(url)) { tcs.SetResult(false); return; }
-                if (!_mgr.Settings.ShowFileInfoOnCapture)
-                {
-                    var item = _mgr.Add(new AddDownloadRequest(url, fileName, null, referrer, cookies, userAgent, null, fileSize, true));
-                    OpenProgress(item);
-                    tcs.SetResult(true);
-                }
-                else tcs.SetResult(ShowFileInfo(url, referrer, cookies, userAgent, fileName, fileSize));
+                _mgr.AddExternal(new AddExternalRequest(dlg.Url, dlg.FileName, opt.Format, dlg.SaveFolder, referer, dlg.Description, dlg.StartNow));
+                return true;
             }
-            catch (Exception) { tcs.TrySetResult(false); }
+            catch (ArgumentException ex)
+            {
+                MessageBox.Show(ex.Message, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
         });
-        return tcs.Task;
+    }
+
+    private async Task<bool> RunPromptAsync(Func<bool> show)
+    {
+        await _promptGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            UiPost(() =>
+            {
+                try { tcs.SetResult(show()); }
+                catch (Exception) { tcs.TrySetResult(false); }
+            });
+            return await tcs.Task.ConfigureAwait(false);
+        }
+        finally { _promptGate.Release(); }
     }
 
     private bool ShowFileInfo(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize)
     {
-        using var dlg = new FileInfoDialog(_mgr, url, fileName, fileSize) { TopMost = true };
-        dlg.Shown += (_, _) => { dlg.Activate(); ForceForeground(dlg.Handle); };
-        var r = dlg.ShowDialog(Visible ? this : null);
+        // Sahipsiz (owner yok): ana pencere öne gelmez; pencere TopMost + ön plana zorlanır.
+        using var dlg = new FileInfoDialog(_mgr, url, fileName, fileSize, true, referrer, cookies, userAgent);
+        var r = dlg.ShowDialog();
         if (r is not (DialogResult.Yes or DialogResult.No)) return false;
         try
         {
@@ -592,7 +627,7 @@ public sealed class MainForm : Form
         }
         catch (ArgumentException ex)
         {
-            MessageBox.Show(this, ex.Message, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(ex.Message, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
     }
@@ -772,11 +807,6 @@ public sealed class MainForm : Form
             e.Cancel = true;
             SaveUiState();
             Hide();
-            if (!_trayHintShown)
-            {
-                _trayHintShown = true;
-                _tray.ShowBalloonTip(3000, "T-Downloader", "Uygulama sistem tepsisinde çalışmaya devam ediyor.", ToolTipIcon.Info);
-            }
             return;
         }
         SaveUiState();
@@ -830,9 +860,7 @@ public sealed class MainForm : Form
         _clipBusy = true;
         try
         {
-            var r = MessageBox.Show(Visible ? this : null, $"Panoda indirilebilir bir bağlantı bulundu:\n\n{text}\n\nİndirmek ister misiniz?",
-                "T-Downloader", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
-            if (r == DialogResult.Yes) ShowFileInfo(text, null, null, null, null, -1);
+            _ = PromptDownloadAsync(text, null, null, null, null, -1, force: true);   // pencerenin kendisi onay penceresidir
         }
         finally { _clipBusy = false; }
     }

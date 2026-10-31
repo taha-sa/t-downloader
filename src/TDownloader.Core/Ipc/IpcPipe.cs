@@ -72,7 +72,7 @@ public sealed class IpcServer : IAsyncDisposable
     public event EventHandler<IpcConnection>? ClientConnected;
     public event EventHandler<IpcConnection>? ClientDisconnected;
 
-    public IpcServer(string pipeName = IpcSerializer.PipeName) { _pipeName = pipeName; }
+    public IpcServer(string? pipeName = null) { _pipeName = pipeName ?? IpcSerializer.ActivePipeName; }
 
     public void Start()
     {

@@ -44,6 +44,11 @@ public sealed class AppSettings
     /// <summary>Tarayıcıdan gelen indirmede "Dosya bilgisi" penceresini göster.</summary>
     public bool ShowFileInfoOnCapture { get; set; } = true;
     public SchedulerSettings Scheduler { get; set; } = new();
+    /// <summary>Kullanıcının "+" ile eklediği kategoriler (klasörleri CategoryFolders'ta tutulur).</summary>
+    public List<string> CustomCategories { get; set; } = new();
+    /// <summary>Ayar şeması sürümü; 1: "dosya bilgisi penceresini göster" bir kerelik açık yapıldı.</summary>
+    public int SettingsVersion { get; set; }
+    public const int CurrentSettingsVersion = 1;
 
     // ---- Video (yt-dlp) ----
     /// <summary>Videoların üstünde "Bu videoyu indir" düğmesini göster.</summary>
@@ -64,10 +69,20 @@ public sealed class AppSettings
         try
         {
             if (File.Exists(path))
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonDefaults.Options) ?? new();
+            {
+                var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonDefaults.Options) ?? new();
+                if (s.SettingsVersion < 1)
+                {
+                    // Bir kerelik göç: IDM gibi her indirmede dosya bilgisi penceresi açılsın.
+                    s.ShowFileInfoOnCapture = true;
+                    s.SettingsVersion = CurrentSettingsVersion;
+                    try { s.Save(path); } catch (Exception) { }
+                }
+                return s;
+            }
         }
         catch (Exception) { /* bozuk dosya: varsayılanlar */ }
-        return new AppSettings();
+        return new AppSettings { SettingsVersion = CurrentSettingsVersion };
     }
 
     public void Save(string path) =>

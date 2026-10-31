@@ -45,4 +45,20 @@ public sealed class ShellIcons
         _map[ext] = idx;
         return idx;
     }
+
+    /// <summary>Uzantıya göre büyük (32x32) shell simgesi; bulunamazsa null.</summary>
+    public static Bitmap? Large(string fileName)
+    {
+        try
+        {
+            var ext = Path.GetExtension(fileName);
+            if (ext.Length == 0) ext = ".";
+            var fi = new SHFILEINFO();
+            SHGetFileInfo("x" + ext, 0x80, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_ICON | SHGFI_USEFILEATTRIBUTES);
+            if (fi.hIcon == IntPtr.Zero) return null;
+            try { using var ic = Icon.FromHandle(fi.hIcon); return ic.ToBitmap(); }
+            finally { DestroyIcon(fi.hIcon); }
+        }
+        catch { return null; }
+    }
 }

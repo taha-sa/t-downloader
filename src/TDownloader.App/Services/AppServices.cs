@@ -36,11 +36,11 @@ public interface IAppServices
     ISynchronizeInvoke UiThread { get; }
     /// <summary>Bağlı tarayıcı eklentilerine mesaj yayınlar (ör. hideButton).</summary>
     Task SendToExtensionAsync(IpcMessage message);
-    /// <summary>"Dosya bilgisi" diyaloğunu açar; kullanıcı kabul ederse indirmeyi ekler ve true döner.</summary>
-    /// <summary>Tepsi balonu ile kısa bildirim gösterir (UI thread dışından çağrılabilir).</summary>
-    void Notify(string title, string message);
+    /// <summary>"Dosya İndirme Bilgisi" penceresini açar; kullanıcı kabul ederse indirmeyi ekler ve true döner.</summary>
     Task<bool> PromptDownloadAsync(string url, string? referrer = null, string? cookies = null, string? userAgent = null,
         string? fileName = null, long fileSize = -1);
+    /// <summary>yt-dlp kalite seçimi sonrası aynı pencereyi açar; onaylanırsa External indirme ekler.</summary>
+    Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option);
 }
 
 public sealed class AppServices : IAppServices
@@ -56,11 +56,12 @@ public sealed class AppServices : IAppServices
 
     public Task SendToExtensionAsync(IpcMessage message) => Ipc?.BroadcastAsync(message) ?? Task.CompletedTask;
 
-    public void Notify(string title, string message) => Main?.Notify(title, message);
-
     public Task<bool> PromptDownloadAsync(string url, string? referrer = null, string? cookies = null, string? userAgent = null,
         string? fileName = null, long fileSize = -1)
         => Main?.PromptDownloadAsync(url, referrer, cookies, userAgent, fileName, fileSize) ?? Task.FromResult(false);
+
+    public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option)
+        => Main?.PromptExternalAsync(source, referer, title, option) ?? Task.FromResult(false);
 
     /// <summary>Ayarları uygular, diske yazar ve eklentiye yayınlar.</summary>
     public void ApplySettings(AppSettings s)

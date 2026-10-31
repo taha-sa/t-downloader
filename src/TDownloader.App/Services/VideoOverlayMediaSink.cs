@@ -345,16 +345,8 @@ public sealed class VideoOverlayMediaSink : IMediaSink
 
     private void StartQuality(string source, string? referer, string title, QualityOption opt)
     {
-        try
-        {
-            string stem = Core.Queue.DownloadManager.SanitizeFileName(Shorten(title, 120));
-            var item = _svc!.Manager.AddExternal(new AddExternalRequest(source, stem + "." + opt.Ext, opt.Format, null, referer, "yt-dlp: " + opt.Label));
-            _svc.Notify("İndirme eklendi", item.FileName);
-        }
-        catch (ArgumentException ex)
-        {
-            Msg(ex.Message, MessageBoxIcon.Warning);
-        }
+        // İndirme başlamadan "Dosya İndirme Bilgisi" penceresi açılır (IDM gibi).
+        _ = _svc!.PromptExternalAsync(source, referer, title, opt);
     }
 
     // ------------------------------------------------------------ bilgi kutuları
