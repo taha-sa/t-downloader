@@ -458,7 +458,7 @@ function loadButton(ov = {}) {
   const mkEl = () => {
     const cls = new Set();
     return { style: {}, classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), has: (c) => cls.has(c), contains: (c) => cls.has(c) }, offsetWidth: 160, offsetHeight: 22,
-      addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }), matches: () => false, set innerHTML(v) {}, scrollHeight: 100 };
+      ls: {}, addEventListener(t, f) { (this.ls[t] ??= []).push(f); }, getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }), matches: () => false, set innerHTML(v) {}, scrollHeight: 100 };
   };
   const els = {};
   const doc = {
@@ -793,7 +793,7 @@ function overlayHarness(videoRect, { stack, cands = [] } = {}) {
   };
   const video = fakeVideo(videoRect); video.contains = (x) => x === video; video.parentElement = null;
   let stackFn = () => [];
-  const h = loadButton({ doc: { elementsFromPoint: (x, y) => stackFn(x, y), getElementsByTagName: () => cands(h) } });
+  const h = loadButton({ doc: { elementsFromPoint: (x, y) => stackFn(x, y), getElementsByTagName: () => cands(h) }, sandbox: { setTimeout: () => 0, location: { hostname: "site.test" } } });
   h.sandbox.window.getComputedStyle = (el) => ({ display: "block", visibility: "visible", opacity: "1", position: el._pos || "static", backdropFilter: (el._style || {}).backdropFilter });
   h.video = video; h.mkNode = mkNode;
   if (stack) stackFn = () => stack(h);
@@ -802,43 +802,78 @@ function overlayHarness(videoRect, { stack, cands = [] } = {}) {
   return h;
 }
 const bpos = (h) => [parseFloat(h.els.btn.style.left), parseFloat(h.els.btn.style.top)];
-await test("düğme: yarı saydam (rgba + backdrop-filter) sabit üst çubuk videonun üstünü örterken düğme çubuğun ALTINDA, görünen kısmın sağ üstünde", () => {
-  const bar = { l: 0, t: 0, r: 1000, b: 53 };
-  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { cands: () => [h.bar] });   // pointer-events:none: yığında görünmez, aday listesinde bulunur
-  h.bar = h.mkNode(bar, "fixed", null, { backdropFilter: "blur(12px)" });
+await test("düğme: yarı saydam sabit üst çubuk yokken ve varken konum = videonun GERÇEK sağ üst köşesi (a)", () => {
+  const h = overlayHarness({ l: 100, t: 200, w: 640, h: 360 }, { cands: () => [h.bar] });
+  h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "fixed", null, { backdropFilter: "blur(12px)" });   // videonun altında değil: örtü yok
+  h.tick(0); h.tick(500);
+  assert.deepEqual(bpos(h), [740 - 160 - 8, 208]);
+  assert.ok(!h.els.btn.style.clipPath || h.els.btn.style.clipPath === "none");
+});
+await test("düğme: sabit konum ATANIN stilinde; elementsFromPoint ilk eleman olarak kendi host'umuzu döndürse de örtü bulunur ve kırpılır; konum değişmez", () => {
+  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { stack: (hh) => [hh.b.host, hh.tab, hh.video] });
+  const wrap = h.mkNode({ l: 0, t: 0, r: 1000, b: 39 }, "fixed");
+  h.tab = h.mkNode({ l: 300, t: 5, r: 500, b: 45 }, "static", h.mkNode({ l: 0, t: 0, r: 1000, b: 39 }, "static", wrap));
   h.tick(0); h.tick(500);
   assert.equal(h.els.btn.style.display, "flex");
-  assert.deepEqual(bpos(h), [740 - 160 - 8, 53 + 8]);
+  assert.deepEqual(bpos(h), [740 - 160 - 8, 28]);
+  assert.equal(h.els.btn.style.clipPath, "inset(11px 0 0px 0)");
 });
-await test("düğme: sabit konum öğenin değil ATASININ stilinde; elementsFromPoint ilk eleman olarak kendi host'umuzu döndürse de örtü bulunur", () => {
-  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, {
-    stack: (hh) => [hh.b.host, hh.tab, hh.video],
-  });
-  const wrap = h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "fixed");
-  h.tab = h.mkNode({ l: 300, t: 5, r: 500, b: 45 }, "static", h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "static", wrap));
-  h.tick(0); h.tick(500);
-  assert.equal(h.els.btn.style.display, "flex");
-  assert.deepEqual(bpos(h), [740 - 160 - 8, 53 + 8]);
-});
-await test("düğme: görünen yükseklik 60 px altına inince gizlenir; çubuk altına girdikçe düğme aşağı kayar", () => {
+await test("düğme: video yukarı kaydıkça düğme video köşesine göre SABİT ofsette kalır, aşağı kaymaz (b)", () => {
   const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { cands: () => [h.bar] });
   h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "fixed");
   h.tick(0); h.tick(500);
-  h.video.rect.t = -100; h.tick(120);                         // video 260 px yüksekliğinde görünür kalır
-  assert.equal(h.els.btn.style.display, "flex");
-  assert.equal(bpos(h)[1], 61);
-  h.video.rect.t = -300; h.tick(120);                         // alt kenar 60: görünen = 60-53 = 7 px
-  assert.equal(h.els.btn.style.display, "none");
-  h.video.rect.t = -250; h.tick(120);                         // görünen = 110-53 = 57 < 60
-  assert.equal(h.els.btn.style.display, "none");
-  h.video.rect.t = -240; h.tick(120);                         // 120-53 = 67
-  assert.equal(h.els.btn.style.display, "flex");
+  for (const t of [20, -20, -100, -200, -300]) {
+    h.video.rect.t = t; h.tick(120);
+    if (h.els.btn.style.display !== "flex") continue;
+    assert.equal(bpos(h)[1] - t, 8, `t=${t} dikey ofset sabit`);
+    assert.equal(bpos(h)[0], 740 - 160 - 8);
+  }
 });
-await test("düğme: örtü yokken (çubuk videonun altında kalmıyor) eski konum: gerçek sağ üst köşe, 8 px içeri", () => {
-  const h = overlayHarness({ l: 100, t: 200, w: 640, h: 360 }, { cands: () => [h.bar] });
-  h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 53 }, "fixed");
+await test("düğme: çubuk düğmenin üst yarısını örterken clip-path üst değeri = örtülen yükseklik, konum değişmez (c); tamamen örtülünce gizli (d)", () => {
+  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { cands: () => [h.bar] });
+  h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 39 }, "fixed");      // düğme 28..50, bh=22 -> örtülen 11 px
   h.tick(0); h.tick(500);
-  assert.deepEqual(bpos(h), [740 - 160 - 8, 208]);
+  assert.equal(h.els.btn.style.display, "flex");
+  assert.deepEqual(bpos(h), [740 - 160 - 8, 28]);
+  assert.equal(h.els.btn.style.clipPath, "inset(11px 0 0px 0)");
+  h.bar.rect.b = 60; h.tick(120);                                  // düğme tamamen çubuğun altında
+  assert.equal(h.els.btn.style.display, "none");
+  assert.ok(!h.els.btn.classList.has("vis"));
+  h.bar.rect.b = 0; h.tick(120);
+});
+await test("düğme: alttan örten sabit çubuk düğmeyi alttan kırpar (inset ... 0 0 alt)", () => {
+  const h = overlayHarness({ l: 100, t: 400, w: 640, h: 360 }, { cands: () => [h.bar] });   // video alt kenarı viewport dışı; düğme 408..430
+  h.bar = h.mkNode({ l: 0, t: 420, r: 1000, b: 600 }, "fixed");
+  h.tick(0); h.tick(500);
+  assert.deepEqual(bpos(h), [740 - 160 - 8, 408]);
+  assert.equal(h.els.btn.style.clipPath, "inset(0px 0 10px 0)");
+});
+function clickHarness() {
+  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { cands: () => [h.bar] });
+  h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 39 }, "fixed");
+  h.tick(0); h.tick(500);
+  h.els.btn.getBoundingClientRect = () => ({ left: 572, top: 28, right: 732, bottom: 50, width: 160, height: 22 });
+  h.click = (y) => { for (const f of h.els.btn.ls.click) f({ isTrusted: true, clientX: 600, clientY: y, stopPropagation() {}, preventDefault() {} }); };
+  return h;
+}
+await test("düğme: kırpılmış bölgeye tıklama menü açmaz (e); görünen bölgeye tıklama açar", () => {
+  const h = clickHarness();
+  assert.equal(h.els.btn.style.clipPath, "inset(11px 0 0px 0)");
+  h.click(33);
+  assert.notEqual(h.els.menu.style.display, "block", "kırpılmış bölge tıklaması yok sayılmalı");
+  h.click(45);
+  assert.equal(h.els.menu.style.display, "block");
+});
+await test("düğme: menü açıkken kırpma başlayınca menü kapanır (f)", () => {
+  const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { cands: () => [h.bar] });
+  h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 10 }, "fixed");        // başta düğmeyi (28..50) örtmez
+  h.tick(0); h.tick(500);
+  assert.ok(!h.els.btn.style.clipPath || h.els.btn.style.clipPath === "none");
+  for (const f of h.els.btn.ls.click) f({ isTrusted: true, clientX: 600, clientY: 40, stopPropagation() {}, preventDefault() {} });
+  assert.equal(h.els.menu.style.display, "block");
+  h.bar.rect.b = 39; h.tick(120);                                    // çubuk düğmenin üst kısmına girdi
+  assert.equal(h.els.btn.style.clipPath, "inset(11px 0 0px 0)");
+  assert.equal(h.els.menu.style.display, "none");
 });
 
 await test("button.js: menü kapanınca bekleyen kalite isteği iptal edilir (kaynakta tek gönderim noktası korunur)", () => {

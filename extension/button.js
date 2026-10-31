@@ -111,7 +111,7 @@
 
   let lastSig = "", lastCover = 0;      // değişmeyen kare: pahalı kontroller atlanır
   function setShown(on) {
-    if (!on) lastSig = "";
+    if (!on) { lastSig = ""; clipT = clipB = 0; }
     if (on) {
       if (btn.style.display !== "flex") { btn.style.display = "flex"; void btn.offsetWidth; }   // opaklık 0'dan başlasın (fade-in)
       btn.classList.add("vis");
@@ -121,7 +121,8 @@
   // Neden eski denetim çalışmıyordu: tek nokta (düğme merkezi) için elementFromPoint bakılıyordu; düğme görünürken o nokta
   // BİZİM düğmemizdir (host) ve denetim "örtü yok" diyordu. Ayrıca saydam/pointer-events:none çubuklar tek noktayla bulunamaz.
   // Şimdi: sabit/yapışkan aday listesi (seyrek yenilenir) + elementsFromPoint yığınındaki sabit atalar, dikdörtgen olarak kırpılır.
-  const COVER_MS = 100, SCAN_MS = 250, ZONE_W = 220, MIN_VIS_H = 60, MIN_VIS_W = 200;
+  const COVER_MS = 100, SCAN_MS = 250, ZONE_W = 220;
+  let clipT = 0, clipB = 0;          // düğmenin üstten/alttan kırpılan piksel sayısı
   let cands = [], scanDirty = true, lastScan = -1e9, lastMeasure = -1e9, coverRects = [];
   const isFixedish = (n) => { try { const p = window.getComputedStyle(n).position; return p === "fixed" || p === "sticky"; } catch { return false; } };
   const isOwn = (n) => n === host || !!(host.contains && host.contains(n));
@@ -184,15 +185,14 @@
     measure(r, now);
     const bw = btn.offsetWidth, bh = btn.offsetHeight || 30;
     const cl = clipFor(r);
-    let p;
-    if (cl.top > r.top || cl.bot < r.bottom) {
-      // örtü var: görünen dikdörtgen = video ∩ viewport ∩ (üst çubukların altı, alt çubukların üstü)
-      const vt = Math.max(r.top, 0, cl.top), vb = Math.min(r.bottom, innerHeight, cl.bot);
-      const vl = Math.max(r.left, 0), vr = Math.min(r.right, innerWidth);
-      const left = vr - bw - 8, top = vt + 8;
-      p = { left, top, visible: vb - vt >= MIN_VIS_H && vr - vl >= MIN_VIS_W && top + bh <= vb };
-    } else p = buttonPos(r, bw, bh, innerWidth, innerHeight);
+    const p = buttonPos(r, bw, bh, innerWidth, innerHeight);      // her zaman videonun GERÇEK sağ üst köşesi
     if (!p.visible) { setShown(false); if (menuOpen) closeMenu(); return; }
+    // Örten sabit çubuk düğmeyle kesişiyorsa düğme çubuğun altına giriyormuş gibi kırpılır (konum değişmez).
+    const cTop = Math.max(0, Math.min(bh, cl.top - p.top)), cBot = Math.max(0, Math.min(bh, p.top + bh - cl.bot));
+    if (cTop + cBot >= bh) { setShown(false); if (menuOpen) closeMenu(); return; }   // tamamen örtülü
+    if ((cTop > 0 || cBot > 0) && menuOpen) closeMenu();         // kırpma başladı: menü çubuğun üstünde asılı kalmasın
+    clipT = cTop; clipB = cBot;
+    btn.style.clipPath = cTop > 0 || cBot > 0 ? "inset(" + cTop + "px 0 " + cBot + "px 0)" : "none";
     btn.style.left = p.left + "px"; btn.style.top = p.top + "px";
     lastSig = sig; lastCover = now;
     if (menuOpen) placeMenu();
@@ -365,6 +365,10 @@
   btn.addEventListener("click", (e) => {
     e.stopPropagation(); e.preventDefault();
     if (!e.isTrusted) return;                          // sayfanın btn.click()/dispatchEvent'i menü açamaz, kalite isteği gönderemez (A2)
+    if ((clipT > 0 || clipB > 0) && typeof e.clientY === "number") {   // kırpılmış (çubuğun altındaki) bölgeye tıklama yok sayılır
+      const bb = btn.getBoundingClientRect();
+      if (e.clientY < bb.top + clipT || e.clientY > bb.bottom - clipB) return;
+    }
     if (menuOpen) { closeMenu(); return; }
     if (target) openMenu();
   }, true);
