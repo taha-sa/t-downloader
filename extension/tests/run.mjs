@@ -375,5 +375,29 @@ await test("button.js: video seçimi ve düğme konumu", () => {
   assert.equal(b.groupOf({ audioOnly: true }), "Sadece ses");
 });
 
+// ---- önceden alma YOK: kalite isteği yalnızca düğme tıklamasıyla gider ----
+await test("önceden alma yok: media mesajı ve düğme yüklemesi qualities göndermez", async () => {
+  sent.length = 0; media.opts.debounceMs = 20;
+  media.onResponse({ tabId: 8, frameId: 0, url: "https://v.test/master2.m3u8", statusCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/vnd.apple.mpegurl" }] });
+  await new Promise((r) => setTimeout(r, 120));
+  assert.ok(sent.some((x) => x.type === "media"));
+  assert.equal(sent.filter((x) => x.type === "qualities").length, 0);
+  const stub = () => new Proxy(function () {}, { get: (t, k) => (k === "style" ? {} : k === "classList" ? { add() {}, remove() {} } : stub()), apply: () => stub(), set: () => true });
+  const doc = { createElement: () => ({ style: {}, attachShadow: () => ({ set innerHTML(v) {}, getElementById: () => stub() }), addEventListener() {} }), addEventListener() {}, documentElement: null };
+  const win = { innerWidth: 1000, innerHeight: 600, top: null, getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1" }), addEventListener() {} };
+  win.top = win;
+  const msgs = [];
+  const sandbox = { window: win, document: doc, __TD_TEST__: {}, parseFloat, Math, setTimeout, clearTimeout, requestAnimationFrame: () => 0, addEventListener() {}, innerWidth: 1000, innerHeight: 600,
+    chrome: { runtime: { sendMessage(m) { msgs.push(m); }, onMessage: mkListener(), getURL: (p) => "chrome-extension://x/" + p } } };
+  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  const src = readFileSync(join(root, "button.js"), "utf8");
+  vm.runInContext(src, sandbox);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(msgs.filter((m) => m && m.kind === "qualities").length, 0);
+  // kaynakta tek gönderim noktası var: openMenu içinde; o da yalnızca düğme click işleyicisi + "Tekrar dene" çağırır
+  assert.equal((src.match(/kind:\s*"qualities"/g) || []).length, 1);
+  assert.equal((src.match(/openMenu\(\)/g) || []).length, 3);   // tanım + click + "Tekrar dene"
+});
+
 console.log(`\n${passed} test geçti`);
 process.exit(0);

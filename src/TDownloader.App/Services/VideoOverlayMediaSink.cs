@@ -70,7 +70,6 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         foreach (var i in m.Items ?? new()) if (!t.Seen.ContainsKey(i.Url)) t.Seen[i.Url] = ++t.Counter;
         if (!string.IsNullOrEmpty(m.PageUrl)) t.PageUrl = m.PageUrl;
         if (!string.IsNullOrEmpty(m.PageTitle)) t.PageTitle = m.PageTitle;
-        Prefetch(m.TabId);   // akış adresi geldiyse kaliteleri şimdiden al
     });
 
     // Eklenti saniyede onlarca konum mesajı gönderebilir; UI thread'ine yalnızca sekme başına en sonuncusu gider.
@@ -131,11 +130,9 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         }
         if (g.TabId == _tabId && g == _raw && _win is { Visible: true }) return;   // aynı konum: yeniden çizme
         if (g.TabId != _tabId) CloseMenu();   // başka sekmenin videosu: eski menü kapanır
-        bool newPage = g.TabId != _tabId || g.PageUrl != _raw?.PageUrl;
         _tabId = g.TabId;
         _raw = g;
         Reposition();
-        if (newPage) Prefetch(g.TabId);
     }
 
     private void HideWin()
@@ -282,15 +279,6 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         });
         _info[source] = (now, t);
         return t;
-    }
-
-    private void Prefetch(int tabId)
-    {
-        if (tabId != _tabId || !Settings.ShowVideoButton) return;
-        var tab = Tab(tabId);
-        var s = Resolve(tab);
-        if (s.Source == null || (!s.Hls && _yt.FindYtDlp() == null)) return;
-        _ = InfoFor(s.Source, s.Ctx, s.Hls, tab.PageTitle);
     }
 
     private void ShowMenu()
