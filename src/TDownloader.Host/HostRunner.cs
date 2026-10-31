@@ -92,16 +92,14 @@ public sealed class HostRunner
             lock (_clientLock) { if (_client is { IsConnected: true }) return _client; }
             DropClient();
 
+            // Cooldown denetimi bağlanma denemesinden ÖNCE: yakın zamanda başlatma başarısız olduysa her mesajda 300 ms bağlanma
+            // bekleme + yeniden başlatma yok (50 indirme x 300 ms = 15 sn takılma). Yine de App elle açılmış olabilir:
+            // cooldown'da yalnızca tek ucuz (1 ms) deneme yapılır.
+            bool inCooldown = DateTime.UtcNow - _lastLaunchFailure < _opt.RetryCooldown;
             var c = new IpcClient(_opt.PipeName);
-            if (await c.ConnectAsync(TimeSpan.FromMilliseconds(300), ct).ConfigureAwait(false))
+            if (await c.ConnectAsync(inCooldown ? TimeSpan.FromMilliseconds(1) : TimeSpan.FromMilliseconds(300), ct).ConfigureAwait(false))
                 return Adopt(c);
-
-            // Önceki başlatma yakın zamanda başarısız olduysa her mesajda 10 sn bekleme.
-            if (DateTime.UtcNow - _lastLaunchFailure < _opt.RetryCooldown)
-            {
-                c.Dispose();
-                return null;
-            }
+            if (inCooldown) { c.Dispose(); return null; }
 
             if (!TryLaunchApp()) { _lastLaunchFailure = DateTime.UtcNow; c.Dispose(); return null; }
 
