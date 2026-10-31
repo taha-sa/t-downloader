@@ -53,6 +53,17 @@ public static class BrowserWindows
         return bestErr <= 80 ? best : null;
     }
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr h, StringBuilder sb, int max);
+
+    /// <summary>Pencere başlığı; tarayıcıda etkin sekme değişince değişir.</summary>
+    public static string Title(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return "";
+        var sb = new StringBuilder(512);
+        GetWindowText(hwnd, sb, sb.Capacity);
+        return sb.ToString();
+    }
+
     public static bool IsUsable(IntPtr hwnd) => hwnd != IntPtr.Zero && IsWindow(hwnd) && IsWindowVisible(hwnd) && !IsIconic(hwnd);
 
     /// <summary>

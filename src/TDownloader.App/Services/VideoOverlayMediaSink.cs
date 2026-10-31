@@ -32,6 +32,12 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     private IntPtr _browser;
     private ContextMenuStrip? _menu;
     private CancellationTokenSource? _lookupCts;
+    private IntPtr _menuBrowser;
+    private string _menuTitle = "";
+
+    // yt-dlp bilgisi sayfa açılınca arka planda alınır; menü açılınca hazır olur.
+    private static readonly TimeSpan InfoTtl = TimeSpan.FromMinutes(10);
+    private readonly Dictionary<string, (DateTime At, Task<VideoInfo> Task)> _info = new(StringComparer.Ordinal);
 
     public VideoOverlayMediaSink(YtDlpClient yt) { _yt = yt; }
 
@@ -43,7 +49,14 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     {
         _svc = services;
         _tick = new System.Windows.Forms.Timer { Interval = 500 };
-        _tick.Tick += (_, _) => { if (_raw?.Visible == true && _win is { Dragging: false }) Reposition(); };
+        _tick.Tick += (_, _) =>
+        {
+            // Kalite menüsü açıkken kullanıcı başka sekmeye/pencereye geçtiyse menüyü kapat.
+            if (_menu != null && _menuBrowser != IntPtr.Zero &&
+                (!BrowserWindows.IsUsable(_menuBrowser) || BrowserWindows.Title(_menuBrowser) != _menuTitle))
+                CloseMenu();
+            if (_raw?.Visible == true && _win is { Dragging: false }) Reposition();
+        };
         _tick.Start();
     }
 
@@ -53,6 +66,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         t.Frames[m.FrameId] = m.Items ?? new();
         if (!string.IsNullOrEmpty(m.PageUrl)) t.PageUrl = m.PageUrl;
         if (!string.IsNullOrEmpty(m.PageTitle)) t.PageTitle = m.PageTitle;
+        Prefetch(m.TabId);   // akış adresi geldiyse kaliteleri şimdiden al
     });
 
     // Eklenti saniyede onlarca konum mesajı gönderebilir; UI thread'ine yalnızca sekme başına en sonuncusu gider.
@@ -111,9 +125,12 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             return;
         }
         if (g.TabId == _tabId && g == _raw && _win is { Visible: true }) return;   // aynı konum: yeniden çizme
+        if (g.TabId != _tabId) CloseMenu();   // başka sekmenin videosu: eski menü kapanır
+        bool newPage = g.TabId != _tabId || g.PageUrl != _raw?.PageUrl;
         _tabId = g.TabId;
         _raw = g;
         Reposition();
+        if (newPage) Prefetch(g.TabId);
     }
 
     private void HideWin()
@@ -211,16 +228,41 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         if (_win != null) _win.MenuOpen = false;
     }
 
+    private readonly record struct Sources(List<MediaItem> Direct, string? Page, string? Source, string? Referer);
+
+    private static Sources Resolve(TabState tab)
+    {
+        var direct = tab.Items.Where(i => i.Kind == "file" && IsHttp(i.Url)).DistinctBy(i => i.Url).Take(25).ToList();
+        var stream = tab.Items.FirstOrDefault(i => (i.Kind == "hls" || i.Kind == "dash") && IsHttp(i.Url));
+        string? page = IsHttp(tab.PageUrl) ? tab.PageUrl : null;
+        return new Sources(direct, page, stream?.Url ?? (direct.Count == 0 ? page : null), stream != null ? page : null);
+    }
+
+    /// <summary>Önbellekteki (veya yeni başlatılan) yt-dlp bilgi görevi. Başarısız/eskimiş görev yeniden başlatılır.</summary>
+    private Task<VideoInfo> InfoFor(string source, string? referer)
+    {
+        var now = DateTime.UtcNow;
+        if (_info.TryGetValue(source, out var e) && now - e.At < InfoTtl && !e.Task.IsFaulted && !e.Task.IsCanceled)
+            return e.Task;
+        foreach (var k in _info.Where(p => now - p.Value.At >= InfoTtl).Select(p => p.Key).ToList()) _info.Remove(k);
+        var t = Task.Run(() => _yt.GetInfoAsync(source, referer));
+        _info[source] = (now, t);
+        return t;
+    }
+
+    private void Prefetch(int tabId)
+    {
+        if (tabId != _tabId || !Settings.ShowVideoButton || _yt.FindYtDlp() == null) return;
+        var s = Resolve(Tab(tabId));
+        if (s.Source != null) _ = InfoFor(s.Source, s.Referer);
+    }
+
     private void ShowMenu()
     {
         if (_svc == null || _win == null) return;
         CloseMenu();
         var tab = Tab(_tabId);
-        var direct = tab.Items.Where(i => i.Kind == "file" && IsHttp(i.Url)).DistinctBy(i => i.Url).Take(25).ToList();
-        var stream = tab.Items.FirstOrDefault(i => (i.Kind == "hls" || i.Kind == "dash") && IsHttp(i.Url));
-        string? page = IsHttp(tab.PageUrl) ? tab.PageUrl : null;
-        string? source = stream?.Url ?? (direct.Count == 0 ? page : null);
-        string? referer = stream != null ? page : null;
+        var (direct, page, source, referer) = Resolve(tab);
 
         // Tek doğrudan medya: menüsüz indir.
         if (source == null && direct.Count == 1) { DownloadDirect(direct[0], page, tab.PageTitle); return; }
@@ -272,24 +314,35 @@ public sealed class VideoOverlayMediaSink : IMediaSink
 
         menu.Closed += (_, _) => { if (ReferenceEquals(_menu, menu)) { _win!.MenuOpen = false; } };
         _win.MenuOpen = true;
+        _menuBrowser = _browser;
+        _menuTitle = BrowserWindows.Title(_browser);
+
+        Task<VideoInfo>? infoTask = loading != null && source != null ? InfoFor(source, referer) : null;
+        if (infoTask is { IsCompletedSuccessfully: true })
+        {
+            FillQualities(menu, loading!, infoTask.Result, source!, page ?? referer);   // önceden alınmış: anında
+            infoTask = null;
+        }
+
         var r = _win.Bounds;
         menu.Show(r.Left, r.Bottom - 2);
 
-        if (loading != null && source != null)
+        if (infoTask != null)
         {
             var cts = _lookupCts = new CancellationTokenSource();
-            string src = source;
+            string src = source!;
+            var loadingItem = loading!;
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    var info = await _yt.GetInfoAsync(src, referer, cts.Token).ConfigureAwait(false);
-                    Post(() => { if (ReferenceEquals(_menu, menu)) FillQualities(menu, loading, info, src, page ?? referer); });
+                    var info = await infoTask.WaitAsync(cts.Token).ConfigureAwait(false);
+                    Post(() => { if (ReferenceEquals(_menu, menu)) FillQualities(menu, loadingItem, info, src, page ?? referer); });
                 }
                 catch (OperationCanceledException) { }
-                catch (YtDlpNotFoundException) { Post(() => ReplaceLoading(menu, loading, "yt-dlp bulunamadı — kurulum bilgisi", ShowInstallInfo)); }
-                catch (YtDlpException ex) { Post(() => ReplaceLoading(menu, loading, "Hata: " + Shorten(ex.Message, 80), () => Msg(ex.Message, MessageBoxIcon.Warning))); }
-                catch (Exception ex) { Post(() => ReplaceLoading(menu, loading, "Hata: " + Shorten(ex.Message, 80), null)); }
+                catch (YtDlpNotFoundException) { Post(() => ReplaceLoading(menu, loadingItem, "yt-dlp bulunamadı — kurulum bilgisi", ShowInstallInfo)); }
+                catch (YtDlpException ex) { Post(() => ReplaceLoading(menu, loadingItem, "Hata: " + Shorten(ex.Message, 80), () => Msg(ex.Message, MessageBoxIcon.Warning))); }
+                catch (Exception ex) { Post(() => ReplaceLoading(menu, loadingItem, "Hata: " + Shorten(ex.Message, 80), null)); }
             });
         }
     }
