@@ -106,7 +106,7 @@ public sealed class DownloadEngine : IDisposable
             }
             else
             {
-                _handle = File.OpenHandle(_partPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+                _handle = File.OpenHandle(_partPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite, FileOptions.Asynchronous);
                 int n = _ranges && _total > 0 ? _opt.Connections : 1;
                 n = Math.Clamp(n, 1, 32);
                 _workers = Enumerable.Range(0, n).Select(i => new Worker { Index = i }).ToList();
@@ -267,6 +267,8 @@ public sealed class DownloadEngine : IDisposable
 
     private async Task WorkerAsync(Worker w, CancellationToken ct)
     {
+        // İşçi başına tek ArrayPool tamponu: okuma ve (asenkron) disk yazımı bunu kullanır.
+        var buf = ArrayPool<byte>.Shared.Rent(_opt.BufferSize);
         try
         {
             while (!ct.IsCancellationRequested)
@@ -283,7 +285,7 @@ public sealed class DownloadEngine : IDisposable
                 w.Seg = seg;
                 try
                 {
-                    await DownloadSegmentAsync(w, seg, ct).ConfigureAwait(false);
+                    await DownloadSegmentAsync(w, seg, buf, ct).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                 catch (Exception ex) when (IsRetryable(ex))
@@ -305,6 +307,10 @@ public sealed class DownloadEngine : IDisposable
             w.State = ConnectionState.Failed;
             Interlocked.CompareExchange(ref _fatal, ex, null);
             try { _cts?.Cancel(); } catch (ObjectDisposedException) { }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buf);
         }
     }
 
@@ -365,11 +371,9 @@ public sealed class DownloadEngine : IDisposable
         return result;
     }
 
-    private async Task DownloadSegmentAsync(Worker w, Segment seg, CancellationToken ct)
+    private async Task DownloadSegmentAsync(Worker w, Segment seg, byte[] buf, CancellationToken ct)
     {
         int attempt = 0;
-        var buf = ArrayPool<byte>.Shared.Rent(_opt.BufferSize);
-        try
         {
             while (true)
             {
@@ -423,7 +427,7 @@ public sealed class DownloadEngine : IDisposable
                             off = seg.Reserved;
                             seg.Reserved += allow;
                         }
-                        RandomAccess.Write(_handle!, buf.AsSpan(0, allow), off);
+                        await RandomAccess.WriteAsync(_handle!, buf.AsMemory(0, allow), off, ct).ConfigureAwait(false);
                         lock (_gate) seg.Position += allow;
                         Interlocked.Add(ref w.Bytes, allow);
                     }
@@ -444,10 +448,6 @@ public sealed class DownloadEngine : IDisposable
                     await Task.Delay(Backoff(attempt, ex), ct).ConfigureAwait(false);
                 }
             }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buf);
         }
     }
 

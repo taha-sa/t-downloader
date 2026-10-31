@@ -103,4 +103,23 @@ public sealed class EngineResilienceTests : IDisposable
         Assert.True(sw.Elapsed >= TimeSpan.FromMilliseconds(900), $"Retry-After beklenmeli ({sw.ElapsedMilliseconds} ms)");
         Assert.Equal(Sha(srv.Data), Sha(File.ReadAllBytes(item.SavePath)));
     }
+
+    [Fact]
+    public async Task DiskHandle_IsAsynchronous_AndFileIsCorrect()
+    {
+        using var srv = new ScriptServer(TestHttpServer.RandomData(2 * 1024 * 1024 + 5));
+        srv.Custom = (c, s, e, probe) => srv.Serve(c, s, e, chunkDelayMs: probe ? 0 : 2);
+        var item = NewItem(srv.Url);
+        using var engine = NewEngine(item);
+        var field = typeof(DownloadEngine).GetField("_handle", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        bool? isAsync = null;
+        engine.ProgressChanged += (_, _) =>
+        {
+            if (field.GetValue(engine) is Microsoft.Win32.SafeHandles.SafeFileHandle h && !h.IsClosed) isAsync ??= h.IsAsync;
+        };
+        var st = await engine.RunAsync();
+        Assert.Equal(DownloadStatus.Completed, st);
+        Assert.True(isAsync, "kısmi dosya FileOptions.Asynchronous ile açılmalı");
+        Assert.Equal(Sha(srv.Data), Sha(File.ReadAllBytes(item.SavePath)));
+    }
 }
