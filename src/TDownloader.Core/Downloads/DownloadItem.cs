@@ -23,7 +23,8 @@ public sealed class DownloadItem
     public DateTime? LastTryAt { get; set; }
     public string? Description { get; set; }
     public string? Referrer { get; set; }
-    public string? Cookie { get; set; }
+    /// <summary>Yalnızca bellekte tutulur; downloads.json'a YAZILMAZ (oturum çerezleri diske düşmesin).</summary>
+    [JsonIgnore] public string? Cookie { get; set; }
     public string? UserAgent { get; set; }
     /// <summary>Akış istekleri için Origin başlığı (iframe oynatıcı sayfasının origin'i); yoksa Referrer'dan türetilir.</summary>
     public string? Origin { get; set; }

@@ -21,6 +21,24 @@ public static class JsonDefaults
         return o;
     }
 
+    /// <summary>
+    /// Atomik yazım + bir önceki sürümün yedeği: önce tmp'ye yazılır ve diske zorlanır, sonra File.Replace ile
+    /// hedefin yerine geçer (eski hedef <c>path + ".bak"</c> olur). Hedef yoksa yalnızca taşınır.
+    /// </summary>
+    internal static void WriteAtomicWithBackup(string path, Action<Stream> write)
+    {
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        var tmp = path + ".tmp";
+        using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16))
+        {
+            write(fs);
+            fs.Flush(flushToDisk: true);
+        }
+        if (File.Exists(path)) File.Replace(tmp, path, path + ".bak", ignoreMetadataErrors: true);
+        else File.Move(tmp, path);
+    }
+
     /// <summary>Dosyaya atomik yazar (tmp + move).</summary>
     internal static void WriteAtomic(string path, string content)
     {

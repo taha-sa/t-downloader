@@ -85,16 +85,42 @@ public sealed class DownloadManager : IAsyncDisposable
 
     // ------------------------------------------------------------ kalıcılık
 
-    /// <summary>downloads.json dosyasını yükler. Yarım kalan indirmeler Paused olur.</summary>
-    public void Load()
+    /// <summary>Son Load()'da ana dosya bozuk çıktıysa açıklama (yedekten yüklendi / liste boş); sorun yoksa null.</summary>
+    public string? LoadWarning { get; private set; }
+
+    private static List<DownloadItem>? TryReadList(string path)
     {
-        List<DownloadItem>? list = null;
         try
         {
-            if (File.Exists(Paths.DownloadsFile))
-                list = JsonSerializer.Deserialize<List<DownloadItem>>(File.ReadAllText(Paths.DownloadsFile), JsonDefaults.Options);
+            if (!File.Exists(path)) return null;
+            using var fs = File.OpenRead(path);
+            return JsonSerializer.Deserialize<List<DownloadItem>>(fs, JsonDefaults.Options);
         }
-        catch (Exception) { /* bozuk dosya */ }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>downloads.json dosyasını yükler (bozuksa .bak yedeğinden). Yarım kalan indirmeler Paused olur.</summary>
+    public void Load()
+    {
+        LoadWarning = null;
+        var list = TryReadList(Paths.DownloadsFile);
+        if (list == null && File.Exists(Paths.DownloadsFile))
+        {
+            // Ana dosya var ama okunamıyor: kanıt olarak ayır, yedekten yüklemeyi dene.
+            try { File.Copy(Paths.DownloadsFile, Paths.DownloadsFile + ".corrupt", overwrite: true); } catch (IOException) { }
+            list = TryReadList(Paths.DownloadsFile + ".bak");
+            LoadWarning = list != null
+                ? "downloads.json bozuktu; bir önceki sürüm (downloads.json.bak) yüklendi."
+                : "downloads.json bozuktu ve yedek okunamadı; liste boş başlatıldı (bozuk dosya downloads.json.corrupt olarak saklandı).";
+        }
+        else if (list == null)
+        {
+            list = TryReadList(Paths.DownloadsFile + ".bak");   // ana dosya yok ama yedek var
+            if (list != null) LoadWarning = "downloads.json yoktu; yedekten (downloads.json.bak) yüklendi.";
+        }
         lock (_gate)
         {
             _items.Clear();
@@ -112,7 +138,8 @@ public sealed class DownloadManager : IAsyncDisposable
         lock (_gate) snapshot = _items.ToList();
         lock (_saveLock)
         {
-            try { JsonDefaults.WriteAtomic(Paths.DownloadsFile, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented)); }
+            // Girintisiz, doğrudan akışa; çerezler [JsonIgnore] olduğundan dosyaya yazılmaz.
+            try { JsonDefaults.WriteAtomicWithBackup(Paths.DownloadsFile, st => JsonSerializer.Serialize(st, snapshot, JsonDefaults.Options)); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
