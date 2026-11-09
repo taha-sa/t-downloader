@@ -1,0 +1,17 @@
+﻿name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: taha-sa/t-suite/.github/workflows/app-ci.yml@main
+    with:
+      app_project: src/TDownloader.App/TDownloader.App.csproj
+      test_projects: |
+        tests/TDownloader.Core.Tests/TDownloader.Core.Tests.csproj
+        tests/TDownloader.Host.Tests/TDownloader.Host.Tests.csproj
+      dotnet_version: '10.0.x'
+    secrets:
+      TSUITE_READ_TOKEN: ${{ secrets.TSUITE_READ_TOKEN }}

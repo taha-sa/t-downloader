@@ -17,3 +17,14 @@ cd extension && node tests/run.mjs
 - `installer\install-host.ps1` native messaging host'u kaydeder. Eklenti 1.1.0 yeni izin (`downloads.ui`) ister: `chrome://extensions` > T-Downloader > **Yenile**.
 - Mimari/sözleşme: `docs/CONTRACT.md`. Performans: `docs/performans.md`.
 - Sürüm: `release.ps1 <sürüm> "notlar"` (yerel build + SHA-256 + ECDSA imza + `latest.json`; `-Publish` verilmedikçe yayınlamaz).
+
+## CI / Yayın
+
+Her push ve pull request CI iş akışını çalıştırır. Yayın için sürüm etiketi oluşturup gönderin:
+
+```powershell
+git tag v1.2.0
+git push --tags
+```
+
+Beta için `v1.2.1-beta.1` gibi bir etiket gönderin; beta sürümleri beta kanalında ön sürüm olarak yayımlanır. Yayın işi, imzalama ve yayımlama başlamadan önce `release` ortamındaki onayı bekler.
