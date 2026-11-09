@@ -11,6 +11,40 @@ public class InboxSpoolTests : IDisposable
         new(id, url, "https://ref/", "a=b", "UA", "a.zip", "application/zip", 1234);
 
     [Fact]
+    public void Write_ProtectsCookiesOnDisk_AndDrainStillReadsThem()
+    {
+        var path = InboxSpool.Write(_dir, Msg("r1") with { Cookies = "sid=SECRETVALUE" });
+        var raw = File.ReadAllText(path);
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.StartsWith(InboxSpool.ProtectedPrefix, raw);
+            Assert.DoesNotContain("SECRETVALUE", raw);
+        }
+        DownloadMessage? got = null;
+        Assert.Equal(1, InboxSpool.Drain(_dir, m => { got = m; return true; }));
+        Assert.Equal("sid=SECRETVALUE", got!.Cookies);
+    }
+
+    [Fact]
+    public void Drain_ReadsLegacyPlainJsonFiles()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "old.json"), IpcSerializer.Serialize(Msg("old") with { Cookies = "k=v" }));
+        DownloadMessage? got = null;
+        Assert.Equal(1, InboxSpool.Drain(_dir, m => { got = m; return true; }));
+        Assert.Equal("k=v", got!.Cookies);
+    }
+
+    [Fact]
+    public void Drain_MovesUndecryptableFileToFailed()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "bad.json"), InboxSpool.ProtectedPrefix + "AAAA");
+        Assert.Equal(0, InboxSpool.Drain(_dir, _ => true));
+        Assert.True(File.Exists(Path.Combine(InboxSpool.FailedDirOf(_dir), "bad.json")));
+    }
+
+    [Fact]
     public void WriteThenDrain_DeliversAndDeletes()
     {
         InboxSpool.Write(_dir, Msg("r1"));

@@ -1,3 +1,7 @@
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 
 namespace TDownloader.Core.Ipc;
@@ -11,16 +15,59 @@ public static class InboxSpool
     public static readonly TimeSpan MaxAge = TimeSpan.FromHours(24);
     public const string Extension = ".json";
 
+    /// <summary>Şifreli dosya öneki; yoksa eski (düz JSON) dosya sayılır ve okunmaya devam eder.</summary>
+    public const string ProtectedPrefix = "TDP1:";
+
+    /// <summary>Çerezler düz metin kalmasın: içerik DPAPI (CurrentUser) ile korunur. Windows dışında düz yazılır.</summary>
+    internal static string Protect(string json)
+    {
+        if (!OperatingSystem.IsWindows()) return json;
+        var enc = ProtectedData.Protect(Encoding.UTF8.GetBytes(json), null, DataProtectionScope.CurrentUser);
+        return ProtectedPrefix + Convert.ToBase64String(enc);
+    }
+
+    /// <summary>Dosya metnini çözer (eski düz JSON da kabul); çözülemezse null.</summary>
+    internal static string? Unprotect(string text)
+    {
+        if (!text.StartsWith(ProtectedPrefix, StringComparison.Ordinal)) return text;
+        if (!OperatingSystem.IsWindows()) return null;
+        try
+        {
+            var raw = ProtectedData.Unprotect(Convert.FromBase64String(text[ProtectedPrefix.Length..].Trim()), null, DataProtectionScope.CurrentUser);
+            return Encoding.UTF8.GetString(raw);
+        }
+        catch (Exception ex) when (ex is CryptographicException or FormatException) { return null; }
+    }
+
+    /// <summary>Klasör yalnızca geçerli kullanıcıya (miras kesilerek) açılır. Başarısızlık yazmayı engellemez.</summary>
+    internal static void RestrictToCurrentUser(string dir)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        try
+        {
+            var di = new DirectoryInfo(dir);
+            var sec = di.GetAccessControl();
+            sec.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+            foreach (FileSystemAccessRule r in sec.GetAccessRules(true, false, typeof(SecurityIdentifier))) sec.RemoveAccessRule(r);
+            var me = WindowsIdentity.GetCurrent().User!;
+            sec.AddAccessRule(new FileSystemAccessRule(me, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+            di.SetAccessControl(sec);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { }
+    }
+
     public static string DirOf(string rootDir) => Path.Combine(rootDir, "inbox");
 
     /// <summary>İsteği atomik yazar; dosya yolunu döner (başarısızlıkta istisna fırlatır).</summary>
     public static string Write(string inboxDir, DownloadMessage msg)
     {
+        bool fresh = !Directory.Exists(inboxDir);
         Directory.CreateDirectory(inboxDir);
+        if (fresh) RestrictToCurrentUser(inboxDir);
         string name = Guid.NewGuid().ToString("N");
         string tmp = Path.Combine(inboxDir, name + ".tmp");
         string final = Path.Combine(inboxDir, name + Extension);
-        File.WriteAllText(tmp, IpcSerializer.Serialize(msg), new UTF8Encoding(false));
+        File.WriteAllText(tmp, Protect(IpcSerializer.Serialize(msg)), new UTF8Encoding(false));
         File.Move(tmp, final);
         return final;
     }
@@ -97,7 +144,8 @@ public static class InboxSpool
             try
             {
                 if (now - time > MaxAge) { Fail(path, "24 saatten uzun süre işlenemedi"); continue; }
-                var msg = IpcSerializer.TryDeserialize(File.ReadAllText(path, Encoding.UTF8)) as DownloadMessage;
+                var plain = Unprotect(File.ReadAllText(path, Encoding.UTF8));
+                var msg = plain == null ? null : IpcSerializer.TryDeserialize(plain) as DownloadMessage;
                 if (msg == null || string.IsNullOrEmpty(msg.Url)) { Fail(path, "Bozuk istek dosyası"); continue; }
                 switch (handler(msg, path))
                 {
