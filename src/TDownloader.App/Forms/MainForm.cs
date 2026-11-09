@@ -355,7 +355,7 @@ public sealed class MainForm : Form
         _catPanel.Dock = DockStyle.Fill;
         var caption = new Panel { Dock = DockStyle.Top, Height = Scaled(20), BackColor = Theme.Black };
         var cl = new Label { Text = "Kategoriler", ForeColor = Theme.Yellow, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(Scaled(6), 0, 0, 0) };
-        var close = new Button { Text = "×", Dock = DockStyle.Right, Width = Scaled(20), FlatStyle = FlatStyle.Flat, ForeColor = Theme.Text, TabStop = false };
+        var close = new Button { Text = "×", Dock = DockStyle.Right, Width = Scaled(20), FlatStyle = FlatStyle.Flat, ForeColor = Theme.Text, AccessibleName = "Kategorileri gizle", TabStop = true };
         close.FlatAppearance.BorderSize = 0;
         close.FlatAppearance.MouseOverBackColor = Theme.Hover;
         close.Click += (_, _) => ToggleCategories();

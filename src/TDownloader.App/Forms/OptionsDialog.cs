@@ -64,13 +64,13 @@ public sealed class OptionsDialog : DluForm
         var k = Page("Kayıt Yeri");
         Put(k, new Label { Text = "Ana kayıt klasörü:" }, 10, 8, 120, 10);
         _root = Put(k, new TextBox(), 10, 20, 206, 14);
-        var rb = Put(k, new Button { Text = "...", }, 221, 20, 20, 14);
+        var rb = Put(k, new Button { Text = "...", AccessibleName = "Ana kayıt klasörünü seç", TabStop = true }, 221, 20, 20, 14);
         Put(k, new Label { Text = "Kategori klasörleri (boşsa ana klasör altında kategori adı):" }, 10, 42, 232, 10);
         _cats = Put(k, new BufferedListView { View = View.Details, FullRowSelect = true, HideSelection = false, MultiSelect = false }, 10, 54, 232, 80);
         _cats.Columns.Add("Kategori", Dlu.X(60));
         _cats.Columns.Add("Klasör", Dlu.X(165));
         _catFolder = Put(k, new TextBox(), 10, 140, 156, 14);
-        var cb = Put(k, new Button { Text = "...", }, 170, 140, 20, 14);
+        var cb = Put(k, new Button { Text = "...", AccessibleName = "Kategori klasörünü seç", TabStop = true }, 170, 140, 20, 14);
         var cr = Put(k, new Button { Text = "Varsayılan", }, 194, 140, 48, 14);
 
         // --- Tarayıcı yakalama
@@ -88,11 +88,11 @@ public sealed class OptionsDialog : DluForm
         _showVideoBtn = Put(v, new DarkCheck { Text = "Videoların üstünde \"Bu videoyu indir\" düğmesini göster", AutoEllipsis = true }, 10, 8, 238, 11);
         Put(v, new Label { Text = "yt-dlp yolu (boşsa otomatik aranır):" }, 10, 26, 232, 10);
         _ytPath = Put(v, new TextBox(), 10, 37, 206, 14);
-        var yb = Put(v, new Button { Text = "...", }, 221, 37, 20, 14);
+        var yb = Put(v, new Button { Text = "...", AccessibleName = "yt-dlp dosyasını seç", TabStop = true }, 221, 37, 20, 14);
         _ytState = Put(v, new Label { AutoEllipsis = true }, 10, 53, 232, 10);
         Put(v, new Label { Text = "ffmpeg yolu veya klasörü (boşsa otomatik aranır):" }, 10, 68, 232, 10);
         _ffPath = Put(v, new TextBox(), 10, 79, 206, 14);
-        var fb = Put(v, new Button { Text = "...", }, 221, 79, 20, 14);
+        var fb = Put(v, new Button { Text = "...", AccessibleName = "ffmpeg dosyasını seç", TabStop = true }, 221, 79, 20, 14);
         _ffState = Put(v, new Label { AutoEllipsis = true }, 10, 95, 232, 10);
         Put(v, new Label { Text = "Varsayılan kalite:" }, 10, 112, 80, 10);
         _quality = Put(v, new DarkCombo { DropDownStyle = ComboBoxStyle.DropDownList }, 90, 110, 80, 14);
