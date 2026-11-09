@@ -59,6 +59,8 @@ public sealed class LinkService : IAsyncDisposable
             _mgr.ProgressChanged += OnProgress;
             _mgr.DownloadCompleted += OnCompleted;
             _mgr.DownloadFailed += OnFailed;
+            _mgr.ItemChanged += OnItemChanged;
+            _mgr.ItemRemoved += OnItemRemoved;
 
             _registry.CleanupStale();
             _registry.Write(new AppManifest
@@ -97,6 +99,20 @@ public sealed class LinkService : IAsyncDisposable
         _server?.Publish("download.completed", LinkJson.Obj(
             ("id", i.Id), ("fileName", i.FileName), ("path", i.SavePath), ("size", i.TotalSize > 0 ? i.TotalSize : i.Downloaded),
             ("url", i.Url), ("mime", MimeTypes.FromFileName(i.FileName))));
+    }
+
+    /// <summary>Hız sınırlayıcı kayıtlarının sayısı (sızıntı denetimi için).</summary>
+    public int TrackedProgressCount { get { lock (_lastProgress) return _lastProgress.Count; } }
+
+    // Duraklatılan / sıraya dönen / iptal edilen kimlikler artık ilerleme üretmez: kaydı temizle.
+    private void OnItemChanged(object? sender, DownloadItem i)
+    {
+        if (i.Status != DownloadStatus.Downloading) lock (_lastProgress) _lastProgress.Remove(i.Id);
+    }
+
+    private void OnItemRemoved(object? sender, DownloadItem i)
+    {
+        lock (_lastProgress) _lastProgress.Remove(i.Id);
     }
 
     private void OnFailed(object? sender, DownloadItem i)
@@ -147,6 +163,8 @@ public sealed class LinkService : IAsyncDisposable
         _mgr.ProgressChanged -= OnProgress;
         _mgr.DownloadCompleted -= OnCompleted;
         _mgr.DownloadFailed -= OnFailed;
+        _mgr.ItemChanged -= OnItemChanged;
+        _mgr.ItemRemoved -= OnItemRemoved;
         try { _registry.MarkStopped(AppId); } catch { }
         if (_server != null) { try { await _server.DisposeAsync().ConfigureAwait(false); } catch { } }
     }
