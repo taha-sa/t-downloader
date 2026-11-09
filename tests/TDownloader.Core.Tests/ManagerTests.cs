@@ -42,6 +42,8 @@ public sealed class ManagerTests : IDisposable
     [InlineData("a.pdf", "Belgeler")]
     [InlineData("a.mp3", "Müzik")]
     [InlineData("a.exe", "Programlar")]
+    [InlineData("a.png", "Resimler")]
+    [InlineData("photo.jpg", "Resimler")]
     [InlineData("a.xyz", "Genel")]
     public void Category_ByExtension(string name, string cat) => Assert.Equal(cat, Categories.FromFileName(name));
 }

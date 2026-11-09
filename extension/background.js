@@ -74,7 +74,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         qlist.track(requestId, tab.id);     // await'ten ÖNCE: menü hemen kapanırsa qualitiesCancel bu kimlikle gidebilir (A15)
         const [players, cookies] = await Promise.all([probePlayers(tab.id, sender.frameId), media.cookiesForTab(tab.id)]);
         const res = await native.request(buildQualities({
-          requestId, tabId: tab.id, frameId: sender.frameId ?? 0, pageUrl: tab.url, pageTitle: tab.title,
+          requestId, tabId: tab.id, frameId: sender.frameId ?? 0, pageUrl: msg.pageUrl || tab.url, pageTitle: tab.title,
           frameUrl: sender.url, src: msg.src, players, cookies,
         }), (m) => m.type === "qualitiesResult" && m.requestId === requestId, 100000);
         qlist.done(requestId);

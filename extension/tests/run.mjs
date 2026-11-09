@@ -460,10 +460,10 @@ function loadButton(ov = {}) {
     return { style: {}, classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), has: (c) => cls.has(c), contains: (c) => cls.has(c) }, offsetWidth: 160, offsetHeight: 22,
       ls: {}, addEventListener(t, f) { (this.ls[t] ??= []).push(f); }, getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }), matches: () => false, set innerHTML(v) {}, scrollHeight: 100 };
   };
-  const els = {};
+  const els = {}, docLs = {};
   const doc = {
     createElement: () => { const e = mkEl(); e.attachShadow = () => ({ set innerHTML(v) {}, getElementById: (id) => (els[id] ??= mkEl()) }); return e; },
-    addEventListener() {}, documentElement: null, elementFromPoint: () => null, hidden: false, querySelectorAll: () => [],
+    ls: docLs, addEventListener(t, f) { (docLs[t] ??= []).push(f); }, documentElement: null, elementFromPoint: () => null, hidden: false, querySelectorAll: () => [],
   };
   const win = { innerWidth: 1000, innerHeight: 600, getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1", position: "static" }), addEventListener() {} };
   win.top = win;
@@ -602,8 +602,8 @@ await test("button.js: video keşfi IntersectionObserver ile; mousemove tüm <vi
   rafs = 0; b.loop();
   assert.equal(rafs, 0, "görünmeyen videoda rAF yeniden planlanmamalı");
   ioCb([{ target: video, isIntersecting: true }]);
-  b.setTarget(video); b.loop();
-  assert.equal(rafs, 1);                                                // görünürken döngü sürer
+  rafs = 0; b.setTarget(video); b.loop();   // görünür olan video hedef olup döngüyü kendisi başlatır; sayaç sıfırlanır
+  assert.equal(rafs, 1);                                              // görünürken döngü sürer
 });
 
 // ---- oynatıcı yapılandırması ayrıştırma ----
@@ -760,6 +760,7 @@ await test("segment sezgisi: manifest yoksa seg-1.mp4 normal dosyadır", () => {
   assert.equal(proto.isSegment("https://a/seg-1.mp4", "video/mp4", false), false);
   assert.equal(proto.isSegment("https://a/seg-1.mp4", "video/mp4", true), true);
   assert.equal(proto.isSegment("https://a/x.m4s", "video/mp4", false), true);
+  assert.equal(proto.isSegment("https://instagram.ferz3-1.fna.fbcdn.net/o1/v/t2/f2/m367/AQOGbs.mp4?efg=eyJ2ZW5", "video/mp4", false), true);
   assert.equal(proto.isSegment("https://a/film.mp4", "video/mp4", true), false);
   assert.equal(proto.isNoiseUrl("https://a/x.png?v=1"), true);
   assert.equal(proto.isNoiseUrl("https://a/x.m3u8"), false);
@@ -847,6 +848,24 @@ await test("düğme: alttan örten sabit çubuk düğmeyi alttan kırpar (inset 
   h.tick(0); h.tick(500);
   assert.deepEqual(bpos(h), [740 - 160 - 8, 408]);
   assert.equal(h.els.btn.style.clipPath, "inset(0px 0 10px 0)");
+});
+await test("düğme: dikey yan paneller (YouTube sağ menüsü vb.) üst çubuk sanılıp düğmeyi gizlemez", () => {
+  const h = overlayHarness({ l: 100, t: 56, w: 640, h: 360 }, { cands: () => [h.sidePanel] });
+  h.sidePanel = h.mkNode({ l: 700, t: 56, r: 760, b: 900 }, "fixed"); // sağda dikey uzanan sabit panel
+  h.tick(0); h.tick(500);
+  assert.equal(h.els.btn.style.display, "flex");
+  assert.deepEqual(bpos(h), [740 - 160 - 8, 64]);
+  assert.ok(!h.els.btn.style.clipPath || h.els.btn.style.clipPath === "none");
+});
+await test("düğme: YouTube izleme sayfası — video üstü 56'ya bitişik, videonun ARKASINDAKİ uzun yapışkan/sabit sütun (secondary-split-scroll-spacer) düğmeyi gizlemez", () => {
+  const h = overlayHarness({ l: 359, t: 56, w: 640, h: 480 }, { cands: () => [h.spacer, h.secondary, h.masthead] });
+  h.spacer = h.mkNode({ l: 347, t: 56, r: 1003, b: 614 }, "sticky");       // videoyla aynı sütun, tüm yükseklik, videonun arkasında
+  h.secondary = h.mkNode({ l: 240, t: 56, r: 1663, b: 614 }, "fixed");
+  h.masthead = h.mkNode({ l: 0, t: 0, r: 1443, b: 56 }, "fixed");           // bitişik üst çubuk: düğmeyi (64..) örtmez
+  h.tick(0); h.tick(500);
+  assert.equal(h.els.btn.style.display, "flex", "düğme gizlenmemeli");
+  assert.deepEqual(bpos(h), [999 - 160 - 8, 64]);
+  assert.ok(!h.els.btn.style.clipPath || h.els.btn.style.clipPath === "none");
 });
 function clickHarness() {
   const h = overlayHarness({ l: 100, t: 20, w: 640, h: 360 }, { cands: () => [h.bar] });
@@ -984,5 +1003,101 @@ await test("A12: gizli pencere (incognito) indirmesi yakalanmaz", async () => {
   assert.equal(calls.length, 0, "tarayıcı indirmesine dokunulmaz");
 });
 
-console.log(`\n${passed} test geçti`);
+
+// ---- düğme kaybolma hatası: video yüklenince oynatıcı DOM'u yeniden kurulur / video öğesi değişir ----
+await test("düğme: yükleme ekranındaki video yerine yenisi gelince (eski kopar) düğme yeni videoda yeniden belirir; çift host/düğme yok; mousemove capture", async () => {
+  let ioCb = null; const winLs = []; const appended = [];
+  const mkV = (rect) => Object.assign(fakeVideo(rect), { currentSrc: "", src: "" });
+  const oldV = mkV({ l: 100, t: 100, w: 640, h: 360 });
+  const newV = mkV({ l: 100, t: 100, w: 640, h: 360 });
+  let list = [oldV], mo = null;
+  const { b, els, sandbox, doc } = loadButton({
+    doc: { querySelectorAll: () => list, elementsFromPoint: () => [newV], appendChild() {}, documentElement: { appendChild: (n) => appended.push(n) } },
+    sandbox: {
+      IntersectionObserver: class { constructor(cb) { ioCb = cb; } observe() {} },
+      MutationObserver: class { constructor(cb) { mo = cb; } observe() {} },
+      setInterval: () => 0, clearInterval() {}, requestAnimationFrame: () => 1,
+      addEventListener: (t, f, o) => { winLs.push([t, o]); },
+    },
+  });
+  let now = 1e6; b.setClock(() => now); b.resetTrackers();   // başlangıç keşfi gerçek saatle izleyici açmış olabilir
+  ioCb([{ target: oldV, isIntersecting: true }]);        // yükleme ekranı videosu hedef olur
+  b.place(); now += 500; b.place();
+  assert.equal(els.btn.style.display, "flex");
+  // oynatıcı yeniden kuruldu: eski video DOM'dan çıktı, yenisi eklendi
+  oldV.isConnected = false; list = [newV];
+  now += 16; b.place();
+  assert.equal(els.btn.style.display, "none");
+  mo([{ type: "childList", addedNodes: [{ nodeType: 1 }] }]);   // gözlemci yeniden keşfi planlar
+  await new Promise((r) => setTimeout(r, 250));
+  ioCb([{ target: newV, isIntersecting: true }]);          // IO yeni videoyu görünür bildirir -> hedef olur
+  now += 16; b.place(); now += 500; b.place();
+  assert.equal(els.btn.style.display, "flex", "yeni videoda düğme yeniden görünmeli");
+  assert.equal(parseFloat(els.btn.style.left), 100 + 640 - 160 - 8);
+  // host sayfa tarafından sökülürse geri takılır
+  doc.createElement; const before = appended.length;
+  now += 16; b.place();
+  assert.ok(appended.length >= before);
+  const mm = winLs.find(([t]) => t === "mousemove");
+  assert.ok(mm && mm[1] && mm[1].capture === true, "mousemove capture ile dinlenmeli (oynatıcı stopPropagation yapsa da)");
+});
+
+await test("Instagram: indirme butonuna basılınca aşağı kaydırmada menü ve buton kapanmaz, ekranda sabitlenir", () => {
+  const h = overlayHarness({ l: 100, t: 80, w: 640, h: 360 }, { cands: () => [h.bar] });
+  h.sandbox.location.hostname = "www.instagram.com";
+  h.bar = h.mkNode({ l: 0, t: 0, r: 1000, b: 60 }, "fixed");
+  h.tick(0); h.tick(500);
+  assert.equal(h.els.btn.style.display, "flex");
+  for (const f of h.els.btn.ls.click) f({ isTrusted: true, clientX: 600, clientY: 90, stopPropagation() {}, preventDefault() {} });
+  assert.equal(h.els.menu.style.display, "block");
+  // Aşağı kaydır: video yukarı çıksın, üst çubuğun altına girsin (t = 20)
+  h.video.rect.t = 20;
+  h.tick(120);
+  assert.equal(h.els.menu.style.display, "block", "menü açık kalmalı");
+  assert.equal(h.els.btn.style.display, "flex", "buton görünür kalmalı");
+  assert.equal(h.els.btn.style.clipPath, "none", "buton kırpılmamalı");
+});
+
+await test("Instagram: aşağı kaydırırken buton mevcut videoda sabit kalır, sağ üstte sabitlenir, alttaki videolara otomatik geçmez", () => {
+  const v1 = fakeVideo({ l: 100, t: 80, w: 640, h: 360 });
+  const v2 = fakeVideo({ l: 100, t: 500, w: 640, h: 360 });
+  let list = [v1, v2];
+  const { b, els, sandbox } = loadButton({
+    doc: {
+      querySelectorAll: () => list,
+      elementsFromPoint: () => [v1],
+    },
+    sandbox: {
+      location: { hostname: "www.instagram.com", pathname: "/" }
+    }
+  });
+
+  b.setTarget(v1);
+  let now = 100;
+  b.setClock(() => now);
+  b.place(); now += 500; b.place();
+  assert.equal(els.btn.style.display, "flex");
+
+  // Aşağı kaydır: v1 yukarı çıksın (t = -200), ancak video altı halen ekranda (b = 160)
+  v1.rect.t = -200;
+  b.inView.add(v2);
+  now += 100;
+  b.place();
+
+  // v1 hedef kalmalı, v2'ye otomatik atlamamalı
+  assert.equal(b.getTarget(), v1, "hedef video 1 olarak kilitli kalmalı");
+  // Buton ekranda görünür kalmalı ve sağ üstte (12px) sabitlenmeli
+  assert.equal(els.btn.style.display, "flex", "aşağı kaydırmada buton görünür kalmalı");
+  assert.equal(els.btn.style.top, "12px", "buton sağ üstte (12px) sabit kalmalı");
+  assert.equal(els.btn.style.left, (100 + 640 - 160 - 8) + "px", "buton videonun sağ kenarında olmalı");
+  assert.equal(els.btn.style.clipPath, "none", "buton kırpılmamalı");
+
+  // Alttaki videoya (v2) tıklanırsa hedef v2'ye geçer
+  const docLs = sandbox.document.ls || {};
+  for (const f of (docLs.pointerdown || [])) f({ isTrusted: true, target: v2 });
+  assert.equal(b.getTarget(), v2, "alttaki videoya basınca hedef v2 olmalı");
+});
+
+console.log(`
+${passed} test geçti`);
 process.exit(0);

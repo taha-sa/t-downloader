@@ -125,12 +125,14 @@ export function originOf(url) {
 // Kesin akış PARÇALARI (HLS/DASH segmenti): medya listesine tek tek girmez.
 const SEGMENT_EXT = /\.(?:ts|m4s|cmfv|cmfa|cmft|m4f|fmp4)(?:$|[?#])/i;
 const SEGMENT_MIME = /^(?:video\/mp2t|video\/iso\.segment|audio\/iso\.segment|video\/vnd\.dlna\.mpeg-tts)$/;
+// Facebook/Instagram video CDN parçaları (DASH alt akışları / parçaları: m367/m78/m366/efg/bytestart)
+const FB_IG_CHUNK = /(?:fna\.fbcdn\.net|cdninstagram\.com).*(?:[?&]efg=|\/m(?:366|367|78|86)\/|[?&]bytestart=)/i;
 // Manifest görülmüş bir sekmede parça gibi adlandırılmış dosyalar (seg-12.mp4, chunk_0003.aac, /00017.m4a ...).
 const SEGMENT_NAME = /(?:^|[\/_.-])(?:(?:seg|segment|chunk|frag|fragment)[-_]?\d+|init(?:[-_.]|$))|[\/_-]\d{3,}\.(?:mp4|m4a|m4v|aac|mp3)(?:$|[?#])|\/\d+\.(?:mp4|m4a|m4v|aac)(?:$|[?#])/i;
 export function isSegment(url, contentType = "", hasManifest = false) {
   const u = url || "";
   const ct = (contentType || "").split(";")[0].trim().toLowerCase();
-  if (SEGMENT_EXT.test(u) || SEGMENT_MIME.test(ct)) return true;
+  if (SEGMENT_EXT.test(u) || SEGMENT_MIME.test(ct) || /[/?&]videoplayback(?:$|[?&#])/i.test(u) || FB_IG_CHUNK.test(u)) return true;
   if (!hasManifest) return false;
   return SEGMENT_NAME.test(u.split(/[?#]/)[0]) || /\.aac(?:$|[?#])/i.test(u);
 }

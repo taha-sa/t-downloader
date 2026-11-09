@@ -124,6 +124,15 @@ public static class Icons
                     g.FillPolygon(br, gl); g.DrawPolygon(pn, gl);
                 }
                 break;
+            case "hash":
+                using (var p = T(2f))
+                {
+                    g.DrawLine(p, 9f, 5, 7f, 19);
+                    g.DrawLine(p, 16f, 5, 14f, 19);
+                    g.DrawLine(p, 5, 9.5f, 19, 9.5f);
+                    g.DrawLine(p, 4.5f, 14.5f, 18.5f, 14.5f);
+                }
+                break;
         }
     }
 

@@ -9,8 +9,8 @@ public sealed class EngineOptions
     /// <summary>Dinamik bölmede en küçük parça (varsayılan 1 MB).</summary>
     public long MinSplitSize { get; set; } = 1024 * 1024;
     /// <summary>Bağlantı başına art arda hata sonrası vazgeçme sayısı (ilerleme olunca sayaç sıfırlanır).</summary>
-    public int MaxRetries { get; set; } = 5;
-    public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
+    public int MaxRetries { get; set; } = 8;
+    public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromSeconds(1.5);
     public TimeSpan ReadTimeout { get; set; } = TimeSpan.FromSeconds(30);
     public TimeSpan ProgressInterval { get; set; } = TimeSpan.FromMilliseconds(250);
     public TimeSpan StateSaveInterval { get; set; } = TimeSpan.FromSeconds(1);

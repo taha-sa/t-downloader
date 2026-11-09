@@ -10,3 +10,19 @@ TestResults/
 dev-extension-key*
 dist/
 dist-new/
+
+# Ek (GitHub oncesi)
+dist-release/
+publish/
+node_modules/
+*.log
+logs/
+*.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.pass
+.env
+.env.*
+.idea/

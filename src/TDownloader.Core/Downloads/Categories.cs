@@ -7,9 +7,10 @@ public static class Categories
     public const string Music = "Müzik";
     public const string Programs = "Programlar";
     public const string Video = "Video";
+    public const string Pictures = "Resimler";
     public const string General = "Genel";
 
-    public static readonly string[] All = { Compressed, Documents, Music, Programs, Video, General };
+    public static readonly string[] All = { Compressed, Documents, Music, Programs, Video, Pictures, General };
 
     private static readonly Dictionary<string, string> Map = Build();
 
@@ -22,6 +23,7 @@ public static class Categories
         Add(Music, "mp3 wav flac aac ogg m4a wma opus mid");
         Add(Programs, "exe msi msix appx apk dmg deb rpm bat jar");
         Add(Video, "mp4 mkv avi mov wmv flv webm m4v mpg mpeg ts 3gp");
+        Add(Pictures, "jpg jpeg png gif webp svg ico bmp avif tiff psd raw heic heif");
         return d;
     }
 

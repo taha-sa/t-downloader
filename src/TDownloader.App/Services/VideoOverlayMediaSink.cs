@@ -298,10 +298,23 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             var ctx = ContextOf(stream, page);
             return new Sources(direct, page, stream.Url, ctx, stream.Kind == "hls" || HlsClient.LooksLikeHlsUrl(stream.Url), ctx.Referer);
         }
-        return new Sources(direct, page, direct.Count == 0 ? page : null, MediaContext.Empty, false, null);
+        bool isVideoSite = IsKnownVideoSite(page);
+        return new Sources(direct, page, isVideoSite || direct.Count == 0 ? page : null, MediaContext.Empty, false, null);
     }
 
     /// <summary>Öğenin kendi başlıkları; yoksa sayfa adresi Referer olur.</summary>
+    public static bool IsKnownVideoSite(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return false;
+        return url.Contains("youtube.com/", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("youtu.be/", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("instagram.com/", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("tiktok.com/", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("facebook.com/", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("fb.watch/", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("twitter.com/", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("x.com/", StringComparison.OrdinalIgnoreCase);
+    }
     public static MediaContext ContextOf(MediaItem i, string? page) => MediaContexts.ContextOf(i, page);
     public static MediaContext ForSource(MediaContext ctx, string? url) => MediaContexts.ForSource(ctx, url);
     public static string Scrub(string? text) => MediaContexts.Scrub(text);
@@ -607,12 +620,15 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         }
         long mainSize = streamOpts.Count == 0 ? 0 : streamOpts.Max(o => o.Size);
 
+        bool isVideoSite = IsKnownVideoSite(pageUrl ?? q.PageUrl);
+
         // Doğrudan dosyalar: etiketli (oynatıcıdan) önce, sonra yakalananlar; küçük/kısa olanlar "Diğer dosyalar"a
         var files = src.Direct.Select(d => (D: d, Hint: fileHints.GetValueOrDefault(d.Url)))
             .OrderByDescending(x => x.Hint?.Height ?? 0).ToList();
         var minor = new List<(MediaItem D, string Label)>();
         foreach (var (d, hint) in files)
         {
+            if (isVideoSite && streamOpts.Count > 0 && hint == null) continue;
             string label = hint != null && (!string.IsNullOrEmpty(hint.Label) || hint.Height > 0)
                 ? (string.IsNullOrEmpty(hint.Label) ? hint.Height + "p" : hint.Label) + " " + Path.GetExtension(d.Url.Split('?', '#')[0]).TrimStart('.').ToLowerInvariant()
                 : Shorten(DirectName(d, pageTitle), 48);
@@ -625,10 +641,13 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             entries.Add(new Entry(null, o));
             infos.Add(new QualityOptionInfo(o.Label, "other", 0, o.Size, false, false));
         }
-        foreach (var (d, label) in minor)
+        if (!isVideoSite || streamOpts.Count == 0)
         {
-            entries.Add(new Entry(d, null));
-            infos.Add(new QualityOptionInfo(label, "other", 0, Math.Max(0, d.Size), false, false));
+            foreach (var (d, label) in minor)
+            {
+                entries.Add(new Entry(d, null));
+                infos.Add(new QualityOptionInfo(label, "other", 0, Math.Max(0, d.Size), false, false));
+            }
         }
 
         if (entries.Count == 0)

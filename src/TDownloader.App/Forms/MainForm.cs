@@ -100,7 +100,16 @@ public sealed class MainForm : Form
 
         _tray = BuildTray();
         _sched = new SchedulerService(svc);
-        _sched.Notify += msg => UiPost(() => _stMain.Text = msg);   // balon yok: durum çubuğunda göster
+        _sched.Notify += msg => UiPost(() =>
+        {
+            _stMain.Text = msg;
+            try
+            {
+                if (_tray.Visible && _mgr.Settings.Scheduler.OnFinished != "none")
+                    _tray.ShowBalloonTip(3000, "T-Downloader", msg, ToolTipIcon.Info);
+            }
+            catch { }
+        });
         _sched.ExitRequested += ExitApp;
 
         _extensionDir = FindExtensionDir();
@@ -313,7 +322,7 @@ public sealed class MainForm : Form
         _tree.ItemHeight = Scaled(20);
         TreeNode N(string t, string tag, string icon) => new(t) { Tag = tag, ImageKey = icon, SelectedImageKey = icon };
         var all = N("Tüm İndirmeler", "all", "all");
-        foreach (var c in new[] { Categories.Compressed, Categories.Documents, Categories.Music, Categories.Programs, Categories.Video })
+        foreach (var c in new[] { Categories.Compressed, Categories.Documents, Categories.Music, Categories.Programs, Categories.Video, Categories.Pictures })
             all.Nodes.Add(N(c, "cat:" + c, "folder"));
         _tree.Nodes.Add(all);
         _tree.Nodes.Add(N("Tamamlanmayan", "unfinished", "unfinished"));
@@ -340,27 +349,93 @@ public sealed class MainForm : Form
         foreach (var c in Cols) _list.Columns.Add(new ColumnHeader { Name = c.Key, Text = c.Title, Width = Scaled(c.Width), TextAlign = c.Align });
         _list.ColumnClick += (_, e) => SortBy(e.Column, _sortCol != e.Column || !_sortAsc);
         _list.DoubleClick += (_, _) => OnListDoubleClick();
+        _list.ItemDrag += (_, e) =>
+        {
+            var sel = Selected();
+            if (e.Item is ListViewItem lvi && lvi.Tag is DownloadItem di && !sel.Any(s => s.Id == di.Id))
+            {
+                sel = new List<DownloadItem> { di };
+            }
+
+            var paths = sel
+                .Where(i => i.Status == DownloadStatus.Completed && !string.IsNullOrEmpty(i.SavePath) && File.Exists(i.SavePath))
+                .Select(i => i.SavePath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (paths.Length == 0) return;
+
+            var data = new DataObject();
+            data.SetData(DataFormats.FileDrop, paths);
+            data.SetData("Preferred DropEffect", new MemoryStream(new byte[] { (byte)DragDropEffects.Copy, 0, 0, 0 }));
+            _list.DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+        };
         _list.SelectedIndexChanged += (_, _) => { if (!_bulk) UpdateStatus(); };
         _list.KeyDown += (_, e) =>
         {
-            if (e.KeyCode != Keys.A || !e.Control) return;
-            // Toplu seçim: öğe başına SelectedIndexChanged/güncelleme yok; tek BeginUpdate + tek durum güncellemesi.
-            _bulk = true; _list.BeginUpdate();
-            try { foreach (ListViewItem i in _list.Items) i.Selected = true; }
-            finally { _list.EndUpdate(); _bulk = false; }
-            UpdateStatus();
-            e.Handled = true;
+            if (e.KeyCode == Keys.A && e.Control)
+            {
+                // Toplu seçim: öğe başına SelectedIndexChanged/güncelleme yok; tek BeginUpdate + tek durum güncellemesi.
+                _bulk = true; _list.BeginUpdate();
+                try { foreach (ListViewItem i in _list.Items) i.Selected = true; }
+                finally { _list.EndUpdate(); _bulk = false; }
+                UpdateStatus();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.Delete)
+            {
+                if (e.Shift) DeleteSelectedFromDisk();
+                else DeleteSelected();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.Enter)
+            {
+                OnListDoubleClick();
+                e.Handled = true;
+            }
         };
+
+        var ctxOpen = Mi("Aç", OpenSelectedFile);
+        var ctxFolder = Mi("Klasörde göster", ShowSelectedInFolder);
+        var ctxHash = Mi("Sağlama Toplamı (Hash)...", ShowSelectedHash, Keys.None, "hash");
+        var ctxSep1 = new ToolStripSeparator();
+        var ctxResume = Mi("Devam et", ResumeSelected, Keys.None, "resume");
+        var ctxStop = Mi("Durdur", StopSelected, Keys.None, "stop");
+        var ctxProgress = Mi("İlerleme penceresi", ShowSelectedProgress);
+        var ctxSep2 = new ToolStripSeparator();
+        var ctxDelete = Mi("Sil", DeleteSelected, Keys.None, "delete");
+        var ctxDisk = Mi("Diskten Sil", DeleteSelectedFromDisk, Keys.None, "deletedisk");
+        ctxDisk.ShortcutKeyDisplayString = "Shift+Del";
 
         _ctx.Items.AddRange(new ToolStripItem[]
         {
-            Mi("Aç", OpenSelectedFile), Mi("Klasörde göster", ShowSelectedInFolder), new ToolStripSeparator(),
-            Mi("Devam et", ResumeSelected, Keys.None, "resume"), Mi("Durdur", StopSelected, Keys.None, "stop"),
-            Mi("İlerleme penceresi", ShowSelectedProgress), new ToolStripSeparator(), Mi("Sil", DeleteSelected, Keys.None, "delete"),
+            ctxOpen, ctxFolder, ctxHash, ctxSep1,
+            ctxResume, ctxStop, ctxProgress, ctxSep2,
+            ctxDelete, ctxDisk
         });
-        var ctxDisk = Mi("Diskten Sil", DeleteSelectedFromDisk, Keys.None, "deletedisk");
-        ctxDisk.ShortcutKeyDisplayString = "Shift+Del";
-        _ctx.Items.Add(ctxDisk);
+        _ctx.Opening += (_, e) =>
+        {
+            var sel = Selected();
+            if (sel.Count == 0)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            bool allCompleted = sel.All(i => i.Status == DownloadStatus.Completed);
+            bool canResume = sel.Any(i => i.Status is DownloadStatus.Paused or DownloadStatus.Failed);
+            bool canStop = sel.Any(i => i.Status is DownloadStatus.Downloading or DownloadStatus.Queued);
+            bool hasIncomplete = sel.Any(i => i.Status != DownloadStatus.Completed);
+
+            ctxHash.Visible = allCompleted && sel.Count == 1;
+            ctxResume.Visible = canResume;
+            ctxStop.Visible = canStop;
+            ctxProgress.Visible = hasIncomplete;
+
+            bool middleGroupVisible = ctxResume.Visible || ctxStop.Visible || ctxProgress.Visible;
+            ctxSep1.Visible = true;
+            ctxSep2.Visible = middleGroupVisible;
+        };
         _ctx.Renderer = new ThemeRenderer();
         _list.ContextMenuStrip = _ctx;
         _split.Panel2.Controls.Add(_list);
@@ -386,6 +461,7 @@ public sealed class MainForm : Form
         m.Items.Add(Mi("Çı&kış", ExitAppByUser));
         var n = new NotifyIcon { Icon = Icons.TrayIcon(), Text = "T-Downloader", ContextMenuStrip = m, Visible = true };
         n.DoubleClick += (_, _) => ShowMain();
+        n.BalloonTipClicked += (_, _) => ShowMain();
         return n;
     }
 
@@ -553,6 +629,14 @@ public sealed class MainForm : Form
             t.Tick += (_, _) => { t.Stop(); t.Dispose(); if (!d.IsDisposed) d.Close(); };
             t.Start();
         }
+        try
+        {
+            if (_tray.Visible && _mgr.Settings.Scheduler.OnFinished != "none")
+            {
+                _tray.ShowBalloonTip(3000, "İndirme Tamamlandı", $"{i.FileName} başarıyla indirildi.", ToolTipIcon.Info);
+            }
+        }
+        catch { }
     }
 
     // ------------------------------------------------------------ sıralama
@@ -806,6 +890,19 @@ public sealed class MainForm : Form
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
+    private void ShowSelectedHash()
+    {
+        var i = Selected().FirstOrDefault();
+        if (i == null) return;
+        if (!File.Exists(i.SavePath))
+        {
+            MessageBox.Show(this, "Dosya bulunamadı:\n" + i.SavePath, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        using var d = new HashDialog(i.SavePath, i.FileName);
+        d.ShowDialog(Visible ? this : null);
+    }
+
     private void ShowOptions()
     {
         using var d = new OptionsDialog(_mgr.Settings, _svc.Paths.Root, _svc.ApplySettings);
@@ -821,8 +918,8 @@ public sealed class MainForm : Form
 
     private void ShowAbout()
     {
-        MessageBox.Show(this, $"T-Downloader {AppServices.Version}\n\nÇok bağlantılı, devam ettirilebilir indirme yöneticisi.\nVeri klasörü: {_svc.Paths.Root}",
-            "T-Downloader hakkında", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        using var d = new AboutDialog(_svc.Paths.Root);
+        d.ShowDialog(Visible ? this : null);
     }
 
     private static string? FindExtensionDir()

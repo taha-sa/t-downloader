@@ -34,13 +34,32 @@
   }
 
   // Düğmenin görüntü alanındaki konumu: videonun İÇİNDE, sağ üst köşeye 8 px içeriden bağlı. Viewport'a kıstırma (clamp)
-  // YOK: video kayınca düğme onunla birlikte kayar; düğme görüntü alanının dışına çıkarsa (video ekran dışında) visible=false.
+  // YOK (Instagram hariç): video kayınca düğme onunla birlikte kayar; düğme görüntü alanının dışına çıkarsa (video ekran dışında) visible=false.
+  // Instagram için: video aşağı kaydırılsa bile düğme sağ üstte (topMin) asılı/sabit kalır.
   function buttonPos(r, bw, bh, vw, vh) {
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (isIg) {
+      const left = Math.max(8, Math.min(vw - bw - 8, r.left + r.width - bw - 8));
+      const topMin = 12;
+      const top = Math.max(topMin, Math.min(Math.max(topMin, r.bottom - bh - 8), r.top + 8));
+      const visible = r.width > 0 && r.height > 0 && r.bottom > 60 && r.top < vh && r.right > 0 && r.left < vw;
+      return { left, top, visible };
+    }
     const left = r.left + r.width - bw - 8, top = r.top + 8;
     const visible = r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw &&
       top + bh > 0 && top < vh && left + bw > 0 && left < vw;
     return { left, top, visible };
   }
+
+  const isIgTargetActive = (v) => {
+    if (!v || !v.isConnected) return false;
+    try {
+      const r = v.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom > 60 && r.top < innerHeight;
+    } catch {
+      return false;
+    }
+  };
 
   // Kararlılık: video dikdörtgeni STABLE_MS boyunca değişmeden (konum sayfa koordinatında, kaydırma sayılmaz) ve yeterince
   // büyükse düğme görünebilir. Görünürken yalnızca BÜYÜK boyut değişimi (oynatıcı yeniden düzenlendi) beklemeyi yeniden başlatır.
@@ -67,21 +86,21 @@
   const scrollXY = () => [typeof scrollX === "number" ? scrollX : 0, typeof scrollY === "number" ? scrollY : 0];
 
   // ---------------------------------------------------------------- DOM (Shadow DOM)
-  let logo = "";
-  try { logo = chrome.runtime.getURL("icons/icon32.png"); } catch { /* yok */ }
   const host = document.createElement("div");
   host.id = "tdownloader-overlay";
   host.style.cssText = "all:initial;position:fixed;z-index:2147483647;left:0;top:0;width:0;height:0;";
   // "closed": sayfa betiği host.shadowRoot ile düğmeye/menüye erişip tıklama simüle edemez (A2). Ek olarak tüm işleyiciler isTrusted ister.
   const sh = host.attachShadow({ mode: "closed" });
-  sh.innerHTML = `<style>
+
+  const style = document.createElement("style");
+  style.textContent = `
     *{box-sizing:border-box;font:600 13px system-ui,"Segoe UI",Tahoma,sans-serif}
     #btn{position:fixed;display:none;align-items:center;gap:5px;padding:3px 8px 3px 5px;background:rgba(245,196,0,.75);color:#111;border:1px solid rgba(17,17,17,.7);
       border-radius:4px;cursor:pointer;user-select:none;opacity:0;transition:opacity .25s ease,background .12s;pointer-events:auto;white-space:nowrap;
       box-shadow:0 1px 5px #0006;font:600 12px/16px system-ui,"Segoe UI",Tahoma,sans-serif}
     #btn *{font:inherit}
-    #btn img{width:14px;height:14px;display:block}
-    #btn.vis{opacity:1}
+    #btn svg,#btn img{width:14px;height:14px;display:block}
+    #btn.vis{opacity:.75}
     #btn.vis:hover,#btn.vis.on{background:#ffd21f;border-color:#111}
     #menu{position:fixed;display:none;width:290px;max-height:360px;overflow:auto;background:#141414;color:#f3f3f3;pointer-events:auto;
       border:1px solid #f5c400;border-radius:6px;box-shadow:0 8px 28px #000b;padding:0 0 4px}
@@ -94,8 +113,43 @@
     #menu .row small{font-weight:400;opacity:.7}
     #menu .msg{padding:10px 12px;font-weight:400;font-size:12px;color:#c9c2a0}#menu .err{color:#ff9d8e}
     #menu .spin{display:inline-block;animation:r 1s linear infinite}@keyframes r{to{transform:rotate(360deg)}}
-  </style><div id="btn">${logo ? `<img src="${logo}" alt="">` : ""}<span>T-Downloader ile İndir</span></div><div id="menu"></div>`;
-  const btn = sh.getElementById("btn"), menu = sh.getElementById("menu");
+  `;
+
+  const append = (parent, child) => {
+    if (parent && typeof parent.appendChild === "function" && child) {
+      try { parent.appendChild(child); } catch {}
+    }
+  };
+
+  const btn = (sh.getElementById && sh.getElementById("btn")) || document.createElement("div");
+  btn.id = "btn";
+
+  if (typeof document.createElementNS === "function") {
+    try {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      if (svg && svg.setAttribute) {
+        svg.setAttribute("viewBox", "0 0 16 16");
+        svg.setAttribute("fill", "currentColor");
+        const p1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        if (p1 && p1.setAttribute) p1.setAttribute("d", "M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z");
+        const p2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        if (p2 && p2.setAttribute) p2.setAttribute("d", "M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z");
+        append(svg, p1);
+        append(svg, p2);
+        append(btn, svg);
+      }
+    } catch { /* svg destegi yoksa sessizce atla */ }
+  }
+  const btnSpan = document.createElement("span");
+  btnSpan.textContent = "T-Downloader ile İndir";
+  append(btn, btnSpan);
+
+  const menu = (sh.getElementById && sh.getElementById("menu")) || document.createElement("div");
+  menu.id = "menu";
+
+  append(sh, style);
+  append(sh, btn);
+  append(sh, menu);
   for (const ev of ["mousedown", "mouseup", "pointerdown", "pointerup", "click", "dblclick", "contextmenu", "wheel"])
     host.addEventListener(ev, (e) => e.stopPropagation());   // sayfanın oynatıcısı bizim tıklamalarımıza tepki vermesin
 
@@ -121,7 +175,7 @@
   // Neden eski denetim çalışmıyordu: tek nokta (düğme merkezi) için elementFromPoint bakılıyordu; düğme görünürken o nokta
   // BİZİM düğmemizdir (host) ve denetim "örtü yok" diyordu. Ayrıca saydam/pointer-events:none çubuklar tek noktayla bulunamaz.
   // Şimdi: sabit/yapışkan aday listesi (seyrek yenilenir) + elementsFromPoint yığınındaki sabit atalar, dikdörtgen olarak kırpılır.
-  const COVER_MS = 100, SCAN_MS = 250, ZONE_W = 220;
+  const COVER_MS = 100, SCAN_MS = 250, ZONE_W = 220, MAX_BAR_H = 160;
   let clipT = 0, clipB = 0;          // düğmenin üstten/alttan kırpılan piksel sayısı
   let cands = [], scanDirty = true, lastScan = -1e9, lastMeasure = -1e9, coverRects = [];
   const isFixedish = (n) => { try { const p = window.getComputedStyle(n).position; return p === "fixed" || p === "sticky"; } catch { return false; } };
@@ -143,7 +197,11 @@
     lastMeasure = now;
     if (scanDirty && now - lastScan >= SCAN_MS) scanCands(now);
     const out = [];
-    for (const n of cands) { if (n.isConnected !== false && unrelated(n)) { const q = areaRect(n); if (q) out.push(q); } }
+    const vt0 = Math.max(r.top, 0);
+    // Çubuk benzeri adaylar geometriyle sayılır. Üstten başlayıp > MAX_BAR_H aşağı uzanan sabit/yapışkan kutular (YouTube'un izleme sayfasında
+    // videonun ARKASINDAKİ #secondary / secondary-split-scroll-spacer sütunları) çubuk değildir; gerçekten videonun üstündeyseler
+    // aşağıdaki elementsFromPoint yığını onları zaten bulur. Aksi halde video üstü 56'ya bitişikken düğme sürekli gizlenirdi.
+    for (const n of cands) { if (n.isConnected !== false && unrelated(n)) { const q = areaRect(n); if (q && !(q.t <= vt0 + 1 && q.b > vt0 + MAX_BAR_H)) out.push(q); } }
     try {
       if (typeof document.elementsFromPoint === "function") {
         const x = Math.max(1, Math.min(innerWidth - 1, r.right - 30));
@@ -167,19 +225,39 @@
     for (const q of coverRects) {
       if (q.r - q.l >= innerWidth * 0.9 && q.b - q.t >= innerHeight * 0.9) continue;       // tüm sayfayı kaplayan kap: çubuk değil
       if (!(q.l < r.right && q.r > r.right - ZONE_W && q.t < r.bottom && q.b > r.top)) continue;
-      if (q.t <= vt + 1) top = Math.max(top, q.b);
-      if (q.b >= vb - 1) bot = Math.min(bot, q.t);
+      if (q.t <= vt + 1 && (q.b <= vt + 160 || (q.r - q.l) >= innerWidth * 0.4)) top = Math.max(top, q.b);
+      if (q.b >= vb - 1 && (q.t >= vb - 160 || (q.r - q.l) >= innerWidth * 0.4)) bot = Math.min(bot, q.t);
     }
     return { top, bot };
   }
   function place() {
-    if (!target || !target.isConnected || !qualifies(target)) return hide();
+    if (!target || !target.isConnected || !qualifies(target)) { hide(); if (!menuOpen) scheduleDiscover(); return; }
+    if (host.isConnected === false) mount();      // site <html> altını yeniden kurduysa kaplama katmanı geri takılır
     const r = target.getBoundingClientRect();
     const [sx, sy] = scrollXY();
     const now = clock();
     // Düğme görünürken video/kaydırma/pencere değişmediyse (ve örtü ölçümü yakın zamanda yapıldıysa) kare boşa hesaplanmaz.
     const sig = r.left + "," + r.top + "," + r.width + "," + r.height + "," + sx + "," + sy + "," + innerWidth + "," + innerHeight;
     if (lastSig === sig && now - lastCover < COVER_MS) return;
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+
+    if (isIg) {
+      // Instagram için: video aşağı kaydırılsa bile sağ üstte sabit kalır ("videoyu aşağı kaydırsam bile sağ üste sabit olmalı").
+      // Örtü/kırpma yapılmaz; buton ve açık menü sağ üst köşede (12px) asılı kalır.
+      setShown(true);
+      const bw = btn.offsetWidth || 150, bh = btn.offsetHeight || 30;
+      const left = Math.max(8, Math.min(innerWidth - bw - 8, r.left + r.width - bw - 8));
+      const topMin = 12;
+      const top = Math.max(topMin, Math.min(Math.max(topMin, r.bottom - bh - 8), r.top + 8));
+      btn.style.clipPath = "none";
+      btn.style.left = left + "px";
+      btn.style.top = top + "px";
+      lastSig = r.left + "," + r.top + "," + r.width + "," + r.height + "," + sx + "," + sy;
+      lastCover = now;
+      if (menuOpen) placeMenu();
+      return;
+    }
+
     if (!stepTracker(trackerOf(target), r, sx, sy, now)) { setShown(false); if (menuOpen) closeMenu(); return; }
     setShown(true);
     measure(r, now);
@@ -203,7 +281,9 @@
     raf = 0;
     if (!target && !menuOpen) return;
     if (document.hidden) return;
-    if (!menuOpen && target && ioSeen.has(target) && !inView.has(target)) { hide(); return; }   // video görünür alanda değil: döngü durur
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (!menuOpen && target && !isIg && ioSeen.has(target) && !inView.has(target)) { hide(); return; }   // video görünür alanda değil: döngü durur
+    if (isIg && target && !isIgTargetActive(target) && !menuOpen) { hide(); return; }
     place();
     raf = requestAnimationFrame(loop);
   }
@@ -216,7 +296,13 @@
     const below = b.bottom + 6, h = Math.min(menu.scrollHeight, 360);
     menu.style.top = (below + h > innerHeight ? Math.max(4, b.top - h - 6) : below) + "px";
   }
-  function hide() { if (menuOpen) return; setShown(false); target = null; }
+  function hide() {
+    if (menuOpen) return;
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (isIg && isIgTargetActive(target)) return;
+    setShown(false);
+    if (!isIg || !isIgTargetActive(target)) target = null;
+  }
   function hideAll() { closeMenu(); setShown(false); target = null; }
   // Kalite listesi okunurken menü kapanırsa (veya sekme/çerçeve gizlenirse) bekleyen istek iptal edilir (App yt-dlp'yi öldürür).
   let pendingRid = null;
@@ -233,17 +319,54 @@
   const io = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
     for (const en of entries) { ioSeen.add(en.target); if (en.isIntersecting) inView.add(en.target); else inView.delete(en.target); }
     syncTick();
+    if (enabled && !menuOpen) checkAutoTarget();     // yükleme ekranından tam boyuta geçen video 4 sn / fare beklemeden hedef olur
   }, { threshold: 0.05 }) : null;
+  function checkAutoTarget() {
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (isIg && isIgTargetActive(target)) return;
+    if (target && target.isConnected && qualifies(target)) return;
+    for (const v of inView) {
+      if (qualifies(v)) { mount(); target = v; place(); startLoop(); break; }
+    }
+  }
   function track(v) {
     if (!v || v.tagName !== "VIDEO" || known.has(v)) return;
     known.add(v);
     if (io) io.observe(v); else { inView.add(v); syncTick(); }
+    if (menuOpen) return;
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (isIg && isIgTargetActive(target)) return;
+    if (qualifies(v) && (!target || !target.isConnected || !qualifies(target))) {
+      mount(); target = v; place(); startLoop();
+    }
   }
-  function discover() { try { for (const v of document.querySelectorAll("video")) track(v); } catch { /* DOM hazır değil */ } }
+  function discover() {
+    try {
+      for (const v of document.querySelectorAll("video")) track(v);
+      checkAutoTarget();
+    } catch { /* DOM hazır değil */ }
+  }
+  // DOM'a video eklendi/değişti ya da hedef kayboldu: kısa gecikmeyle (tek seferde birleştirilir) yeniden keşif. Çift düğme olmaz:
+  // tek host/btn vardır, hedef yalnızca değişir.
+  let discoverT = 0;
+  function scheduleDiscover() {
+    if (discoverT || typeof setTimeout !== "function") return;
+    discoverT = setTimeout(() => { discoverT = 0; if (enabled) discover(); }, 150);
+  }
   discover();
   document.addEventListener("DOMContentLoaded", discover);
   addEventListener("load", discover);
-  for (const ev of ["loadedmetadata", "play", "playing"]) document.addEventListener(ev, (e) => track(e.target), true);
+  for (const ev of ["loadedmetadata", "play", "playing", "canplay"]) document.addEventListener(ev, (e) => {
+    track(e.target);
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (isIg && isIgTargetActive(target)) return;
+    if (e.target && e.target.tagName === "VIDEO" && qualifies(e.target)) {
+      mount(); target = e.target; place(); startLoop();
+    }
+  }, true);
+  for (const ev of ["yt-navigate-finish", "yt-page-data-updated", "popstate"]) {
+    window.addEventListener(ev, () => { discover(); checkAutoTarget(); }, true);
+  }
 
   function inRect(v, x, y) { const r = v.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; }
   // İmlecin altındaki video: elementsFromPoint (yığın derinliği kadar iş); yoksa yalnızca görünür alandaki videolar denenir.
@@ -262,13 +385,42 @@
     const t = clock();
     if (t - lastMove < 60) return;                       // fare olayı sağanağında en çok ~16 tarama/sn
     lastMove = t;
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (isIg && isIgTargetActive(target)) return;
     const v = videoUnder(e.clientX, e.clientY);
     if (v && qualifies(v)) {
       mount(); target = v; place(); startLoop();
-      clearTimeout(hideT); hideT = setTimeout(() => { if (!btn.matches(":hover")) hide(); }, 3500);
     }
-  }, { passive: true });
-  addEventListener("scroll", () => { scanDirty = true; if (target) place(); }, { passive: true, capture: true });
+  }, { passive: true, capture: true });     // capture: oynatıcı mousemove'u durdursa (stopPropagation) bile hover algılanır
+
+  document.addEventListener("pointerdown", (e) => {
+    if (!e.isTrusted) return;
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (!isIg || !target) return;
+    try {
+      const v = e.target && (e.target.tagName === "VIDEO" ? e.target : (e.target.querySelector && e.target.querySelector("video")) || (e.target.closest && e.target.closest("article, [role='dialog'], section")?.querySelector("video")));
+      if (v && v !== target && qualifies(v)) {
+        if (menuOpen) closeMenu();
+        target = v;
+        place();
+      }
+    } catch {}
+  }, true);
+
+  addEventListener("scroll", () => {
+    scanDirty = true;
+    const isIg = typeof location !== "undefined" && location.hostname && location.hostname.toLowerCase().includes("instagram.com");
+    if (isIg) {
+      if (target && !isIgTargetActive(target) && !menuOpen) {
+        hide();
+        checkAutoTarget();
+      } else if (target) {
+        place();
+      }
+      return;
+    }
+    if (target) place();
+  }, { passive: true, capture: true });
   // Görünür alandaki videoların kararlılığı hover'dan önce ölçülür (ilk hover'da 400 ms beklemeyi önler).
   // Zamanlayıcı yalnızca görünür alanda video varken çalışır; yoksa durur.
   function tickOnce() {
@@ -294,7 +446,15 @@
   // DOM değişimi (yeni çubuk/stil): aday listesi bir sonraki ölçümde (en çok 250 ms'de bir) yenilenir.
   try {
     if (typeof MutationObserver === "function" && document.documentElement)
-      new MutationObserver(() => { scanDirty = true; }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+      new MutationObserver((muts) => {
+        scanDirty = true;
+        if (!enabled) return;
+        if (target && !target.isConnected) { scheduleDiscover(); return; }
+        for (const m of muts) {
+          if (m.type !== "childList") continue;
+          for (const n of m.addedNodes) if (n.nodeType === 1) { scheduleDiscover(); return; }
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
   } catch { /* gözlemci yok */ }
   addEventListener("mousedown", (e) => { if (e.isTrusted && menuOpen && !e.composedPath().includes(host)) { closeMenu(); hide(); } }, true);
   addEventListener("keydown", (e) => { if (e.isTrusted && e.key === "Escape" && menuOpen) { closeMenu(); hide(); } }, true);
@@ -302,27 +462,126 @@
   document.addEventListener("visibilitychange", () => { if (document.hidden) { closeMenu(); hide(); } });
 
   // ---------------------------------------------------------------- menü
-  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const mb = (n) => (n > 0 ? (n >= 1073741824 ? (n / 1073741824).toFixed(2) + " GB" : (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB") : "");
 
-  function drawMessage(title, html, cls = "") {
-    menu.innerHTML = `<div class="h" title="${esc(title)}">${esc(title)}</div><div class="msg ${cls}">${html}</div>`;
+  function clearMenu() {
+    if (!menu) return;
+    if (typeof menu.replaceChildren === "function") { menu.replaceChildren(); return; }
+    while (menu.firstChild) { try { menu.removeChild(menu.firstChild); } catch { break; } }
+    menu.textContent = "";
+  }
+
+  function drawMessage(title, text, cls = "") {
+    clearMenu();
+    const h = document.createElement("div");
+    h.className = "h";
+    h.title = title || "";
+    h.textContent = title || "";
+    append(menu, h);
+
+    const m = document.createElement("div");
+    m.className = "msg" + (cls ? " " + cls : "");
+    m.textContent = text || "";
+    append(menu, m);
     placeMenu();
   }
+
+  function drawLoading(title) {
+    clearMenu();
+    const h = document.createElement("div");
+    h.className = "h";
+    h.title = title || "";
+    h.textContent = title || "";
+    append(menu, h);
+
+    const m = document.createElement("div");
+    m.className = "msg";
+    const spin = document.createElement("span");
+    spin.className = "spin";
+    spin.textContent = "↻";
+    const textSpan = document.createElement("span");
+    textSpan.textContent = " Kaliteler okunuyor…";
+    append(m, spin);
+    append(m, textSpan);
+    append(menu, m);
+    placeMenu();
+  }
+
+  function drawError(title, errorText, onRetry) {
+    clearMenu();
+    const h = document.createElement("div");
+    h.className = "h";
+    h.title = title || "";
+    h.textContent = title || "";
+    append(menu, h);
+
+    const m = document.createElement("div");
+    m.className = "msg err";
+    const errSpan = document.createElement("span");
+    errSpan.textContent = errorText || "";
+    append(m, errSpan);
+
+    if (onRetry) {
+      const retry = document.createElement("div");
+      retry.className = "row";
+      retry.id = "retry";
+      retry.style.cssText = "margin:8px -12px -10px";
+      const span = document.createElement("span");
+      span.textContent = "↻ Tekrar dene";
+      append(retry, span);
+      retry.onclick = (e) => {
+        if (!e.isTrusted) return;
+        onRetry();
+      };
+      append(m, retry);
+    }
+    append(menu, m);
+    placeMenu();
+  }
+
   function groupOf(o) { return o.kind === "other" ? "Diğer dosyalar" : o.kind === "file" ? "Dosya" : o.audioOnly ? "Sadece ses" : "Video"; }
+
   function drawOptions(res) {
-    let h = `<div class="h" title="${esc(res.title)}">${esc(res.title || "Video")}</div>`;
+    clearMenu();
+    const titleText = res.title || "Video";
+    const h = document.createElement("div");
+    h.className = "h";
+    h.title = titleText;
+    h.textContent = titleText;
+    append(menu, h);
+
     let last = "";
     (res.options || []).forEach((o, i) => {
       const g = groupOf(o);
-      if (g !== last) { h += `<div class="g">${esc(g)}</div>`; last = g; }
-      h += `<div class="row${o.isDefault ? " def" : ""}${o.kind === "other" ? " oth" : ""}" data-i="${i}"><span>${esc(o.label)}</span><small>${esc(o.label.includes("MB") ? "" : mb(o.size))}</small></div>`;
+      if (g !== last) {
+        const gEl = document.createElement("div");
+        gEl.className = "g";
+        gEl.textContent = g;
+        append(menu, gEl);
+        last = g;
+      }
+      const row = document.createElement("div");
+      let cls = "row";
+      if (o.isDefault) cls += " def";
+      if (o.kind === "other") cls += " oth";
+      row.className = cls;
+      row.dataset ??= {}; row.dataset.i = String(i); if (typeof row.setAttribute === "function") row.setAttribute("data-i", String(i));
+
+      const span = document.createElement("span");
+      span.textContent = o.label || "";
+      append(row, span);
+
+      const small = document.createElement("small");
+      small.textContent = (o.label && o.label.includes("MB")) ? "" : mb(o.size);
+      append(row, small);
+
+      append(menu, row);
     });
-    menu.innerHTML = h;
+
     menu.onclick = (e) => {
       if (!e.isTrusted) return;                        // yalnızca gerçek kullanıcı tıklaması indirme başlatır (A2)
       const row = e.target.closest(".row"); if (!row) return;
-      const i = +row.dataset.i, my = token;
+      const rowI = row.dataset ? row.dataset.i : (typeof row.getAttribute === "function" ? row.getAttribute("data-i") : null); const i = +(rowI ?? -1), my = token;
       drawMessage(res.title || "Video", "Gönderiliyor…");
       send({ kind: "qualitySelect", selectionId: res.selectionId, index: i }, (r) => {
         if (my !== token) return;                      // menü bu arada kapandı
@@ -338,11 +597,100 @@
     placeMenu();
   }
 
+  function findVideoPageUrl(v) {
+    if (!v) {
+      v = typeof document.querySelector === "function" ? document.querySelector("video:not([paused])") || document.querySelector("video") : null;
+    }
+    try {
+      const host = (location.hostname || "").toLowerCase();
+      if (host.includes("instagram.com")) {
+        const isPostCode = (c) => c && c !== "explore" && c !== "reels" && c !== "stories" && c !== "direct";
+
+        // 1. Sayfa adresi zaten bir gönderi/reel ise
+        const pathMatch = (location.pathname || "").match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+        if (pathMatch && isPostCode(pathMatch[1])) {
+          return "https://www.instagram.com/reel/" + pathMatch[1] + "/";
+        }
+
+        if (v) {
+          // 2. En yakın yapısal post konteyneri (akışta article, modalda dialog, reels sekmesinde section/main)
+          const containers = [];
+          if (typeof v.closest === "function") {
+            for (const sel of ["article", "[role=\"dialog\"]", "section", "main"]) {
+              const el = v.closest(sel);
+              if (el) containers.push(el);
+            }
+          }
+
+          for (const c of containers) {
+            const links = c.querySelectorAll ? c.querySelectorAll("a[href]") : [];
+            for (const a of links) {
+              const h = a.getAttribute("href") || a.href || "";
+              const m = h.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+              if (m && isPostCode(m[1])) return "https://www.instagram.com/reel/" + m[1] + "/";
+            }
+          }
+
+          // 3. Videodan yukarıya doğru tüm ata elemanları tara
+          for (let el = v.parentElement; el && el !== document.body; el = el.parentElement) {
+            const links = el.querySelectorAll ? el.querySelectorAll("a[href]") : [];
+            for (const a of links) {
+              const h = a.getAttribute("href") || a.href || "";
+              const m = h.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+              if (m && isPostCode(m[1])) return "https://www.instagram.com/reel/" + m[1] + "/";
+            }
+          }
+
+          // 4. Geometrik yakınlık: DOM'daki reel/post linklerinden videoya en yakın olanı seç
+          const vr = typeof v.getBoundingClientRect === "function" ? v.getBoundingClientRect() : null;
+          if (vr && typeof document.querySelectorAll === "function") {
+            const allLinks = document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"], a[href*="/reels/"], a[href*="/tv/"]');
+            let bestLink = null, bestDist = Infinity;
+            for (const a of allLinks) {
+              const h = a.getAttribute("href") || a.href || "";
+              const m = h.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i);
+              if (m && isPostCode(m[1])) {
+                const ar = typeof a.getBoundingClientRect === "function" ? a.getBoundingClientRect() : null;
+                if (ar) {
+                  const dist = Math.hypot(ar.left - vr.left, ar.top - vr.top);
+                  if (dist < bestDist) {
+                    bestDist = dist;
+                    bestLink = "https://www.instagram.com/reel/" + m[1] + "/";
+                  }
+                }
+              }
+            }
+            if (bestLink && bestDist < 1600) return bestLink;
+          }
+        }
+      } else if (host.includes("tiktok.com")) {
+        const m = (location.pathname || "").match(/\/video\/(\d+)/i);
+        if (m) return location.href;
+        let el = v;
+        for (let d = 0; el && el !== document.body && d < 15; d++, el = el.parentElement) {
+          const a = el.querySelector && el.querySelector('a[href*="/video/"]');
+          if (a && a.href) return a.href;
+        }
+      } else if (host.includes("twitter.com") || host.includes("x.com")) {
+        const m = (location.pathname || "").match(/\/status\/(\d+)/i);
+        if (m) return location.href;
+        let el = v;
+        for (let d = 0; el && el !== document.body && d < 15; d++, el = el.parentElement) {
+          const a = el.querySelector && el.querySelector('a[href*="/status/"]');
+          if (a && a.href) return a.href;
+        }
+      }
+    } catch { /* DOM erisim hatasi */ }
+    return location.href;
+  }
+
   function openMenu() {
     menuOpen = true; btn.classList.add("on"); startLoop();
-    const my = ++token, v = target;
+    const my = ++token;
+    const v = target || (typeof document.querySelector === "function" ? document.querySelector("video:not([paused])") || document.querySelector("video") : null);
+    if (!target && v) target = v;
     const title = (document.title || location.hostname).slice(0, 120);
-    drawMessage(title, `<span class="spin">⟳</span> Kaliteler okunuyor…`);
+    drawLoading(title);
     const src = v && /^https?:/i.test(v.currentSrc || v.src || "") ? (v.currentSrc || v.src) : "";
     let done = false;
     const rid = "q" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -355,12 +703,11 @@
       const msg = !r ? "T-Downloader yanıt vermedi. Uygulama çalışıyor mu?"
         : code === "no_ytdlp" ? "Bu video için yt-dlp gerekiyor (Seçenekler > Video)."
         : (r.error || "Bu video okunamadı.");
-      drawMessage(title, `${esc(msg)}<div class="row" id="retry" style="margin:8px -12px -10px"><span>↻ Tekrar dene</span></div>`, "err");
-      const rt = sh.getElementById("retry");
-      if (rt) rt.onclick = (e) => { if (e.isTrusted) { closeMenu(); openMenu(); } };
+      drawError(title, msg, () => { closeMenu(); if (target) openMenu(); });
     };
     setTimeout(() => fin(null), 100000);
-    send({ kind: "qualities", src, rid }, fin);
+    const pageUrl = findVideoPageUrl(v);
+    send({ kind: "qualities", src, rid, pageUrl }, fin);
   }
   btn.addEventListener("click", (e) => {
     e.stopPropagation(); e.preventDefault();
@@ -375,8 +722,8 @@
 
   if (typeof globalThis.__TD_TEST__ !== "undefined") {
     globalThis.__TD_TEST__.button = {
-      qualifies, buttonPos, host, btn, menu, drawOptions, groupOf, newTracker, stepTracker, place, measure, inView, ioSeen, videoUnder, syncTick, loop,
-      setTarget: (v) => { target = v; }, setClock: (f) => { clock = f; }, resetTrackers: () => { trackers = new WeakMap(); },
+      qualifies, buttonPos, isIgTargetActive, host, btn, menu, drawOptions, groupOf, newTracker, stepTracker, place, measure, inView, ioSeen, videoUnder, syncTick, loop,
+      setTarget: (v) => { target = v; }, getTarget: () => target, setClock: (f) => { clock = f; }, resetTrackers: () => { trackers = new WeakMap(); },
     };
   }
 } catch (e) { try { document.documentElement.dataset.tdErr = String(e && e.stack || e); } catch {} } })();
