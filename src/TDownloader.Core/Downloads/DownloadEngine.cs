@@ -285,6 +285,7 @@ public sealed class DownloadEngine : IDisposable
                 throw HttpStatusException.From(resp);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (IOException ex) when (IsDiskFull(ex)) { throw new NonRetryableException("Diskte yeterli alan yok."); }
             catch (Exception ex) when (IsRetryable(ex))
             {
                 if (IsOverloadStatus(ex)) _hostGate.Throttle();
@@ -319,6 +320,7 @@ public sealed class DownloadEngine : IDisposable
                     await DownloadSegmentAsync(w, seg, buf, ct).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (IOException ex) when (IsDiskFull(ex)) { throw new NonRetryableException("Diskte yeterli alan yok."); }
                 catch (Exception ex) when (IsRetryable(ex))
                 {
                     // Bağlantı hatası bütçesi doldu: yalnızca BU işçi emekli olur, parçası kuyruğa döner.
@@ -480,6 +482,7 @@ public sealed class DownloadEngine : IDisposable
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (IOException ex) when (IsDiskFull(ex)) { throw new NonRetryableException("Diskte yeterli alan yok."); }
                 catch (Exception ex) when (IsRetryable(ex))
                 {
                     if (IsOverloadStatus(ex)) _hostGate.Throttle();
@@ -499,9 +502,14 @@ public sealed class DownloadEngine : IDisposable
         }
     }
 
+    /// <summary>Disk dolu (ERROR_DISK_FULL 112 / ERROR_HANDLE_DISK_FULL 39): yeniden denemek anlamsız.</summary>
+    private static bool IsDiskFull(Exception ex) =>
+        ex is IOException && ((ex.HResult & 0xFFFF) is 112 or 39);
+
     private static bool IsRetryable(Exception ex)
     {
         if (ex is NonRetryableException) return false;
+        if (IsDiskFull(ex)) return false;
         if (ex is HttpRequestException { StatusCode: { } sc })
         {
             int c = (int)sc;

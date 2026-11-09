@@ -54,6 +54,9 @@ foreach ($must in @('TDownloader.exe', 'TDownloader.Host.exe', 'TSuite.Updater.e
 $extDest = Join-Path $pub 'extension'
 New-Item -ItemType Directory $extDest -Force | Out-Null
 robocopy (Join-Path $PSScriptRoot 'extension') $extDest /E /XD tests node_modules /XF package.json /NFL /NDL /NJH /NJS | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "robocopy basarisiz ($LASTEXITCODE)" }
+$extManifest = (Get-Content (Join-Path $PSScriptRoot 'extension\manifest.json') -Raw | ConvertFrom-Json).version
+if ($extManifest -ne $Version) { throw "Eklenti manifest surumu ($extManifest) $Version ile eslesmiyor" }
 
 $artifact = Join-Path $out $ArtifactAs
 Compress-Archive -Path (Join-Path $pub '*') -DestinationPath $artifact -Force

@@ -25,7 +25,8 @@ public sealed class ShellIcons
     public ImageList Images { get; } = new() { ColorDepth = ColorDepth.Depth32Bit, ImageSize = SystemInformation.SmallIconSize };
     private readonly Dictionary<string, int> _map = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _pending = new(StringComparer.OrdinalIgnoreCase);
-    private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
+    private static SynchronizationContext? _uiCtx;
+    private static SynchronizationContext? Ui => _uiCtx ??= SynchronizationContext.Current;
 
     /// <summary>Yeni bir simge ImageList'e eklenince (UI thread'inde) tetiklenir: liste yeniden boyanmalı.</summary>
     public event Action? IconsChanged;
@@ -58,7 +59,8 @@ public sealed class ShellIcons
                     _map[ext] = idx; _pending.Remove(ext);
                     IconsChanged?.Invoke();
                 }
-                if (_ui != null) _ui.Post(_ => Apply(), null); else Apply();
+                var ui = Ui;
+                if (ui != null) ui.Post(_ => Apply(), null);   // UI context yoksa ImageList'e dokunma (çapraz-thread yok)
             });
         }
         return 0;

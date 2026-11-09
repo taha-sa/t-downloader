@@ -207,9 +207,9 @@ public sealed class HostRunner
                 CreateNoWindow = true,
                 WorkingDirectory = Path.GetDirectoryName(_opt.AppExePath)!,
                 // Chrome'un stdio'sunu miras alıp App tarayıcıya bağlı kalmasın.
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                RedirectStandardInput = false,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
             };
             using var p = Process.Start(psi);
             return p != null;
