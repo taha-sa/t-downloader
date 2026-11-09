@@ -27,6 +27,7 @@ public sealed class MainForm : Form
     private readonly SchedulerService _sched;
     private readonly float _s;
     private readonly ShellIcons _shell = new();
+    private readonly CompletionSound _completionSound = new();
     private readonly NotifyIcon _tray;
     private readonly MenuStrip _menu = new();
     private readonly ToolStrip _tool = new();
@@ -712,6 +713,7 @@ public sealed class MainForm : Form
     private void OnCompleted(DownloadItem i)
     {
         MarkDirty(i.Id);
+        if (_mgr.Settings.PlayCompletionSound) _completionSound.Play();
         if (_dialogs.TryGetValue(i.Id, out var d))
         {
             d.RefreshItem(i);
@@ -1195,6 +1197,7 @@ public sealed class MainForm : Form
         if (IsHandleCreated) RemoveClipboardFormatListener(Handle);
         _tray.Visible = false;
         _tray.Dispose();
+        _completionSound.Dispose();
         base.OnFormClosed(e);
     }
 

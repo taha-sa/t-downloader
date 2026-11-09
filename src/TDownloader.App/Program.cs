@@ -55,6 +55,7 @@ internal static class Program
 
         var paths = AppPaths.Default;
         var settings = AppSettings.Load(paths.SettingsFile);
+        WindowsStartup.TryApply(settings.StartWithWindows);
         var manager = new DownloadManager(paths, settings);
         manager.Load();
 

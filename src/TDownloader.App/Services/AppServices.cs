@@ -89,6 +89,12 @@ public sealed class AppServices : IAppServices
     /// <summary>Ayarları uygular, diske yazar ve eklentiye yayınlar.</summary>
     public void ApplySettings(AppSettings s)
     {
+        if (!WindowsStartup.TryApply(s.StartWithWindows))
+        {
+            MessageBox.Show(Main, "Windows ile başlat ayarı uygulanamadı. Ayarlar kaydedilmedi.",
+                "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         Manager.UpdateSettings(s);
         Saver.Trigger();                 // 2 sn geciktirilmiş, UI dışı kaydetme
         _ = Ipc?.BroadcastAsync(SettingsMessage.From(s));

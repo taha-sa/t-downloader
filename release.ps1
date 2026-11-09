@@ -46,7 +46,7 @@ foreach ($proj in @($AppProject, $HostProject)) {
     -p:Version=$Version -p:AssemblyVersion=$asm -o $pub
   if ($LASTEXITCODE -ne 0) { throw "dotnet publish basarisiz: $proj" }
 }
-foreach ($must in @('TDownloader.exe', 'TDownloader.Host.exe', 'TSuite.Updater.exe')) {
+foreach ($must in @('TDownloader.exe', 'TDownloader.Host.exe', 'TSuite.Updater.exe', 'TSuite.Updater.dll', 'TSuite.Updater.runtimeconfig.json', 'TSuite.Updater.deps.json')) {
   if (-not (Test-Path (Join-Path $pub $must))) { throw "Yayin ciktisinda eksik: $must" }
 }
 
