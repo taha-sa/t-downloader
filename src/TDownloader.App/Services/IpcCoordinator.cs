@@ -25,7 +25,16 @@ public sealed class IpcCoordinator : IAsyncDisposable
         };
     }
 
-    public void Start() => _server.Start();
+    private InboxService? _inbox;
+
+    public void Start()
+    {
+        _server.Start();
+        // Host, App kapalıyken aldığı istekleri gelen kutusuna yazar: açılışta boşalt, çalışırken izle.
+        // Explicit: tarayıcı zaten iptal edildi; "yakalama kapalı" ayarı bu istekleri düşürmemeli.
+        _inbox = new InboxService(InboxSpool.DirOf(_svc.Paths.Root), d => { _capture.Handle(d with { Explicit = true }); return true; });
+        _inbox.Start();
+    }
 
     private Task<IpcMessage?> HandleAsync(IpcMessage msg, IpcConnection conn)
     {
@@ -71,5 +80,5 @@ public sealed class IpcCoordinator : IAsyncDisposable
         return Task.FromResult<IpcMessage?>(null);
     }
 
-    public ValueTask DisposeAsync() => _server.DisposeAsync();
+    public ValueTask DisposeAsync() { _inbox?.Dispose(); return _server.DisposeAsync(); }
 }

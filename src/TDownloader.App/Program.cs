@@ -60,6 +60,9 @@ internal static class Program
         svc.Media.Attach(svc);
         var ipc = new IpcCoordinator(svc);
         ipc.Start();
+        var link = new LinkService(svc);
+        link.Start();
+        new UpdateService(svc, link.PublishUpdateAvailable).ScheduleCheck();
 
         using var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
         var cts = new CancellationTokenSource();
@@ -76,7 +79,9 @@ internal static class Program
         Application.Run(form);
 
         cts.Cancel();
+        svc.FlushSettings();
         svc.Media.Detach();
+        try { link.DisposeAsync().AsTask().Wait(1500); } catch (Exception) { }
         try { ipc.DisposeAsync().AsTask().Wait(2000); } catch (Exception) { }
         try { manager.ShutdownAsync().Wait(10000); } catch (Exception) { }
     }
