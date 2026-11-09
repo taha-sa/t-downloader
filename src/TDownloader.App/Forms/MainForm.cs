@@ -107,6 +107,7 @@ public sealed class MainForm : Form
         MainMenuStrip = _menu;
 
         _tray = BuildTray();
+        Disposed += (_, _) => _uiGone.TrySetResult();
         _sched = new SchedulerService(svc);
         _sched.Notify += msg => UiPost(() =>
         {
@@ -177,6 +178,42 @@ public sealed class MainForm : Form
     {
         if (IsDisposed || !IsHandleCreated) return;
         try { BeginInvoke(a); } catch (InvalidOperationException) { }
+    }
+
+    /// <summary>UI iş parçacığına gönderir; gönderilemediyse (handle yok / form atılmış) false döner.</summary>
+    private bool TryUiPost(Action a)
+    {
+        if (IsDisposed || !IsHandleCreated) return false;
+        try { BeginInvoke(a); return true; } catch (InvalidOperationException) { return false; }
+    }
+
+    private readonly TaskCompletionSource _uiGone = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private Action? _balloonRetry;
+
+    /// <summary>Tarayıcıdan gelen ve spool'dan işlenen isteklerde ekleme başarısız olursa "Tekrar dene" bağlantısı (balon tıklaması / tepsi menüsü).</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action? RetryFailedCaptures { get; set; }
+
+    /// <summary>Başarısız tarayıcı indirmesi bildirimi (tepsi balonu + durum çubuğu). Balona tıklamak yeniden dener.</summary>
+    public void NotifyCaptureFailed(string what)
+    {
+        string msg = "Tarayıcıdan gelen indirme eklenemedi: " + what;
+        TryUiPost(() =>
+        {
+            _stMain.Text = msg + " (Tekrar dene: tepsi simgesi menüsü)";
+            _balloonRetry = RetryFailedCaptures;
+            try { if (_tray.Visible) _tray.ShowBalloonTip(8000, "T-Downloader - Tekrar dene", msg + ". Tekrar denemek için tıklayın.", ToolTipIcon.Warning); } catch { }
+        });
+    }
+
+    /// <summary>Gerçek yinelenen istek (aynı bağlantı + aynı sayfa) yutulduğunda sessiz kalmamak için bilgi.</summary>
+    public void NotifyDuplicate(string url)
+    {
+        TryUiPost(() =>
+        {
+            _stMain.Text = "Aynı bağlantı zaten ekleniyor/eklendi: " + url;
+            try { if (_tray.Visible) _tray.ShowBalloonTip(3000, "T-Downloader", "Aynı bağlantı zaten ekleniyor/eklendi.", ToolTipIcon.Info); } catch { }
+        });
     }
 
     private void MarkDirty(string id) { lock (_dirtyLock) _dirty.Add(id); }
@@ -477,11 +514,17 @@ public sealed class MainForm : Form
         m.Items.Add(Mi("&Aç", ShowMain));
         m.Items.Add(Mi("&URL Ekle...", () => { ShowMain(); AddUrl(); }, Keys.None, "add"));
         m.Items.Add(Mi("&Tümünü Durdur", _mgr.PauseAll, Keys.None, "stopall"));
+        m.Items.Add(Mi("Tarayıcıdan gelip eklenemeyenleri tekrar &dene", () => RetryFailedCaptures?.Invoke()));
         m.Items.Add(new ToolStripSeparator());
         m.Items.Add(Mi("Çı&kış", ExitAppByUser));
         var n = new NotifyIcon { Icon = Icons.TrayIcon(), Text = "T-Downloader", ContextMenuStrip = m, Visible = true };
         n.DoubleClick += (_, _) => ShowMain();
-        n.BalloonTipClicked += (_, _) => ShowMain();
+        n.BalloonTipClicked += (_, _) =>
+        {
+            var retry = _balloonRetry; _balloonRetry = null;
+            if (retry != null) { try { retry(); } catch (Exception) { } }
+            ShowMain();
+        };
         return n;
     }
 
@@ -776,9 +819,23 @@ public sealed class MainForm : Form
 
     public async Task<bool> PromptDownloadAsync(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize, bool force = false)
     {
+        try { return await PromptCaptureAsync(url, referrer, cookies, userAgent, fileName, fileSize, force).ConfigureAwait(false); }
+        catch (Exception) { return false; }
+    }
+
+    /// <summary>
+    /// PromptDownloadAsync ile aynı akış, ama pencere/ekleme HATASINI istisna olarak fırlatır (tarayıcı spool'u dosyayı saklayıp bildirsin).
+    /// false = kullanıcı iptal etti ya da yinelenen istek atlandı (hata değil).
+    /// </summary>
+    public async Task<bool> PromptCaptureAsync(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize, bool force = false)
+    {
         if (!IsHttp(url)) return false;
         bool claimed = false;
-        if (!force) { if (!_claims.TryClaim(url)) return false; claimed = true; }
+        if (!force)
+        {
+            if (!_claims.TryClaim(url, referrer)) { NotifyDuplicate(url); return false; }
+            claimed = true;
+        }
         bool added = false;
         try
         {
@@ -795,11 +852,17 @@ public sealed class MainForm : Form
             });
             return added;
         }
-        finally { if (claimed) _claims.Complete(url, added); }
+        finally { if (claimed) _claims.Complete(url, added, referrer); }
     }
 
     /// <summary>yt-dlp (External) indirmesi: kalite seçildikten sonra aynı pencereyi gösterir.</summary>
-    public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption opt, TDownloader.Core.Video.MediaContext? ctx = null)
+    public async Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption opt, TDownloader.Core.Video.MediaContext? ctx = null)
+    {
+        try { return await PromptExternalCoreAsync(source, referer, title, opt, ctx).ConfigureAwait(false); }
+        catch (Exception) { return false; }
+    }
+
+    private Task<bool> PromptExternalCoreAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption opt, TDownloader.Core.Video.MediaContext? ctx)
     {
         string stem = DownloadManager.SanitizeFileName(title.Length <= 120 ? title : title[..119] + "…");
         string name = stem + "." + opt.Ext;
@@ -826,12 +889,18 @@ public sealed class MainForm : Form
         await _promptGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var tcs = new TaskCompletionSource<bool>();
-            UiPost(() =>
+            // Arka plan açılışında IPC/inbox pencere handle'ından önce çalışabilir: kısa süre handle'ı bekle.
+            for (int w = 0; w < 200 && !IsHandleCreated && !IsDisposed; w++) await Task.Delay(100).ConfigureAwait(false);
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // Pencere henüz yok / kapanmış: sessizce dönüp kapıyı kilitli bırakma, hata olarak bildir (çağıran isteği saklar).
+            if (!TryUiPost(() =>
             {
-                try { tcs.SetResult(show()); }
-                catch (Exception) { tcs.TrySetResult(false); }
-            });
+                try { tcs.TrySetResult(show()); }
+                catch (Exception ex) { tcs.TrySetException(ex); }
+            })) throw new InvalidOperationException("Ana pencere hazır değil.");
+            // Gönderilen iş hiç çalışmadan form atılırsa (kapanış) kapı sonsuza dek beklemesin.
+            var first = await Task.WhenAny(tcs.Task, _uiGone.Task).ConfigureAwait(false);
+            if (first != tcs.Task) throw new InvalidOperationException("Ana pencere kapandı.");
             return await tcs.Task.ConfigureAwait(false);
         }
         finally { _promptGate.Release(); }

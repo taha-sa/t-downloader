@@ -146,7 +146,7 @@ public sealed class LinkService : IAsyncDisposable
         _mgr.ProgressChanged -= OnProgress;
         _mgr.DownloadCompleted -= OnCompleted;
         _mgr.DownloadFailed -= OnFailed;
-        try { _registry.Remove(AppId); } catch { }
+        try { _registry.MarkStopped(AppId); } catch { }
         if (_server != null) { try { await _server.DisposeAsync().ConfigureAwait(false); } catch { } }
     }
 }

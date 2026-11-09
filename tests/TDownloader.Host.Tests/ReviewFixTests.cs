@@ -32,9 +32,10 @@ public class ReviewFixTests
         var c = new PromptClaims(() => now);
         Assert.True(c.TryClaim("u"));
         c.Complete("u", added: true);
-        now += TimeSpan.FromSeconds(5);
-        Assert.False(c.TryClaim("u"));                            // tarayıcının çift gönderimi
-        now += TimeSpan.FromSeconds(11);
+        now += TimeSpan.FromSeconds(1);
+        Assert.False(c.TryClaim("u"));                            // tarayıcının çift gönderimi (aynı URL + aynı sayfa, 2 sn içinde)
+        Assert.True(c.TryClaim("u", "https://other/"));           // farklı sayfadan gelen aynı URL gerçek yineleme değil
+        now += TimeSpan.FromSeconds(2);
         Assert.True(c.TryClaim("u"));                             // pencere doldu
     }
 
@@ -173,5 +174,31 @@ public class ReviewFixTests
         using var c = new IpcClient(pipe);
         Assert.True(await c.ConnectAsync(TimeSpan.FromSeconds(5)));
         Assert.IsType<PongMessage>(await c.RequestAsync(new PingMessage()));
+    }
+}
+
+public class CaptureCompletionTests
+{
+    [Fact]
+    public async Task Gate_Completed_ReportsFailureWhenPromptThrows_AndOkOtherwise()
+    {
+        var res = new System.Collections.Concurrent.ConcurrentQueue<bool>();
+        var bad = new DownloadCaptureGate(_ => true, _ => throw new InvalidOperationException("x"));
+        var good = new DownloadCaptureGate(_ => true, _ => Task.CompletedTask);
+        var m = new DownloadMessage("r", "https://x/a.zip", null, null, null, "a.zip", null, 1);
+        Assert.True(bad.Handle(m, res.Enqueue).Accepted);
+        Assert.True(good.Handle(m, res.Enqueue).Accepted);
+        Assert.True(SpinWait.SpinUntil(() => res.Count == 2, 3000));
+        Assert.Equal(new[] { false, true }, res.OrderBy(x => x));
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public void Gate_Rejected_DoesNotInvokeCompleted()
+    {
+        bool called = false;
+        var g = new DownloadCaptureGate(_ => false, _ => Task.CompletedTask);
+        Assert.False(g.Handle(new DownloadMessage("r", "https://x/a", null, null, null, "a", null, 1), _ => called = true).Accepted);
+        Assert.False(called);
     }
 }

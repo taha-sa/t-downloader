@@ -41,10 +41,51 @@ public class InboxSpoolTests : IDisposable
         InboxSpool.Write(_dir, Msg("old"));
         File.WriteAllText(Path.Combine(_dir, "bad.json"), "not json");
         var seen = new List<string>();
-        int n = InboxSpool.Drain(_dir, m => { seen.Add(m.RequestId); return true; }, DateTime.UtcNow.AddDays(2));
+        var notified = new List<string>();
+        int n = InboxSpool.Drain(_dir, m => { seen.Add(m.RequestId); return true; }, DateTime.UtcNow.AddDays(2), (p, _) => notified.Add(p));
         Assert.Equal(0, n);
         Assert.Empty(seen);
-        Assert.Empty(Directory.GetFiles(_dir));
+        Assert.Empty(Directory.GetFiles(_dir));                       // sessizce silinmez: failed\ altına taşınır
+        Assert.Equal(2, Directory.GetFiles(InboxSpool.FailedDirOf(_dir), "*.json").Length);
+        Assert.Equal(2, notified.Count);
+    }
+
+    [Fact]
+    public void Drain_KeepsFileWhilePending_AndIsIdempotent()
+    {
+        var path = InboxSpool.Write(_dir, Msg("r1"));
+        int calls = 0;
+        // Pending (iş sürüyor): dosya diskte kalır, silinmez.
+        Assert.Equal(0, InboxSpool.Drain(_dir, (_, _) => { calls++; return DrainAction.Pending; }));
+        Assert.True(File.Exists(path));
+        // Çökme sonrası yeniden boşaltma: aynı dosya tekrar sunulur, sonunda bir kez silinir.
+        Assert.Equal(1, InboxSpool.Drain(_dir, (_, _) => { calls++; return DrainAction.Done; }));
+        Assert.Equal(0, InboxSpool.Drain(_dir, (_, _) => { calls++; return DrainAction.Done; }));
+        Assert.Equal(2, calls);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void MoveToFailed_KeepsFileWithReason_AndRetryBringsItBack()
+    {
+        var path = InboxSpool.Write(_dir, Msg("r1"));
+        var dest = InboxSpool.MoveToFailed(path, "ekleme hatası");
+        Assert.NotNull(dest);
+        Assert.False(File.Exists(path));
+        Assert.True(File.Exists(dest));
+        Assert.Contains("ekleme hatası", File.ReadAllText(Path.ChangeExtension(dest!, ".reason.txt")));
+        Assert.Equal(1, InboxSpool.RetryFailed(_dir));
+        Assert.True(File.Exists(path));
+        Assert.Equal(1, InboxSpool.Drain(_dir, _ => true, DateTime.UtcNow.AddHours(1)));   // yaş sayacı sıfırlandı
+    }
+
+    [Fact]
+    public void Drain_FailedAction_MovesToFailed()
+    {
+        var path = InboxSpool.Write(_dir, Msg("r1"));
+        Assert.Equal(0, InboxSpool.Drain(_dir, (_, _) => DrainAction.Failed));
+        Assert.False(File.Exists(path));
+        Assert.Single(Directory.GetFiles(InboxSpool.FailedDirOf(_dir), "*.json"));
     }
 
     [Fact]

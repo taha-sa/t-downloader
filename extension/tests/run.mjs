@@ -1179,6 +1179,36 @@ await test("onDeterminingFilename: desteklenmeyen/hariç durumlar -> suggest(), 
   resetDet();
   assert.equal((await det(item())).suggested, 0, "duraklatma kalkınca yeniden devralır");
 });
+await test("Y1: devralınmayan HER dal tarayıcı indirme arayüzünü (balon/raf) geri açar", async () => {
+  capture.takeover.uiHoldMs = 30;
+  const branches = [
+    ["blob", () => {}, item({ url: "blob:https://x/1", finalUrl: "blob:https://x/1" })],
+    ["data", () => {}, item({ url: "data:text/plain,a", finalUrl: "data:text/plain,a" })],
+    ["POST", () => capture.notePost("https://dl.test/post2.zip"), item({ url: "https://dl.test/post2.zip", finalUrl: "https://dl.test/post2.zip" })],
+    ["Alt", () => capture.setAlt(5000), item()],
+    ["gizli", () => {}, item({ incognito: true })],
+    ["kendi", () => {}, item({ byExtensionId: "ext-self" })],
+    ["tür kuralı", () => settings.applyAppSettings({ fileTypes: ["pdf"] }), item()],
+    ["boyut kuralı", () => settings.applyAppSettings({ minFileSizeKb: 9_000_000 }), item()],
+    ["hariç site", () => settings.applyAppSettings({ excludedSites: ["dl.test"] }), item()],
+    ["bu sitede duraklat", () => settings.setHostPaused("dl.test", true), item()],
+    ["devralma kapalı", () => settings.applyAppSettings({ interceptEnabled: false }), item()],
+    ["host red", () => { hostBehavior = "reject"; }, item()],
+  ];
+  for (const [name, arrange, it] of branches) {
+    resetDet();
+    await sleep(90);                                   // önceki tutma süresi dolsun
+    await capture.syncUi();
+    if (name !== "devralma kapalı") assert.equal(capture.isUiHidden(), true, name + ": önkoşul: arayüz gizli");
+    uiCalls.length = 0;
+    arrange();
+    const r = await det(it);
+    assert.equal(r.suggested, 1, name + ": suggest");
+    if (name !== "devralma kapalı") assert.ok(uiCalls.includes(true), name + ": arayüz geri açılmalı");
+    capture.setAlt(0); settings.setHostPaused("dl.test", false);
+  }
+  resetDet();
+});
 await test("site duraklatma: alt alan adı eşleşir, www yok sayılır", () => {
   settings.setHostPaused("www.Example.com", true);
   assert.equal(settings.isHostPaused("cdn.example.com"), true);

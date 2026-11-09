@@ -140,6 +140,17 @@ public sealed class HostRunner
 
         _log.Write(ok ? $"App kapalı; download {d.RequestId} gelen kutusuna yazıldı, App başlatıldı." : $"download {d.RequestId} reddedildi.");
         await WriteToBrowserAsync(new DownloadResultMessage(d.RequestId, ok), ct).ConfigureAwait(false);
+        // ACK accepted kalır (dosya diskte güvende); ama App gerçekten ayağa kalktı mı? ~5 sn pipe'ı bekle, olmazsa günlüğe yaz.
+        if (ok) _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var probe = new IpcClient(_opt.PipeName);
+                if (!await probe.ConnectAsync(TimeSpan.FromSeconds(5), CancellationToken.None).ConfigureAwait(false))
+                    _log.Write($"UYARI: App başlatıldı ama pipe 5 sn içinde açılmadı; {d.RequestId} gelen kutusunda bekliyor (App açılınca işlenecek).");
+            }
+            catch (Exception ex) { _log.Write("App doğrulama hatası: " + ex.Message); }
+        });
     }
 
     /// <summary>Yalnızca kullanıcı eylemi mesajları App'i başlatabilir (ping/media/tabClosed/... asla).</summary>

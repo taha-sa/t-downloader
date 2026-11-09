@@ -15,7 +15,7 @@ public sealed class IpcCoordinator : IAsyncDisposable
         // IDM tarzı: kurallar uygunsa hemen accepted:true, onay penceresi arka planda sırayla (pencere eklentiyi bekletmez).
         _capture = new DownloadCaptureGate(
             enabled: d => _svc.Main != null && (d.Explicit || _svc.Settings.BrowserCaptureEnabled),
-            showPrompt: d => _svc.PromptDownloadAsync(d.Url, d.Referrer, d.Cookies, d.UserAgent, d.Filename, d.FileSize));
+            showPrompt: d => _svc.PromptCaptureAsync(d.Url, d.Referrer, d.Cookies, d.UserAgent, d.Filename, d.FileSize));
         svc.Ipc = _server;
         _server.MessageHandler = HandleAsync;
         _server.ClientConnected += (_, c) =>
@@ -32,7 +32,11 @@ public sealed class IpcCoordinator : IAsyncDisposable
         _server.Start();
         // Host, App kapalıyken aldığı istekleri gelen kutusuna yazar: açılışta boşalt, çalışırken izle.
         // Explicit: tarayıcı zaten iptal edildi; "yakalama kapalı" ayarı bu istekleri düşürmemeli.
-        _inbox = new InboxService(InboxSpool.DirOf(_svc.Paths.Root), d => { _capture.Handle(d with { Explicit = true }); return true; });
+        // Spool dosyası YALNIZ istek başarıyla işlenince silinir; hata/süre aşımında failed\ altına taşınır ve uygulamada bildirilir.
+        _inbox = new InboxService(InboxSpool.DirOf(_svc.Paths.Root),
+            (d, completed) => _capture.Handle(d with { Explicit = true }, completed),
+            failedPath => _svc.Main?.NotifyCaptureFailed(Path.GetFileName(failedPath)));
+        if (_svc.Main != null) _svc.Main.RetryFailedCaptures = () => _inbox?.RetryFailed();
         _inbox.Start();
     }
 

@@ -28,7 +28,9 @@ public sealed class DownloadCaptureGate
         Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
 
     /// <summary>Anında karar verir; kabulde pencereyi arka planda başlatır. Asla bloklamaz.</summary>
-    public DownloadResultMessage Handle(DownloadMessage d)
+    /// <param name="completed">İsteğe bağlı: pencere akışı bitince çağrılır. true = akış hatasız bitti (eklendi ya da kullanıcı iptal etti),
+    /// false = pencere/ekleme hatası (istek KAYBOLMAMALI; çağıran dosyayı saklar ve bildirir). Reddedilen isteklerde çağrılmaz.</param>
+    public DownloadResultMessage Handle(DownloadMessage d, Action<bool>? completed = null)
     {
         bool ok;
         try { ok = IsHttp(d.Url) && _enabled(d); }
@@ -43,9 +45,11 @@ public sealed class DownloadCaptureGate
         }
         _ = Task.Run(async () =>
         {
+            bool ok = true;
             try { await _showPrompt(d).ConfigureAwait(false); }
-            catch (Exception ex) { _log?.Invoke("Onay penceresi hatası: " + ex.Message); }
+            catch (Exception ex) { ok = false; _log?.Invoke("Onay penceresi hatası: " + ex.Message); }
             finally { Interlocked.Decrement(ref _pending); }
+            try { completed?.Invoke(ok); } catch (Exception ex) { _log?.Invoke("Tamamlanma geri çağrısı hatası: " + ex.Message); }
         });
         return new DownloadResultMessage(d.RequestId, true);
     }

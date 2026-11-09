@@ -195,20 +195,23 @@ export function onDeterminingFilename(item, suggest) {
   remember(determined, item.id);
   let done = false;
   const pass = () => { if (done) return; done = true; try { suggest(); } catch { /* yut */ } };
+  // TEK cikis: devralmadigimiz HER indirme (skipReason, legacy, kapali, site duraklat, kural disi, host yok, red, istisna)
+  // buradan gecer; tarayici balonu/rafi once geri acilir, sonra suggest() cagrilir. Hicbir dal holdUi'yi unutamaz.
+  const release = async () => { try { await holdUi(); } catch { /* UI API yok: yut */ } pass(); };
   (async () => {
     try {
       const url = item.finalUrl || item.url || "";
-      if (skipReason(item, url)) { pass(); return; }
-      if (legacy.has(item.id)) { pass(); return; }                     // yavas basliklarda eski yol onceden devraldi
+      if (skipReason(item, url)) { await release(); return; }
+      if (legacy.has(item.id)) { await release(); return; }                     // yavas basliklarda eski yol onceden devraldi
       await settings.ready;
       const eff = settings.effective();
-      if (!eff.interceptEnabled) { pass(); return; }
-      if (settings.isHostPaused(hostOf(item.referrer || ""), hostOf(url))) { pass(); return; }   // "bu sitede duraklat"
+      if (!eff.interceptEnabled) { await release(); return; }
+      if (settings.isHostPaused(hostOf(item.referrer || ""), hostOf(url))) { await release(); return; }   // "bu sitede duraklat"
       const filename = filenameFrom(item);
       const fileSize = item.fileSize > 0 ? item.fileSize : item.totalBytes > 0 ? item.totalBytes : -1;
       const d = { url, referrer: item.referrer || "", filename, fileSize };
-      if (!decideCapture(eff, d).capture) { pass(); return; }          // tur/boyut/site kurali: tarayici indirsin
-      if (!native.isConnected()) { native.connect(); if (!native.isConnected()) { await holdUi(); pass(); return; } }
+      if (!decideCapture(eff, d).capture) { await release(); return; }          // tur/boyut/site kurali: tarayici indirsin
+      if (!native.isConnected()) { native.connect(); if (!native.isConnected()) { await release(); return; } }
 
       const accepted = await sendDownload({ ...d, mime: item.mime || "", browserId: item.id, timeoutMs: takeover.ackMs });
       if (accepted) {
@@ -216,12 +219,10 @@ export function onDeterminingFilename(item, suggest) {
         await safe(() => chrome.downloads.cancel(item.id));
         await safe(() => chrome.downloads.erase({ id: item.id }));     // tarayici listesinde/balonunda iz kalmasin
       } else {
-        await holdUi();                                                // yedek indirme gorunur olsun
-        pass();
+        await release();                                               // yedek indirme gorunur olsun
       }
     } catch {
-      await holdUi().catch?.(() => {});
-      pass();
+      await release();
     }
   })();
   return true;

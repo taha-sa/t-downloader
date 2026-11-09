@@ -258,14 +258,18 @@ public sealed class PromptClaims
     private readonly object _lock = new();
     private readonly Func<DateTime> _now;
 
-    public TimeSpan Window { get; init; } = TimeSpan.FromSeconds(15);
+    public TimeSpan Window { get; init; } = TimeSpan.FromSeconds(2);
     public int MaxRemembered { get; init; } = 500;
 
     public PromptClaims(Func<DateTime>? now = null) { _now = now ?? (() => DateTime.UtcNow); }
 
+    // Gerçek yineleme = aynı URL + aynı sayfa (referrer). Farklı sayfadan gelen aynı URL ayrı istektir.
+    private static string Key(string url, string? referrer) => string.IsNullOrEmpty(referrer) ? url : url + "\n" + referrer;
+
     /// <summary>true = bu isteğin penceresi gösterilmeli. false = aynı URL için pencere zaten bekliyor/açık ya da az önce eklendi.</summary>
-    public bool TryClaim(string url)
+    public bool TryClaim(string url, string? referrer = null)
     {
+        url = Key(url, referrer);
         lock (_lock)
         {
             var now = _now();
@@ -277,8 +281,9 @@ public sealed class PromptClaims
     }
 
     /// <summary>Pencere kapandı. added=false (İptal/hata) ise talep hemen bırakılır; true ise kısa süre hatırlanır.</summary>
-    public void Complete(string url, bool added)
+    public void Complete(string url, bool added, string? referrer = null)
     {
+        url = Key(url, referrer);
         lock (_lock)
         {
             _active.Remove(url);

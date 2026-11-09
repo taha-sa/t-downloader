@@ -79,6 +79,10 @@ public sealed class AppServices : IAppServices
         string? fileName = null, long fileSize = -1, bool force = false)
         => Main?.PromptDownloadAsync(url, referrer, cookies, userAgent, fileName, fileSize, force) ?? Task.FromResult(false);
 
+    /// <summary>Tarayıcı yakalama yolu: pencere/ekleme hatasında istisna fırlatır (Main yoksa da).</summary>
+    public Task<bool> PromptCaptureAsync(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize)
+        => Main?.PromptCaptureAsync(url, referrer, cookies, userAgent, fileName, fileSize) ?? throw new InvalidOperationException("Ana pencere yok.");
+
     public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option, TDownloader.Core.Video.MediaContext? ctx = null)
         => Main?.PromptExternalAsync(source, referer, title, option, ctx) ?? Task.FromResult(false);
 
