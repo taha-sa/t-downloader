@@ -195,22 +195,24 @@ public sealed class HostRunner
         return c;
     }
 
+    // Host, Chrome'un native-messaging stdio boruları üzerinde çalışır. App bunları miras alırsa
+    // (a) App'in her stdout yazısı protokolü bozar, (b) App boruları tutarak Chrome'un host kanalını
+    // canlı tutar. Yönlendirme (Redirect*) ise okunmayan borularda tıkanma/handle sızıntısı yaratır.
+    // UseShellExecute=true: CreateProcess bInheritHandles=false ile çalışır, hiçbir handle miras kalmaz.
+    public static ProcessStartInfo BuildAppStartInfo(string exePath) => new(exePath, "--background")
+    {
+        UseShellExecute = true,
+        WindowStyle = ProcessWindowStyle.Hidden,
+        WorkingDirectory = Path.GetDirectoryName(exePath)!,
+    };
+
     private bool TryLaunchApp()
     {
         try
         {
             if (!File.Exists(_opt.AppExePath)) { _log.Write("App bulunamadı: " + _opt.AppExePath); return false; }
             _log.Write("App başlatılıyor: " + _opt.AppExePath + " --background");
-            var psi = new ProcessStartInfo(_opt.AppExePath, "--background")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(_opt.AppExePath)!,
-                // Chrome'un stdio'sunu miras alıp App tarayıcıya bağlı kalmasın.
-                RedirectStandardInput = false,
-                RedirectStandardOutput = false,
-                RedirectStandardError = false,
-            };
+            var psi = BuildAppStartInfo(_opt.AppExePath);
             using var p = Process.Start(psi);
             return p != null;
         }
