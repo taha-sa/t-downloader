@@ -33,6 +33,10 @@ public sealed class DownloadManager : IAsyncDisposable
 
     private readonly object _gate = new();
     private readonly List<DownloadItem> _items = new();
+    // Hedef yol -> kullanım sayısı (OrdinalIgnoreCase); _gate altında _items ile birlikte güncellenir.
+    private readonly Dictionary<string, int> _paths = new(StringComparer.OrdinalIgnoreCase);
+    private void PathAdd(string? p) { if (string.IsNullOrEmpty(p)) return; _paths[p] = _paths.TryGetValue(p, out var n) ? n + 1 : 1; }
+    private void PathRemove(string? p) { if (string.IsNullOrEmpty(p) || !_paths.TryGetValue(p, out var n)) return; if (n <= 1) _paths.Remove(p); else _paths[p] = n - 1; }
     private readonly Dictionary<string, Active> _active = new();
     private readonly HttpClient? _http;
     private readonly object _saveLock = new();
@@ -127,12 +131,12 @@ public sealed class DownloadManager : IAsyncDisposable
         }
         lock (_gate)
         {
-            _items.Clear();
+            _items.Clear(); _paths.Clear();
             foreach (var i in list ?? new())
             {
                 if (i == null || string.IsNullOrEmpty(i.Id) || !i.Id.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is (char)45 or (char)95)) continue;   // null öğe / yol bileşeni olamayacak kimlik (C18, C22)
                 if (i.Status is DownloadStatus.Downloading or DownloadStatus.Queued) i.Status = DownloadStatus.Paused;
-                _items.Add(i);
+                _items.Add(i); PathAdd(i.SavePath);
             }
         }
     }
@@ -181,12 +185,7 @@ public sealed class DownloadManager : IAsyncDisposable
             Referrer = req.Referrer, Cookie = req.Cookie, UserAgent = req.UserAgent, Description = req.Description,
             Status = DownloadStatus.Paused,
         };
-        lock (_gate)
-        {
-            item.SavePath = UniquePath(folder, name);
-            item.FileName = Path.GetFileName(item.SavePath);
-            _items.Add(item);
-        }
+        ReserveUnique(item, folder, name);
         ItemAdded?.Invoke(this, item);
         RequestSave();
         if (req.StartNow) Start(item.Id);
@@ -207,12 +206,7 @@ public sealed class DownloadManager : IAsyncDisposable
             Kind = DownloadKind.External, ExternalFormat = req.Format, Status = DownloadStatus.Paused,
             Cookie = req.Cookie, CookieHost = req.CookieHost, UserAgent = req.UserAgent, Origin = req.Origin,
         };
-        lock (_gate)
-        {
-            item.SavePath = UniquePath(folder, name);
-            item.FileName = Path.GetFileName(item.SavePath);
-            _items.Add(item);
-        }
+        ReserveUnique(item, folder, name);
         ItemAdded?.Invoke(this, item);
         RequestSave();
         if (req.StartNow) Start(item.Id);
@@ -229,21 +223,28 @@ public sealed class DownloadManager : IAsyncDisposable
         return Path.Combine(Settings.SaveFolder, category);
     }
 
-    private string UniquePath(string folder, string name)
+    // Disk denetimi (File.Exists) kilit DIŞINDA; yol kümesi kontrolü + ekleme kilit altında (O(1)). Yarışta döngü yeniden dener.
+    private void ReserveUnique(DownloadItem item, string folder, string name)
     {
-        var path = Path.Combine(folder, name);
-        if (!PathTaken(path)) return path;
         var stem = Path.GetFileNameWithoutExtension(name);
         var ext = Path.GetExtension(name);
-        for (int i = 1; ; i++)
+        for (int i = 0; ; i++)
         {
-            path = Path.Combine(folder, $"{stem} ({i}){ext}");
-            if (!PathTaken(path)) return path;
+            var path = i == 0 ? Path.Combine(folder, name) : Path.Combine(folder, $"{stem} ({i}){ext}");
+            bool taken;
+            lock (_gate) taken = _paths.ContainsKey(path);
+            if (taken || File.Exists(path)) continue;
+            lock (_gate)
+            {
+                if (_paths.ContainsKey(path)) continue;
+                item.SavePath = path;
+                item.FileName = Path.GetFileName(path);
+                _items.Add(item);
+                PathAdd(path);
+                return;
+            }
         }
     }
-
-    private bool PathTaken(string path) =>
-        File.Exists(path) || _items.Any(i => string.Equals(i.SavePath, path, StringComparison.OrdinalIgnoreCase));
 
     public static string NameFromUri(Uri uri)
     {
@@ -270,7 +271,7 @@ public sealed class DownloadManager : IAsyncDisposable
             _active.TryGetValue(id, out act);
         }
         if (act != null) { act.Stop(); await act.Task.ConfigureAwait(false); }
-        lock (_gate) _items.Remove(item);
+        lock (_gate) { if (_items.Remove(item)) PathRemove(item.SavePath); }
         try { var d = Path.Combine(Paths.DwnlDataDir, id); if (Directory.Exists(d)) Directory.Delete(d, true); } catch { }
         // yt-dlp hedef klasörde .part/.ytdl/.part-FragN bırakır; tamamlanmamış harici indirme silinirken temizle.
         if (item.Kind == DownloadKind.External && item.Status != DownloadStatus.Completed)
@@ -450,7 +451,7 @@ public sealed class DownloadManager : IAsyncDisposable
             {
                 if (!string.IsNullOrWhiteSpace(res.FinalPath) && File.Exists(res.FinalPath))
                 {
-                    item.SavePath = res.FinalPath;
+                    lock (_gate) { PathRemove(item.SavePath); item.SavePath = res.FinalPath; PathAdd(item.SavePath); }
                     item.FileName = Path.GetFileName(res.FinalPath);
                     item.Category = Categories.FromFileName(item.FileName);
                     try { item.TotalSize = new FileInfo(res.FinalPath).Length; } catch (IOException) { }

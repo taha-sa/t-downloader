@@ -46,4 +46,28 @@ public sealed class ManagerTests : IDisposable
     [InlineData("photo.jpg", "Resimler")]
     [InlineData("a.xyz", "Genel")]
     public void Category_ByExtension(string name, string cat) => Assert.Equal(cat, Categories.FromFileName(name));
+
+    [Fact]
+    public void Add_5000Same_UniqueNames_LinearTime_AndPathSetFollowsRemove()
+    {
+        var paths = new AppPaths(Path.Combine(_tmp, "appdata2"));
+        var settings = new AppSettings { SaveFolder = Path.Combine(_tmp, "dl2") };
+        var mgr = new DownloadManager(paths, settings);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int k = 0; k < 5000; k++)
+        {
+            var it = mgr.Add(new AddDownloadRequest("http://127.0.0.1:1/a.bin", "A.bin", StartNow: false));
+            Assert.True(set.Add(it.SavePath));
+        }
+        sw.Stop();
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20), sw.Elapsed.ToString());
+        Assert.EndsWith("A.bin", mgr.Items[0].SavePath);
+        Assert.EndsWith("a (1).bin", mgr.Items[1].SavePath.ToLowerInvariant());
+        // kaldırılan yol yeniden kullanılabilir
+        var first = mgr.Items[0];
+        mgr.RemoveAsync(first.Id, false).GetAwaiter().GetResult();
+        var again = mgr.Add(new AddDownloadRequest("http://127.0.0.1:1/a.bin", "A.bin", StartNow: false));
+        Assert.Equal(first.SavePath, again.SavePath);
+    }
 }
