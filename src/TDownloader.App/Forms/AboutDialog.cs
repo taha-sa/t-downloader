@@ -1,3 +1,4 @@
+using TSuite.Diagnostics;
 using System.Diagnostics;
 using TDownloader.App.Services;
 using TDownloader.App.Ui;
@@ -20,7 +21,7 @@ public sealed class AboutDialog : DluForm
         MinimizeBox = false;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
-        SetClientDlu(240, 148);
+        SetClientDlu(240, 190);
 
         // Logo / Simge
         var iconPic = new PictureBox
@@ -104,7 +105,32 @@ public sealed class AboutDialog : DluForm
         }, 62, 88, 166, 18);
 
         // Tamam düğmesi
-        var ok = MakeButton("Tamam", 88, 118, 64, 16, DialogResult.OK);
+        var automatic = Add(new CheckBox
+        {
+            Text = "Hata raporlarını otomatik hazırla", ForeColor = Theme.Text,
+            Font = Theme.UiFont(8f), Checked = CrashReporter.AutomaticallyPrepareReports
+        }, 12, 110, 216, 14);
+        automatic.CheckedChanged += (_, _) =>
+        {
+            try { CrashReporter.AutomaticallyPrepareReports = automatic.Checked; }
+            catch (Exception ex)
+            {
+                Log.Error("Could not save crash report preference: " + ex);
+                MessageBox.Show(this, "Tercih kaydedilemedi.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        };
+        var reportLink = Add(new LinkLabel
+        {
+            Text = "Hata raporu gönder…", Font = Theme.UiFont(8f), LinkColor = Theme.Yellow,
+            ActiveLinkColor = Theme.YellowLight, VisitedLinkColor = Theme.Yellow
+        }, 12, 130, 216, 14);
+        reportLink.LinkClicked += (_, _) =>
+        {
+            using var dialog = new CrashReportDialog(ManualReport.Create(), UpdateService.Theme);
+            dialog.ShowDialog(this);
+            automatic.Checked = CrashReporter.AutomaticallyPrepareReports;
+        };
+        var ok = MakeButton("Tamam", 88, 160, 64, 16, DialogResult.OK);
         AcceptButton = ok;
         CancelButton = ok;
     }

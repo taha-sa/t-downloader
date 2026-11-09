@@ -1,3 +1,4 @@
+using TSuite.Diagnostics;
 using TDownloader.App.Forms;
 using TDownloader.App.Services;
 using TDownloader.Core.Queue;
@@ -52,6 +53,9 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
         Application.SetDefaultFont(new Font("Tahoma", 8f));
+        CrashReporter.Install(UpdateService.AppId, "T-Downloader", AppServices.Version, "taha-sa/t-downloader-releases", UpdateService.Theme);
+        CrashReporter.InstallWinForms();
+        Log.Info("Application starting");
 
         var paths = AppPaths.Default;
         var settings = AppSettings.Load(paths.SettingsFile);
@@ -64,6 +68,20 @@ internal static class Program
         var svc = new AppServices { Manager = manager, Paths = paths };
         var form = new MainForm(svc, background);
         svc.Main = form;
+        bool reportChecked = false;
+        form.VisibleChanged += (_, _) =>
+        {
+            if (!form.Visible || reportChecked) return;
+            reportChecked = true;
+            form.BeginInvoke(() =>
+            {
+                if (CrashReporter.GetPendingReport() is { } report)
+                {
+                    using var dialog = new CrashReportDialog(report, UpdateService.Theme);
+                    dialog.ShowDialog(form);
+                }
+            });
+        };
         svc.Media = new VideoOverlayMediaSink(yt);
         svc.Media.Attach(svc);
         var ipc = new IpcCoordinator(svc);
