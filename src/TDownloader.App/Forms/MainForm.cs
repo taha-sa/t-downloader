@@ -114,12 +114,13 @@ public sealed class MainForm : Form
             _stMain.Text = msg;
             try
             {
-                if (_tray.Visible && _mgr.Settings.Scheduler.OnFinished != "none")
+                if (_tray.Visible)
                     _tray.ShowBalloonTip(3000, "T-Downloader", msg, ToolTipIcon.Info);
             }
             catch { }
         });
-        _sched.ExitRequested += ExitApp;
+        _sched.ExitRequested += () => UiPost(ExitApp);
+        _sched.ExitCountdownChanged += n => UiPost(() => { if (n >= 0) _stMain.Text = $"Çıkış: {n} sn (iptal için kuyruğu durdurun)"; });
 
         _extensionDir = FindExtensionDir();
         RestoreUiState();
@@ -720,7 +721,7 @@ public sealed class MainForm : Form
         try
         {
             if (_mgr.Settings.ShowCompletedDialog) ShowCompleted(i);              // bildirim balonunun yerine tamamlanma penceresi
-            else if (_tray.Visible && _mgr.Settings.Scheduler.OnFinished != "none")
+            else if (_tray.Visible)   // tek tek tamamlanma balonu, zamanlayıcı "bitince" ayarından bağımsız
                 _tray.ShowBalloonTip(3000, "İndirme Tamamlandı", $"{i.FileName} başarıyla indirildi.", ToolTipIcon.Info);
         }
         catch { }

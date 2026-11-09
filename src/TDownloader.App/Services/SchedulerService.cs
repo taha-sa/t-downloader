@@ -1,63 +1,27 @@
-using TDownloader.Core.Downloads;
-using TDownloader.Core.Settings;
+using TDownloader.Core.Queue;
 
 namespace TDownloader.App.Services;
 
-/// <summary>Basit zamanlayıcı: belirlenen gün/saatte kuyruğu başlatır, bitince bildirir/uygulamadan çıkar.</summary>
+/// <summary>Zamanlayıcı: mantık Core.SchedulerCore'da; burası yalnız zamanlayıcıyı sürer.</summary>
 public sealed class SchedulerService : IDisposable
 {
-    private readonly AppServices _svc;
-    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 15000 };
-    private string _lastFiredKey = "";
-    private bool _watching;
+    private readonly SchedulerCore _core;
+    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
 
-    public event Action<string>? Notify;
-    public event Action? ExitRequested;
+    public event Action<string>? Notify { add => _core.Notify += value; remove => _core.Notify -= value; }
+    public event Action? ExitRequested { add => _core.ExitRequested += value; remove => _core.ExitRequested -= value; }
+    public event Action<int>? ExitCountdownChanged { add => _core.ExitCountdownChanged += value; remove => _core.ExitCountdownChanged -= value; }
 
     public SchedulerService(AppServices svc)
     {
-        _svc = svc;
-        _timer.Tick += (_, _) => Tick();
+        _core = new SchedulerCore(() => svc.Settings, () => svc.Manager.Items, () => svc.Manager.StartAll());
+        _timer.Tick += (_, _) => _core.Tick(DateTime.Now);
         _timer.Start();
     }
 
-    /// <summary>Elle kuyruk başlatıldığında "bitince" eylemi için izlemeyi aç.</summary>
-    public void WatchQueue() => _watching = true;
-    public void StopWatching() => _watching = false;
-
-    public void Tick(DateTime? nowOverride = null)
-    {
-        var s = _svc.Settings.Scheduler;
-        var now = nowOverride ?? DateTime.Now;
-        if (s.Enabled && TimeSpan.TryParse(s.StartTime, System.Globalization.CultureInfo.InvariantCulture, out var t) && s.Days.Contains((int)now.DayOfWeek)
-            && now.Hour == t.Hours && now.Minute == t.Minutes)
-        {
-            var key = now.ToString("yyyyMMddHHmm");
-            if (key != _lastFiredKey)
-            {
-                _lastFiredKey = key;
-                _watching = true;
-                _svc.Manager.StartAll();
-            }
-        }
-        if (_watching)
-        {
-            var items = _svc.Manager.Items;
-            bool busy = items.Any(i => i.Status is DownloadStatus.Queued or DownloadStatus.Downloading);
-            if (!busy)
-            {
-                _watching = false;
-                if (items.Any(i => i.Status == DownloadStatus.Completed))
-                {
-                    switch (s.OnFinished)
-                    {
-                        case "exit": ExitRequested?.Invoke(); break;
-                        case "notify": Notify?.Invoke("Kuyruktaki tüm indirmeler tamamlandı."); break;
-                    }
-                }
-            }
-        }
-    }
+    public void WatchQueue() => _core.WatchQueue();
+    public void StopWatching() => _core.StopWatching();
+    public void CancelExit() => _core.CancelExit();
 
     public void Dispose() => _timer.Dispose();
 }
