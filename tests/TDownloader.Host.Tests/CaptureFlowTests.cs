@@ -103,6 +103,22 @@ public class CaptureFlowTests
     }
 
     [Fact]
+    public async Task Gate_SingleConsumer_ProcessesInOrder_OneAtATime()
+    {
+        var order = new List<string>(); int cur = 0, max = 0;
+        var gate = new DownloadCaptureGate(_ => true, async d =>
+        {
+            max = Math.Max(max, Interlocked.Increment(ref cur));
+            await Task.Delay(5); lock (order) order.Add(d.RequestId); Interlocked.Decrement(ref cur);
+        });
+        for (int k = 0; k < 20; k++) Assert.True(gate.Handle(Dl(k.ToString())).Accepted);
+        Assert.True(SpinWait.SpinUntil(() => gate.Pending == 0, 5000));
+        Assert.Equal(1, max);
+        Assert.Equal(Enumerable.Range(0, 20).Select(x => x.ToString()), order);
+        await Task.CompletedTask;
+    }
+
+    [Fact]
     public async Task Ipc_50ConcurrentDownloads_AllAnsweredWithin15s_WhileWindowIsOpen_PingStillFlows()
     {
         var win = new FakeWindow();
