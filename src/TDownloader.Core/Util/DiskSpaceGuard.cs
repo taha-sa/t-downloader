@@ -9,6 +9,16 @@ public static class DiskSpaceGuard
     public static bool IsInsufficient(long freeBytes, long size, long margin = DefaultMargin) =>
         size > 0 && freeBytes >= 0 && freeBytes < size + margin;
 
+    /// <summary>Tek karar noktası: uyarı gerekir mi? Boyut bilinmiyorsa (≤0) yalnız boş alan paydan az ise uyarır. Okunamazsa (Free=null) uyarmaz.</summary>
+    public readonly record struct Verdict(bool Warn, long? Free, long Needed);
+
+    public static Verdict Evaluate(string? folder, long size, long margin = DefaultMargin)
+    {
+        var free = FreeBytes(folder);
+        long needed = (size > 0 ? size : 0) + margin;
+        return new Verdict(free is { } f && f >= 0 && f < needed, free, needed);
+    }
+
     /// <summary>Klasörün sürücüsündeki boş bayt (klasör yoksa var olan üst klasör); okunamazsa null.</summary>
     public static long? FreeBytes(string? folder)
     {

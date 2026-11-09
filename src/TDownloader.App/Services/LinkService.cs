@@ -44,7 +44,7 @@ public sealed class LinkService : IAsyncDisposable
             var srv = new LinkServer(AppId, AppServices.Version, Events, Commands);
             srv.OnCommand("download.add", OnAdd);
             srv.OnCommand("download.pause", (d, _) => Task.FromResult(WithId(d, id => _mgr.Pause(id))));
-            srv.OnCommand("download.resume", (d, _) => Task.FromResult(WithId(d, id => _mgr.Start(id))));
+            srv.OnCommand("download.resume", (d, _) => Task.FromResult(WithId(d, id => { using var _s = DiskGate.Silent(); _mgr.Start(id); })));
             srv.OnCommand("download.list", (_, _) => Task.FromResult<JsonElement?>(ListItems()));
             srv.OnCommand("app.show", (_, _) =>
             {
@@ -116,9 +116,10 @@ public sealed class LinkService : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(url)) throw new ArgumentException("url gerekli");
         // Disk koruması (T-Link üzerinden gelen eklemede de): yer yoksa "disk_full;free=<bayt>;needed=<bayt>" ile reddet.
         long needed = d is { ValueKind: JsonValueKind.Object } o && o.TryGetProperty("size", out var sv) && sv.ValueKind == JsonValueKind.Number && sv.TryGetInt64(out var sz) && sz > 0 ? sz : 0;
-        var free = TDownloader.Core.Util.DiskSpaceGuard.FreeBytes(_mgr.Settings.SaveFolder);
-        if (free is { } fb && fb < needed + TDownloader.Core.Util.DiskSpaceGuard.DefaultMargin)
-            throw new InvalidOperationException($"disk_full;free={fb};needed={needed + TDownloader.Core.Util.DiskSpaceGuard.DefaultMargin}");
+        // Hedef sürücü dosya adının kategori klasörüne göre; boyut yoksa yalnız 1 GB payı denetlenir.
+        var v = TDownloader.Core.Util.DiskSpaceGuard.Evaluate(_mgr.TargetFolder(null, Str(d, "fileName") ?? System.IO.Path.GetFileName(new Uri(url, UriKind.RelativeOrAbsolute).IsAbsoluteUri ? new Uri(url).AbsolutePath : url)), needed);
+        if (v.Warn && v.Free is { } fb)
+            throw new InvalidOperationException($"disk_full;free={fb};needed={v.Needed}");
         var item = _mgr.Add(new AddDownloadRequest(url, FileName: Str(d, "fileName"), Referrer: Str(d, "referrer")));
         return Task.FromResult<JsonElement?>(LinkJson.Obj(("id", item.Id)));
     }

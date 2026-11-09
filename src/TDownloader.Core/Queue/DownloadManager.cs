@@ -219,6 +219,10 @@ public sealed class DownloadManager : IAsyncDisposable
         return item;
     }
 
+    /// <summary>Bir indirmenin gerçek hedef klasörü (açık klasör yoksa dosya adından kategori klasörü).</summary>
+    public string TargetFolder(string? saveFolder, string? fileName) =>
+        !string.IsNullOrWhiteSpace(saveFolder) ? saveFolder! : FolderForCategory(Categories.FromFileName(SanitizeFileName(string.IsNullOrWhiteSpace(fileName) ? "file" : fileName!)));
+
     public string FolderForCategory(string category)
     {
         if (Settings.CategoryFolders.TryGetValue(category, out var f) && !string.IsNullOrWhiteSpace(f)) return f;
@@ -283,9 +287,19 @@ public sealed class DownloadManager : IAsyncDisposable
     // ------------------------------------------------------------ başlat / duraklat
 
     /// <summary>İndirmeyi kuyruğa alır; boş yer varsa hemen başlar.</summary>
+    /// <summary>Başlatma kapısı (ör. disk koruması): false dönerse öğe başlatılmaz. UI/arayanın iş parçacığında, kilit dışında çağrılır.</summary>
+    public Func<DownloadItem, bool>? StartGate { get; set; }
+
     public void Start(string id)
     {
         DownloadItem? item;
+        var gate = StartGate;
+        if (gate != null)
+        {
+            DownloadItem? probe;
+            lock (_gate) probe = _items.FirstOrDefault(i => i.Id == id);
+            if (probe != null && probe.Status is not (DownloadStatus.Completed or DownloadStatus.Downloading) && !IsActive(id)) { try { if (!gate(probe)) return; } catch (Exception) { } }
+        }
         lock (_gate)
         {
             item = _items.FirstOrDefault(i => i.Id == id);
@@ -303,6 +317,8 @@ public sealed class DownloadManager : IAsyncDisposable
         ItemChanged?.Invoke(this, item);
         ProcessQueue();
     }
+
+    private bool IsActive(string id) { lock (_gate) return _active.ContainsKey(id); }
 
     public void StartAll()
     {

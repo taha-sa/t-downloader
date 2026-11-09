@@ -108,6 +108,7 @@ public sealed class MainForm : Form
 
         _tray = BuildTray();
         Disposed += (_, _) => _uiGone.TrySetResult();
+        _mgr.StartGate = DiskStartGate;
         _sched = new SchedulerService(svc);
         _sched.Notify += msg => UiPost(() =>
         {
@@ -844,7 +845,7 @@ public sealed class MainForm : Form
             {
                 if (!force && !_mgr.Settings.ShowFileInfoOnCapture)
                 {
-                    if (!ConfirmDiskSpace(null, fileSize)) return false;
+                    if (!ConfirmDiskSpace(null, fileSize, fileName ?? url)) return false;
                     var item = _mgr.Add(new AddDownloadRequest(url, fileName, null, referrer, cookies, userAgent, null, fileSize, true));
                     OpenProgress(item);
                     return true;
@@ -872,6 +873,7 @@ public sealed class MainForm : Form
             using var dlg = new FileInfoDialog(_mgr, source, name, opt.Size, probeSize: false, referrer: referer, cookies: ctx?.Cookies, userAgent: ctx?.UserAgent, description: "Video: " + opt.Label);
             var r = dlg.ShowDialog();
             if (r is not (DialogResult.Yes or DialogResult.No)) return false;
+            if (!ConfirmDiskSpace(dlg.SaveFolder, opt.Size, dlg.FileName)) return false;
             try
             {
                 _mgr.AddExternal(new AddExternalRequest(dlg.Url, dlg.FileName, opt.Format, dlg.SaveFolder, referer, dlg.Description, dlg.StartNow, ctx?.Cookies, ctx?.UserAgent, ctx?.EffectiveOrigin, ctx?.CookieHost));
@@ -907,14 +909,25 @@ public sealed class MainForm : Form
         finally { _promptGate.Release(); }
     }
 
-    /// <summary>Boyut biliniyorsa ve hedef sürücüde boyut + 1 GB yoksa temalı uyarı: Yine de indir / İptal.</summary>
-    private bool ConfirmDiskSpace(string? folder, long size)
+    /// <summary>Hedef sürücüde yer yoksa (boyut bilinmiyorsa 1 GB payın altındaysa) temalı uyarı: Yine de indir / İptal. Tek karar noktası: DiskSpaceGuard.Evaluate.</summary>
+    private bool ConfirmDiskSpace(string? folder, long size, string? fileName = null)
     {
-        if (size <= 0) return true;
-        var free = TDownloader.Core.Util.DiskSpaceGuard.FreeBytes(string.IsNullOrWhiteSpace(folder) ? _mgr.Settings.SaveFolder : folder);
-        if (free is null || !TDownloader.Core.Util.DiskSpaceGuard.IsInsufficient(free.Value, size)) return true;
-        using var w = new DiskWarnDialog(size, free.Value);
+        var v = TDownloader.Core.Util.DiskSpaceGuard.Evaluate(_mgr.TargetFolder(folder, fileName), size);
+        if (!v.Warn || v.Free is null) return true;
+        using var w = new DiskWarnDialog(size, v.Free.Value);
         return w.ShowDialog() == DialogResult.Yes;
+    }
+
+    /// <summary>Devam/kuyruk/zamanlayıcı yolları: kalan boyuta göre denetim. Sessiz bağlamda (zamanlayıcı, T-Link) pencere açmadan atlar.</summary>
+    private bool DiskStartGate(DownloadItem i)
+    {
+        long remaining = i.TotalSize > 0 ? Math.Max(0, i.TotalSize - i.Downloaded) : 0;
+        string? folder = string.IsNullOrEmpty(i.SavePath) ? null : Path.GetDirectoryName(i.SavePath);
+        if (DiskGate.IsSilent)
+            return !TDownloader.Core.Util.DiskSpaceGuard.Evaluate(_mgr.TargetFolder(folder, i.FileName), remaining).Warn;
+        if (!IsHandleCreated || IsDisposed) return true;
+        if (InvokeRequired) { try { return (bool)Invoke(new Func<bool>(() => ConfirmDiskSpace(folder, remaining, i.FileName))); } catch (Exception) { return true; } }
+        return ConfirmDiskSpace(folder, remaining, i.FileName);
     }
 
     private bool ShowFileInfo(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize)
@@ -923,7 +936,7 @@ public sealed class MainForm : Form
         using var dlg = new FileInfoDialog(_mgr, url, fileName, fileSize, true, referrer, cookies, userAgent);
         var r = dlg.ShowDialog();
         if (r is not (DialogResult.Yes or DialogResult.No)) return false;
-        if (!ConfirmDiskSpace(dlg.SaveFolder, dlg.FileSize > 0 ? dlg.FileSize : fileSize)) return false;
+        if (!ConfirmDiskSpace(dlg.SaveFolder, dlg.FileSize > 0 ? dlg.FileSize : fileSize, dlg.FileName)) return false;
         try
         {
             var item = _mgr.Add(new AddDownloadRequest(dlg.Url, dlg.FileName, dlg.SaveFolder, referrer, cookies, userAgent,

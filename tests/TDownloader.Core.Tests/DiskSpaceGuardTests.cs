@@ -23,4 +23,14 @@ public class DiskSpaceGuardTests
         Assert.True(DiskSpaceGuard.FreeBytes(Path.Combine(Path.GetTempPath(), "yok-" + Guid.NewGuid().ToString("N"), "alt")) > 0);
         Assert.Null(DiskSpaceGuard.FreeBytes(""));
     }
+
+    [Fact]
+    public void Evaluate_unknown_size_warns_only_when_below_margin()
+    {
+        var tmp = Path.GetTempPath();
+        Assert.False(DiskSpaceGuard.Evaluate(tmp, -1, margin: 1).Warn);
+        Assert.True(DiskSpaceGuard.Evaluate(tmp, -1, margin: long.MaxValue / 2).Warn);
+        Assert.True(DiskSpaceGuard.Evaluate(tmp, long.MaxValue / 4, margin: 1).Warn);
+        Assert.False(DiskSpaceGuard.Evaluate("", 100).Warn);   // okunamayan sürücü uyarmaz
+    }
 }

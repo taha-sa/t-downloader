@@ -66,4 +66,20 @@ public sealed class ManagerResilienceTests : IDisposable
         Assert.Equal(DownloadStatus.Completed, mgr.Items[0].Status);
         await mgr.ShutdownAsync();
     }
+
+    [Fact]
+    public async Task StartGate_False_KeepsItemPaused_NoRequest()
+    {
+        using var srv = new TestHttpServer(TestHttpServer.RandomData(100_000));
+        var settings = new AppSettings { SaveFolder = Path.Combine(_tmp, "dl"), Connections = 1, MaxConcurrentDownloads = 1 };
+        var mgr = new DownloadManager(new AppPaths(Path.Combine(_tmp, "app")), settings);
+        mgr.Add(new AddDownloadRequest(srv.Url, "g.bin", StartNow: false));
+        var id = mgr.Items[0].Id;
+        mgr.StartGate = _ => false;
+        mgr.Start(id);
+        Assert.Equal(DownloadStatus.Paused, mgr.Items[0].Status);
+        Assert.Equal(0, mgr.ActiveCount);
+        Assert.Equal(0, srv.RequestCount);
+        await mgr.ShutdownAsync();
+    }
 }

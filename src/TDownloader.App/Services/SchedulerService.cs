@@ -14,7 +14,7 @@ public sealed class SchedulerService : IDisposable
 
     public SchedulerService(AppServices svc)
     {
-        _core = new SchedulerCore(() => svc.Settings, () => svc.Manager.Items, () => svc.Manager.StartAll());
+        _core = new SchedulerCore(() => svc.Settings, () => svc.Manager.Items, () => { using var _ = DiskGate.Silent(); svc.Manager.StartAll(); });
         _timer.Tick += (_, _) => _core.Tick(DateTime.Now);
         _timer.Start();
     }
