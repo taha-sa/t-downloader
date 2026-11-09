@@ -46,9 +46,9 @@ public sealed class SchedulerDialog : DluForm
             _days[i] = Put(new DarkCheck { Text = DayList[i].Name, AutoEllipsis = true }, 8 + (i % 4) * 68, 46 + (i / 4) * 13, 66, 11);
             _days[i].Checked = _s.Scheduler.Days.Contains(DayList[i].Dow);
         }
-        Put(new Label { Text = "Kuyruk bitince:" }, 8, 78, 70, 10);
+        Put(new Label { Text = "Kuyruk bitince (yalnız bu seçim):" }, 8, 78, 70, 10);
         _finish = Put(new DarkCombo { DropDownStyle = ComboBoxStyle.DropDownList }, 80, 76, 130, 64);
-        _finish.Items.AddRange(new object[] { "Hiçbir şey yapma", "Bildirim göster", "Uygulamadan çık" });
+        _finish.Items.AddRange(new object[] { "Hiçbir şey yapma", "Bildirim göster", "Uygulamadan çık (30 sn geri sayım)" });
         _finish.SelectedIndex = _s.Scheduler.OnFinished switch { "exit" => 2, "notify" => 1, _ => 0 };
         Put(new Label { Text = "Kuyruktaki dosyalar:" }, 8, 98, 120, 10);
         _files = Put(new BufferedListView { View = View.Details, FullRowSelect = true }, 8, 110, 278, 134);

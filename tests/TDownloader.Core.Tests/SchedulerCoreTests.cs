@@ -105,4 +105,21 @@ public class SchedulerCoreTests
         c.Tick(D(2, 13, 0, 31));
         Assert.Equal(1, _exit);
     }
+
+    [Theory]
+    [InlineData("none", 0, false)]
+    [InlineData("notify", 1, false)]
+    [InlineData("exit", 1, true)]   // exit: yalnız geri sayım uyarısı (tek ileti) + çıkış beklemede
+    public void OnFinished_OnlySelectedBehaviorRuns(string mode, int notes, bool exitPending)
+    {
+        _set.Scheduler.OnFinished = mode;
+        var p = Item(DownloadStatus.Paused); _items.Add(p);
+        var c = Make(); c.WatchQueue();
+        p.Status = DownloadStatus.Completed;
+        c.Tick(D(2, 12, 0));
+        Assert.Equal(notes, _notes.Count);
+        Assert.Equal(exitPending, c.ExitPending);
+        Assert.Equal(0, _exit);
+        if (mode == "exit") Assert.Contains("çıkılacak", _notes[0]); else if (mode == "notify") Assert.Contains("tamamlandı", _notes[0]);
+    }
 }
