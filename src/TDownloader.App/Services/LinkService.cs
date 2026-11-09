@@ -3,6 +3,7 @@ using TDownloader.Core.Downloads;
 using TDownloader.Core.Queue;
 using TDownloader.Core.Util;
 using TSuite.Link;
+using TSuite.Update;
 
 namespace TDownloader.App.Services;
 
@@ -15,7 +16,7 @@ public sealed class LinkService : IAsyncDisposable
 {
     public const string AppId = "t-downloader";
     private static readonly string[] Events = ["download.progress", "download.completed", "download.failed", "app.update.available"];
-    private static readonly string[] Commands = ["download.add", "download.pause", "download.resume", "download.list", "app.show", "app.version"];
+    private static readonly string[] Commands = ["download.add", "download.pause", "download.resume", "download.list", "app.show", "app.version", .. UpdateLink.Commands];
 
     private readonly AppServices _svc;
     private readonly DownloadManager _mgr;
@@ -29,6 +30,12 @@ public sealed class LinkService : IAsyncDisposable
 
     public void PublishUpdateAvailable(TSuite.Update.UpdateInfo info) =>
         _server?.Publish("app.update.available", LinkJson.Obj(("version", info.NewVersion), ("notes", info.Notes)));
+
+    /// Standart güncelleme komutlarını (app.update.check/install) bağlar.
+    public void RegisterUpdate(UpdateController ctl)
+    {
+        if (_server != null) UpdateLink.Register(_server, ctl);
+    }
 
     public void Start()
     {

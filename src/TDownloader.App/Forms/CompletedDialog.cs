@@ -166,10 +166,10 @@ public sealed class CompletedDialog : Form
         bx = DrawButton(g, "open", "Aç", bx, by, 84, primary: true, enabled: _exists);
         bx = DrawButton(g, "openwith", "Birlikte aç…", bx, by, 112, false, _exists);
         bx = DrawButton(g, "folder", "Klasörü aç", bx, by, 100, false, _exists);
-        if (ExtraActions.Count > 0)        // "Telefonda aç" vb. için ayrılmış yuva
+        if (ExtraActions.Count > 0 && ExtraActions[0].IsAvailable(cur))   // "Telefona gönder": yalnızca uygunsa görünür
         {
             var act = ExtraActions[0];
-            bx = DrawButton(g, "extra", act.Text, bx, by, 112, false, act.IsAvailable(cur));
+            bx = DrawButton(g, "extra", act.Text, bx, by, 112, false, true);
         }
         var closeBtn = new Rectangle(W - Pad - 72, by, 72, 32);
         DrawButtonAt(g, "closebtn", "Kapat", closeBtn, false, true);

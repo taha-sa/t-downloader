@@ -15,6 +15,13 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // T-Bridge "Hepsini güncelle": kapalıyken `--update` ile başlatılır -> kontrol, indirme, yardımcıyı başlat, çık (arayüz yok).
+        if (TSuite.Update.UpdateCli.IsRequested(args))
+        {
+            Environment.ExitCode = TSuite.Update.UpdateCli.RunAsync(UpdateService.MakeOptions()).GetAwaiter().GetResult();
+            return;
+        }
+
         bool background = args.Any(a => string.Equals(a, "--background", StringComparison.OrdinalIgnoreCase));
         using var mutex = new Mutex(true, MutexName, out bool first);
         if (!first)
@@ -62,7 +69,9 @@ internal static class Program
         ipc.Start();
         var link = new LinkService(svc);
         link.Start();
-        new UpdateService(svc, link.PublishUpdateAvailable).ScheduleCheck();
+        var upd = new UpdateService(svc, link.PublishUpdateAvailable);
+        link.RegisterUpdate(upd.Controller);
+        upd.ScheduleCheck();
 
         using var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
         var cts = new CancellationTokenSource();

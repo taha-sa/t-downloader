@@ -688,7 +688,13 @@ public sealed class MainForm : Form
     private void ShowCompleted(DownloadItem i)
     {
         if (_completed == null || _completed.IsDisposed)
-            _completed = new CompletedDialog(never => { _mgr.Settings.ShowCompletedDialog = !never; _svc.SaveSettings(); });
+        {
+            var dlg = new CompletedDialog(never => { _mgr.Settings.ShowCompletedDialog = !never; _svc.SaveSettings(); });
+            var act = new Services.PhoneSendAction();   // "Telefona gönder": T-Bridge + bağlı telefon varsa görünür
+            act.Changed += () => { try { dlg.BeginInvoke(dlg.Invalidate); } catch (InvalidOperationException) { } };
+            dlg.ExtraActions.Add(act);
+            _completed = dlg;
+        }
         _completed.Present(new CompletedEntry(i.Id, i.FileName, i.Url, i.SavePath, i.TotalSize > 0 ? i.TotalSize : i.Downloaded));
     }
 
@@ -777,6 +783,7 @@ public sealed class MainForm : Form
             {
                 if (!force && !_mgr.Settings.ShowFileInfoOnCapture)
                 {
+                    if (!ConfirmDiskSpace(null, fileSize)) return false;
                     var item = _mgr.Add(new AddDownloadRequest(url, fileName, null, referrer, cookies, userAgent, null, fileSize, true));
                     OpenProgress(item);
                     return true;
@@ -827,12 +834,23 @@ public sealed class MainForm : Form
         finally { _promptGate.Release(); }
     }
 
+    /// <summary>Boyut biliniyorsa ve hedef sürücüde boyut + 1 GB yoksa temalı uyarı: Yine de indir / İptal.</summary>
+    private bool ConfirmDiskSpace(string? folder, long size)
+    {
+        if (size <= 0) return true;
+        var free = TDownloader.Core.Util.DiskSpaceGuard.FreeBytes(string.IsNullOrWhiteSpace(folder) ? _mgr.Settings.SaveFolder : folder);
+        if (free is null || !TDownloader.Core.Util.DiskSpaceGuard.IsInsufficient(free.Value, size)) return true;
+        using var w = new DiskWarnDialog(size, free.Value);
+        return w.ShowDialog() == DialogResult.Yes;
+    }
+
     private bool ShowFileInfo(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize)
     {
         // Sahipsiz (owner yok): ana pencere öne gelmez; pencere TopMost + ön plana zorlanır.
         using var dlg = new FileInfoDialog(_mgr, url, fileName, fileSize, true, referrer, cookies, userAgent);
         var r = dlg.ShowDialog();
         if (r is not (DialogResult.Yes or DialogResult.No)) return false;
+        if (!ConfirmDiskSpace(dlg.SaveFolder, dlg.FileSize > 0 ? dlg.FileSize : fileSize)) return false;
         try
         {
             var item = _mgr.Add(new AddDownloadRequest(dlg.Url, dlg.FileName, dlg.SaveFolder, referrer, cookies, userAgent,
