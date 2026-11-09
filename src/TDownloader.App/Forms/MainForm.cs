@@ -735,12 +735,15 @@ public sealed class MainForm : Form
         if (_completed == null || _completed.IsDisposed)
         {
             var dlg = new CompletedDialog(never => { _mgr.Settings.ShowCompletedDialog = !never; _svc.SaveSettings(); });
-            var act = new Services.PhoneSendAction();   // "Telefona gönder": T-Bridge + bağlı telefon varsa görünür
-            act.Changed += () => { try { dlg.BeginInvoke(dlg.Invalidate); } catch (InvalidOperationException) { } };
-            dlg.ExtraActions.Add(act);
-            var actOpen = new Services.PhoneSendAction(open: true);   // "Telefonda aç": aynı uygunluk kuralı, file.send open:true
-            actOpen.Changed += () => { try { dlg.BeginInvoke(dlg.Invalidate); } catch (InvalidOperationException) { } };
-            dlg.ExtraActions.Add(actOpen);
+            foreach (var open in new[] { false, true })   // "Telefona gönder" / "Telefonda aç": T-Bridge + bağlı telefon varsa görünür
+            {
+                var act = new Services.PhoneSendAction(open);
+                act.Feedback += msg => { try { dlg.BeginInvoke(() => dlg.ShowNote(msg)); } catch (InvalidOperationException) { } };
+                dlg.ExtraActions.Add(act);
+            }
+            Action changed = () => { try { dlg.BeginInvoke(dlg.Invalidate); } catch (InvalidOperationException) { } };
+            Services.PhoneStatus.Changed += changed;
+            dlg.Disposed += (_, _) => Services.PhoneStatus.Changed -= changed;
             _completed = dlg;
         }
         _completed.Present(new CompletedEntry(i.Id, i.FileName, i.Url, i.SavePath, i.TotalSize > 0 ? i.TotalSize : i.Downloaded));

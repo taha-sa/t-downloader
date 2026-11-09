@@ -38,6 +38,8 @@ public sealed class CompletedDialog : Form
     private readonly List<string> _order = new();   // Tab sırası (çizimde dolar)
     private string _focus = "";
     private string _flash = "";        // "url" | "path": kopyalandı geri bildirimi
+    private string _note = "";         // ekstra eylem sonucu (örn. "Telefona gönderildi"); flaş zamanlayıcısıyla silinir
+    private bool _phoneHeld;           // PhoneStatus yoklayıcısını tutuyor muyuz (görünürken)
 
     /// <summary>Gelecekteki eylemler (örn. "Telefonda aç"). Boşsa yuva çizilmez.</summary>
     public List<ICompletedAction> ExtraActions { get; } = new();
@@ -82,7 +84,7 @@ public sealed class CompletedDialog : Form
             Opacity = p;
             if (p >= 1) { _fade.Stop(); }
         };
-        _flashTimer.Tick += (_, _) => { _flashTimer.Stop(); _flash = ""; Invalidate(); };
+        _flashTimer.Tick += (_, _) => { _flashTimer.Stop(); _flash = ""; _note = ""; Invalidate(); };
     }
 
     protected override bool ShowWithoutActivation => true;
@@ -221,7 +223,9 @@ public sealed class CompletedDialog : Form
         _hit["never"] = new Rectangle(cb.X, 236 + shift, cbText.Right - cb.X, 20);
         _order.Add("never");
         if (_focus == "never") { using var fp = new Pen(Theme.Yellow, 2f) { DashStyle = DashStyle.Dot }; g.DrawRectangle(fp, Rectangle.Inflate(_hit["never"], 2, 1)); }
-        if (!_exists)
+        if (_note != "")
+            TextRenderer.DrawText(g, _note, _fBody, new Rectangle(W - Pad - 200, 236 + shift, 200, 20), Theme.Ok, Flags | TextFormatFlags.Right);
+        else if (!_exists)
             TextRenderer.DrawText(g, "Dosya taşınmış veya silinmiş", _fBody, new Rectangle(W - Pad - 170, 236 + shift, 170, 20), Theme.TextDim, Flags | TextFormatFlags.Right);
     }
 
@@ -332,6 +336,7 @@ public sealed class CompletedDialog : Form
             case "openwith": OpenWith(cur); break;
             case "folder": ShowInFolder(cur); break;
             case string x when x.StartsWith("extra") && int.TryParse(x.AsSpan(5), out var xi) && xi >= 0 && xi < ExtraActions.Count:
+                if (!_exists || !File.Exists(cur.Path)) { ShowNote("Dosya bulunamadı"); break; }
                 ExtraActions[xi].Execute(cur); break;
             case "prev": if (_queue.Prev()) OnEntryChanged(); break;
             case "next": if (_queue.Next()) OnEntryChanged(); break;
@@ -362,6 +367,13 @@ public sealed class CompletedDialog : Form
     }
 
     // ------------------------------------------------------------ eylemler
+
+    /// <summary>Ekstra eylem sonucunu kısa süre gösterir ("kopyalandı" flaşı kalıbı).</summary>
+    public void ShowNote(string text)
+    {
+        if (IsDisposed) return;
+        _note = text; _flashTimer.Stop(); _flashTimer.Start(); Invalidate();
+    }
 
     private void Copy(string text, string id)
     {
@@ -399,13 +411,15 @@ public sealed class CompletedDialog : Form
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
-        if (!Visible) { _fade.Stop(); _hover = ""; _down = ""; }
+        if (!Visible) { _fade.Stop(); _hover = ""; _down = ""; _note = ""; if (_phoneHeld) { _phoneHeld = false; Services.PhoneStatus.Release(); } }
+        else if (!_phoneHeld) { _phoneHeld = true; Services.PhoneStatus.Acquire(); }
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            if (_phoneHeld) { _phoneHeld = false; Services.PhoneStatus.Release(); }
             _fade.Dispose(); _flashTimer.Dispose(); _tip.Dispose();
             _icon?.Dispose();
             _fTitle.Dispose(); _fBody.Dispose(); _fBold.Dispose();
