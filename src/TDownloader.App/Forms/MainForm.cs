@@ -693,6 +693,9 @@ public sealed class MainForm : Form
             var act = new Services.PhoneSendAction();   // "Telefona gönder": T-Bridge + bağlı telefon varsa görünür
             act.Changed += () => { try { dlg.BeginInvoke(dlg.Invalidate); } catch (InvalidOperationException) { } };
             dlg.ExtraActions.Add(act);
+            var actOpen = new Services.PhoneSendAction(open: true);   // "Telefonda aç": aynı uygunluk kuralı, file.send open:true
+            actOpen.Changed += () => { try { dlg.BeginInvoke(dlg.Invalidate); } catch (InvalidOperationException) { } };
+            dlg.ExtraActions.Add(actOpen);
             _completed = dlg;
         }
         _completed.Present(new CompletedEntry(i.Id, i.FileName, i.Url, i.SavePath, i.TotalSize > 0 ? i.TotalSize : i.Downloaded));

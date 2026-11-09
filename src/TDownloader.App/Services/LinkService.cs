@@ -114,6 +114,11 @@ public sealed class LinkService : IAsyncDisposable
     {
         var url = Str(d, "url");
         if (string.IsNullOrWhiteSpace(url)) throw new ArgumentException("url gerekli");
+        // Disk koruması (T-Link üzerinden gelen eklemede de): yer yoksa "disk_full;free=<bayt>;needed=<bayt>" ile reddet.
+        long needed = d is { ValueKind: JsonValueKind.Object } o && o.TryGetProperty("size", out var sv) && sv.ValueKind == JsonValueKind.Number && sv.TryGetInt64(out var sz) && sz > 0 ? sz : 0;
+        var free = TDownloader.Core.Util.DiskSpaceGuard.FreeBytes(_mgr.Settings.SaveFolder);
+        if (free is { } fb && fb < needed + TDownloader.Core.Util.DiskSpaceGuard.DefaultMargin)
+            throw new InvalidOperationException($"disk_full;free={fb};needed={needed + TDownloader.Core.Util.DiskSpaceGuard.DefaultMargin}");
         var item = _mgr.Add(new AddDownloadRequest(url, FileName: Str(d, "fileName"), Referrer: Str(d, "referrer")));
         return Task.FromResult<JsonElement?>(LinkJson.Obj(("id", item.Id)));
     }

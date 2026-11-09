@@ -5,18 +5,18 @@ using TSuite.Link;
 namespace TDownloader.App.Services;
 
 /// <summary>
-/// "Telefona gönder" (ICompletedAction): yalnızca T-Bridge kayıtlıysa VE telefon bağlıysa (phone.status) görünür.
+/// "Telefona gönder" / "Telefonda aç" (ICompletedAction): yalnızca T-Bridge kayıtlıysa VE telefon bağlıysa (phone.status) görünür.
 /// Durum arka planda yoklanır (en çok 3 sn'de bir; UI thread'i bloklanmaz), değişince <see cref="Changed"/> tetiklenir.
 /// Gönderme: T-Bridge'e T-Link komutu file.send {path}.
 /// </summary>
-public sealed class PhoneSendAction : ICompletedAction
+public sealed class PhoneSendAction(bool open = false) : ICompletedAction
 {
     private volatile bool _available;
     private long _lastCheck;
     private int _busy;
 
     public event Action? Changed;
-    public string Text => "Telefona gönder";
+    public string Text => open ? "Telefonda aç" : "Telefona gönder";
 
     public bool IsAvailable(CompletedEntry entry)
     {
@@ -44,7 +44,7 @@ public sealed class PhoneSendAction : ICompletedAction
             await using var c = new LinkClient("t-bridge", TimeSpan.FromSeconds(5));
             c.Start();
             if (!await c.WaitConnectedAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false)) return;
-            await c.SendCommandAsync("file.send", LinkJson.Obj(("path", entry.Path)), TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+            await c.SendCommandAsync("file.send", open ? LinkJson.Obj(("path", entry.Path), ("open", true)) : LinkJson.Obj(("path", entry.Path)), TimeSpan.FromSeconds(8)).ConfigureAwait(false);
         }
         catch { /* gönderilemedi: sessizce geç */ }
     });

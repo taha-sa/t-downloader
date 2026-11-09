@@ -39,6 +39,21 @@ public sealed class CompletedDialog : Form
 
     /// <summary>Gelecekteki eylemler (örn. "Telefonda aç"). Boşsa yuva çizilmez.</summary>
     public List<ICompletedAction> ExtraActions { get; } = new();
+    private const int ExtraRowH = 40;
+    private int _h = H;   // telefon eylem satırı görünürse yükselir; boyut paint dışında uygulanır
+    private bool _resizePending;
+
+    private void ApplyHeight(int h)
+    {
+        _resizePending = false;
+        if (IsDisposed || h == _h) return;
+        int bottom = Location.Y + _h;
+        _h = h;
+        ClientSize = new Size(W, _h);
+        Location = new Point(Location.X, bottom - _h);
+        using (var gp = Round(new Rectangle(0, 0, W, _h), Radius)) Region = new Region(gp);
+        Invalidate();
+    }
 
     public CompletedDialog(Action<bool> onNeverShowChanged)
     {
@@ -126,7 +141,7 @@ public sealed class CompletedDialog : Form
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
         g.Clear(Theme.Bg);
-        using (var gp = Round(new Rectangle(0, 0, W - 1, H - 1), Radius))
+        using (var gp = Round(new Rectangle(0, 0, W - 1, _h - 1), Radius))
         using (var pen = new Pen(Theme.Border, 1)) g.DrawPath(pen, gp);
         _hit.Clear();
 
@@ -166,16 +181,23 @@ public sealed class CompletedDialog : Form
         bx = DrawButton(g, "open", "Aç", bx, by, 84, primary: true, enabled: _exists);
         bx = DrawButton(g, "openwith", "Birlikte aç…", bx, by, 112, false, _exists);
         bx = DrawButton(g, "folder", "Klasörü aç", bx, by, 100, false, _exists);
-        if (ExtraActions.Count > 0 && ExtraActions[0].IsAvailable(cur))   // "Telefona gönder": yalnızca uygunsa görünür
-        {
-            var act = ExtraActions[0];
-            bx = DrawButton(g, "extra", act.Text, bx, by, 112, false, true);
-        }
         var closeBtn = new Rectangle(W - Pad - 72, by, 72, 32);
         DrawButtonAt(g, "closebtn", "Kapat", closeBtn, false, true);
 
+        // telefon eylemleri (Telefona gönder / Telefonda aç): yalnızca uygunsa, ikinci satırda
+        int shift = 0, ex = Pad;
+        for (int k = 0; k < ExtraActions.Count; k++)
+        {
+            var act = ExtraActions[k];
+            if (!act.IsAvailable(cur)) continue;
+            shift = ExtraRowH;
+            ex = DrawButton(g, "extra" + k, act.Text, ex, by + ExtraRowH, 132, false, true);
+        }
+        int want = H + shift;
+        if (want != _h && !_resizePending && IsHandleCreated) { _resizePending = true; BeginInvoke(() => ApplyHeight(want)); }
+
         // alt satır: onay kutusu + not
-        var cb = new Rectangle(Pad, 238, 16, 16);
+        var cb = new Rectangle(Pad, 238 + shift, 16, 16);
         using (var gp = Round(cb, 4))
         {
             using (var b = new SolidBrush(_neverShow ? Theme.Yellow : Theme.Field)) g.FillPath(b, gp);
@@ -187,11 +209,11 @@ public sealed class CompletedDialog : Form
             using var pen = new Pen(Theme.Black, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
             g.DrawLines(pen, new[] { new PointF(cb.X + 3.5f, cb.Y + 8.5f), new PointF(cb.X + 6.8f, cb.Y + 11.5f), new PointF(cb.X + 12.5f, cb.Y + 4.5f) });
         }
-        var cbText = new Rectangle(cb.Right + 8, 236, 250, 20);
+        var cbText = new Rectangle(cb.Right + 8, 236 + shift, 250, 20);
         TextRenderer.DrawText(g, "Bu pencereyi bir daha gösterme", _fBody, cbText, Theme.TextDim, Flags);
-        _hit["never"] = new Rectangle(cb.X, 236, cbText.Right - cb.X, 20);
+        _hit["never"] = new Rectangle(cb.X, 236 + shift, cbText.Right - cb.X, 20);
         if (!_exists)
-            TextRenderer.DrawText(g, "Dosya taşınmış veya silinmiş", _fBody, new Rectangle(W - Pad - 170, 236, 170, 20), Theme.TextDim, Flags | TextFormatFlags.Right);
+            TextRenderer.DrawText(g, "Dosya taşınmış veya silinmiş", _fBody, new Rectangle(W - Pad - 170, 236 + shift, 170, 20), Theme.TextDim, Flags | TextFormatFlags.Right);
     }
 
     private void DrawField(Graphics g, int slot, string id, string label, string value, int y)
@@ -294,7 +316,8 @@ public sealed class CompletedDialog : Form
             case "open": OpenFile(cur); break;
             case "openwith": OpenWith(cur); break;
             case "folder": ShowInFolder(cur); break;
-            case "extra": if (ExtraActions.Count > 0) ExtraActions[0].Execute(cur); break;
+            case string x when x.StartsWith("extra") && int.TryParse(x.AsSpan(5), out var xi) && xi >= 0 && xi < ExtraActions.Count:
+                ExtraActions[xi].Execute(cur); break;
             case "prev": if (_queue.Prev()) OnEntryChanged(); break;
             case "next": if (_queue.Next()) OnEntryChanged(); break;
             case "url": Copy(cur.Url, "url"); break;
