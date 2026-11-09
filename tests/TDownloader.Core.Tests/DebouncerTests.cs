@@ -4,6 +4,12 @@ namespace TDownloader.Core.Tests;
 
 public class DebouncerTests
 {
+    private static async Task Until(Func<bool> cond)
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (!cond() && DateTime.UtcNow < until) await Task.Delay(10);
+    }
+
     [Fact]
     public async Task ManyTriggers_RunOnce_OffCallerThread()
     {
@@ -11,11 +17,11 @@ public class DebouncerTests
         var d = new Debouncer(TimeSpan.FromMilliseconds(60), () => { Interlocked.Increment(ref runs); thread = Environment.CurrentManagedThreadId; });
         for (int i = 0; i < 100; i++) d.Trigger();
         Assert.True(d.IsPending);
-        await Task.Delay(300);
+        await Until(() => Volatile.Read(ref runs) >= 1);
         Assert.Equal(1, runs);
         Assert.NotEqual(Environment.CurrentManagedThreadId, thread);
         d.Trigger();
-        await Task.Delay(300);
+        await Until(() => Volatile.Read(ref runs) >= 2);
         Assert.Equal(2, runs);
     }
 
@@ -38,7 +44,7 @@ public class DebouncerTests
     {
         var d = new Debouncer(TimeSpan.FromMilliseconds(10), () => throw new IOException("disk"));
         d.Trigger();
-        await Task.Delay(120);
+        await Until(() => !d.IsPending);
         Assert.False(d.IsPending);
     }
 }

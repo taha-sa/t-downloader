@@ -26,8 +26,7 @@ public sealed class HlsTestServer : IDisposable
     {
         for (int attempt = 0; ; attempt++)
         {
-            var t = new TcpListener(IPAddress.Loopback, 0); t.Start();
-            int port = ((IPEndPoint)t.LocalEndpoint).Port; t.Stop();
+            int port = TestPorts.Next();
             _l.Prefixes.Clear();
             _l.Prefixes.Add($"http://127.0.0.1:{port}/");
             _l.Prefixes.Add($"http://localhost:{port}/");

@@ -140,11 +140,12 @@ public sealed class EngineResilienceTests : IDisposable
     [Fact]
     public async Task HostConnectionCap_LimitsConcurrency_AndQueuedWorkersDoNotTimeOut()
     {
-        // 6 parça x 4 x 150 ms = ~600 ms; tavan 2 => 3 dalga (~1,8 sn). ReadTimeout 1 sn: bekleyenler zaman aşımına düşmemeli.
+        // Parça başına 3 x 300 ms = ~900 ms; tavan 2 => 3 dalga (~2,7 sn). ReadTimeout 1,5 sn: son dalga ~1,8 sn kuyrukta bekler
+        // (ReadTimeout'tan uzun) ama tek okuma aralığı yalnızca 300 ms; bekleyenler zaman aşımına düşmemeli. Marjlar iki yönde de >=300 ms.
         using var srv = new ScriptServer(TestHttpServer.RandomData(6 * 64 * 1024));
-        srv.Custom = (c, s, e, probe) => srv.Serve(c, s, e, chunkDelayMs: probe ? 0 : 150);
+        srv.Custom = (c, s, e, probe) => srv.Serve(c, s, e, chunkDelayMs: probe ? 0 : 300);
         var item = NewItem(srv.Url);
-        using var engine = NewEngine(item, o => { o.Connections = 6; o.MaxConnectionsPerHost = 2; o.ReadTimeout = TimeSpan.FromSeconds(1); });
+        using var engine = NewEngine(item, o => { o.Connections = 6; o.MaxConnectionsPerHost = 2; o.ReadTimeout = TimeSpan.FromSeconds(1.5); });
         var st = await engine.RunAsync();
         Assert.Equal(DownloadStatus.Completed, st);
         Assert.True(srv.MaxInFlight <= 2, $"eşzamanlı bağlantı {srv.MaxInFlight}");
@@ -194,7 +195,8 @@ public sealed class EngineResilienceTests : IDisposable
 
             g.Throttle();
             Assert.Equal(1, g.Limit);
-            await Task.Delay(300);
+            var until = DateTime.UtcNow.AddSeconds(5);
+            while (g.Limit != 2 && DateTime.UtcNow < until) await Task.Delay(20);   // koşul beklemesi: sabit süre yok
             Assert.Equal(2, g.Limit);
         }
     }

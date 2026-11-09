@@ -13,6 +13,10 @@ public sealed class ScriptServer : IDisposable
 
     private readonly HttpListener _l = new();
     private int _inFlight, _maxInFlight, _requests;
+    // İstek başına "uçuşta" işareti (Serve içinde son parça yazılmadan ÖNCE düşürülür): istemci gövdeyi bitirip HostGate yerini
+    // bırakınca sonraki istek sunucuda hâlâ bitmemiş işleyiciyle çakışıp MaxInFlight'ı şişirmesin.
+    private readonly AsyncLocal<int[]?> _flight = new();
+    private void EndFlight() { var f = _flight.Value; if (f != null && Interlocked.Exchange(ref f[0], 0) == 1) Interlocked.Decrement(ref _inFlight); }
     public byte[] Data { get; }
     public string Url { get; }
     public int Requests => Volatile.Read(ref _requests);
@@ -27,8 +31,7 @@ public sealed class ScriptServer : IDisposable
         int port = 0;
         for (int attempt = 0; ; attempt++)
         {
-            var t = new TcpListener(IPAddress.Loopback, 0); t.Start();
-            port = ((IPEndPoint)t.LocalEndpoint).Port; t.Stop();
+            port = TestPorts.Next();
             _l.Prefixes.Clear();
             _l.Prefixes.Add($"http://127.0.0.1:{port}/");
             try { _l.Start(); break; } catch (HttpListenerException) when (attempt < 20) { }
@@ -63,6 +66,7 @@ public sealed class ScriptServer : IDisposable
         while (pos <= end)
         {
             int n = (int)Math.Min(16 * 1024, end - pos + 1);
+            if (pos + n > end) EndFlight();        // son parça: istemci bitirip yerini bırakabilir
             await s.WriteAsync(Data.AsMemory((int)pos, n));
             pos += n; sent += n;
             if (stopAfterBytes >= 0 && sent >= stopAfterBytes) { resp.Abort(); return; }
@@ -86,6 +90,7 @@ public sealed class ScriptServer : IDisposable
         lock (Log) Log.Add((DateTime.UtcNow, start, end));
         if (!probe)
         {
+            _flight.Value = new[] { 1 };
             int cur = Interlocked.Increment(ref _inFlight);
             int m;
             while (cur > (m = Volatile.Read(ref _maxInFlight)) && Interlocked.CompareExchange(ref _maxInFlight, cur, m) != m) { }
@@ -96,7 +101,7 @@ public sealed class ScriptServer : IDisposable
             else await Serve(c, start, end);
         }
         catch { try { c.Response.Abort(); } catch { } }
-        finally { if (!probe) Interlocked.Decrement(ref _inFlight); }
+        finally { if (!probe) EndFlight(); }
     }
 
     public void Dispose() { try { _l.Close(); } catch { } }

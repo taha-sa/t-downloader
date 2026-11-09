@@ -125,12 +125,13 @@ public class HostProcessTests
             var reply = Assert.IsType<DownloadResultMessage>(await host.Receive());
             Assert.Equal("r2", reply.RequestId);
             Assert.True(reply.Accepted);                       // gelen kutusuna yazıldı + App başlatıldı -> ACK
-            var spooled = Directory.GetFiles(host.InboxDir, "*.json");
-            Assert.Single(spooled);
-            Assert.Contains("https://x/b.zip", File.ReadAllText(spooled[0]));
+            Assert.Single(Directory.GetFiles(host.InboxDir, "*.json"));
+            var urls = new List<string>();
+            InboxSpool.Drain(host.InboxDir, m => { urls.Add(m.Url); return false; });   // dosya DPAPI ile korunur: spool okuyucusu ile çöz, silme
+            Assert.Equal(new[] { "https://x/b.zip" }, urls);
 
-            Assert.True(SpinWait.SpinUntil(() => File.Exists(marker), 5000), "Sahte App başlatılmadı.");
-            Assert.Contains("--background", File.ReadAllText(marker));
+            // .cmd dosyayı önce oluşturur, sonra içeriği yazar: yalnızca varlığa değil içeriğe bekle.
+            Assert.True(SpinWait.SpinUntil(() => SafeRead(marker).Contains("--background"), 10000), "Sahte App başlatılmadı: " + SafeRead(marker));
 
             host.P.StandardInput.Close();
             Assert.True(host.P.WaitForExit(10000));

@@ -21,8 +21,7 @@ public sealed class TestHttpServer : IDisposable
         int port = 0;
         for (int attempt = 0; ; attempt++)
         {
-            var l = new TcpListener(IPAddress.Loopback, 0); l.Start();
-            port = ((IPEndPoint)l.LocalEndpoint).Port; l.Stop();
+            port = TestPorts.Next();
             _listener.Prefixes.Clear();
             _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
             try { _listener.Start(); break; } catch (HttpListenerException) when (attempt < 20) { }

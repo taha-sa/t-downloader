@@ -82,13 +82,17 @@ public class ProgressSmoothnessTests
     {
         const int packets = 2000;                       // ~376 KB
         var seg = HlsTestServer.Ts(packets, 3);
-        var tcp = new TcpListener(IPAddress.Loopback, 0); tcp.Start();
-        int port = ((IPEndPoint)tcp.LocalEndpoint).Port; tcp.Stop();
-        using var l = new HttpListener();
-        l.Prefixes.Add($"http://127.0.0.1:{port}/"); l.Start();
+        var l = new HttpListener();
+        int port;
+        for (int attempt = 0; ; attempt++)
+        {
+            port = TestPorts.Next();
+            l.Prefixes.Clear(); l.Prefixes.Add($"http://127.0.0.1:{port}/");
+            try { l.Start(); break; } catch (HttpListenerException) when (attempt < 20) { }
+        }
         var serve = Task.Run(async () =>
         {
-            while (l.IsListening)
+            while (true)
             {
                 HttpListenerContext c;
                 try { c = await l.GetContextAsync(); } catch { break; }
@@ -132,6 +136,11 @@ public class ProgressSmoothnessTests
                 Assert.Equal(seg.Length, dl[^1]);
             }
         }
-        finally { l.Close(); try { Directory.Delete(tmp, true); } catch { } }
+        finally
+        {
+            try { l.Close(); } catch (ObjectDisposedException) { }
+            try { await serve.WaitAsync(TimeSpan.FromSeconds(5)); } catch { }   // dinleyici ömrü test boyunca: sunucu görevi bitmeden test bitmez
+            try { Directory.Delete(tmp, true); } catch { }
+        }
     }
 }
