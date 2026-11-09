@@ -32,12 +32,34 @@ export async function cookieHeader(url) {
 // App geç de olsa kabul ettiyse (soğuk başlangıç) tarayıcıdaki kopya iptal edilir: çift indirme olmasın.
 const lateWatch = new Map();
 const LATE_MAX = 200;
+const LATE_KEY = "lateWatch";
 export const watchedCount = () => lateWatch.size;
-native.onHostMessage((m) => {
+
+// Servis çalışanı (MV3) bekleme sırasında yeniden başlayabilir: izleme tablosu chrome.storage.session'da da tutulur (en iyi çaba).
+const sess = () => globalThis.chrome?.storage?.session;
+const persistLate = () => {
+  try { Promise.resolve(sess()?.set({ [LATE_KEY]: [...lateWatch] })).catch?.(() => {}); } catch { /* oturum deposu yok */ }
+};
+let lateReady = Promise.resolve();
+// Bellekteki tabloyu atar ve depodan yeniden yükler (servis çalışanı yeniden başlatıldığında modül yüklenirken bir kez çalışır).
+export function restoreLateWatch() {
+  lateWatch.clear();
+  lateReady = (async () => {
+    try {
+      const r = await sess()?.get(LATE_KEY);
+      for (const [k, v] of r?.[LATE_KEY] || []) if (typeof k === "string" && !lateWatch.has(k)) lateWatch.set(k, v);
+    } catch { /* depo yok */ }
+  })();
+  return lateReady;
+}
+restoreLateWatch();
+native.onHostMessage(async (m) => {
   if (m.type !== "downloadResult" || typeof m.requestId !== "string") return;
+  await lateReady;
   const id = lateWatch.get(m.requestId);
   if (id === undefined) return;
   lateWatch.delete(m.requestId);
+  persistLate();
   if (m.accepted === true && id !== null) {
     safe(() => chrome.downloads.cancel(id)).then(() => safe(() => chrome.downloads.erase({ id })));
   }
@@ -47,6 +69,7 @@ native.onHostMessage((m) => {
 // info.browserId: tarayıcı indirme kimliği (zaman aşımında geç kabul için izlenir); info.explicit: kullanıcı eylemi.
 export async function sendDownload(info) {
   const requestId = newId();
+  const t0 = Date.now();        // zaman aşımı sayacı çerez okumasını da kapsar
   const msg = buildDownload({
     requestId,
     url: info.url,
@@ -61,11 +84,12 @@ export async function sendDownload(info) {
   const res = await native.request(
     msg,
     (m) => m.type === "downloadResult" && m.requestId === requestId,
-    info.timeoutMs ?? opts.timeoutMs,
+    Math.max(1, (info.timeoutMs ?? opts.timeoutMs) - (Date.now() - t0)),
   );
   if (!res && info.browserId !== undefined) {
     lateWatch.set(requestId, info.browserId);
     while (lateWatch.size > LATE_MAX) lateWatch.delete(lateWatch.keys().next().value);
+    persistLate();
   }
   return !!(res && res.accepted === true);
 }

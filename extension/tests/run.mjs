@@ -69,12 +69,16 @@ function makePort() {
 }
 globalThis.navigator ??= {};
 Object.defineProperty(globalThis, "navigator", { value: { userAgent: "TestUA/1.0" }, configurable: true });
+const sessionStore = {};
 globalThis.chrome = {
   runtime: {
     connectNative: (name) => { assert.equal(name, "com.tdownloader.host"); return makePort(); },
     lastError: undefined,
   },
-  storage: { local: { get: async () => ({}), set: async () => {} } },
+  storage: {
+    local: { get: async () => ({}), set: async () => {} },
+    session: { get: async (k) => ({ [k]: sessionStore[k] }), set: async (o) => { Object.assign(sessionStore, structuredClone(o)); } },
+  },
   cookies: { getAll: async () => [{ name: "a", value: "1" }, { name: "b", value: "2" }] },
   downloads: {
     search: async (q) => (searchResult ? [{ id: q.id, ...searchResult() }] : []),
@@ -179,6 +183,21 @@ await test("zaman aşımından sonra gelen accepted:true tarayıcı kopyasını 
   lastPort.onMessage._fire({ type: "downloadResult", requestId: dl.requestId, accepted: true });   // ikinci kez: etkisiz
   await sleep(30);
   assert.equal(calls.length, 0);
+});
+await test("servis çalışanı yeniden başlasa da geç accepted:true tarayıcı kopyasını iptal eder (lateWatch kalıcı)", async () => {
+  sent.length = 0; calls.length = 0; hostBehavior = "silent"; capture.opts.timeoutMs = 60;
+  const it = item({ url: "https://dl.test/restart.zip", finalUrl: "https://dl.test/restart.zip" });
+  await capture.onDownloadCreated(it);
+  const dl = sent.find((x) => x.type === "download");
+  await sleep(10);
+  assert.ok(sessionStore.lateWatch.some(([k]) => k === dl.requestId));   // depoya yazıldı
+  await capture.restoreLateWatch();                                       // yeniden başlatma: bellek sıfırlanır, depodan yüklenir
+  calls.length = 0;
+  lastPort.onMessage._fire({ type: "downloadResult", requestId: dl.requestId, accepted: true });
+  await sleep(30);
+  assert.deepEqual(calls.map((c) => c[0]), ["cancel", "erase"]);
+  assert.equal(calls[0][1], it.id);
+  assert.ok(!sessionStore.lateWatch.some(([k]) => k === dl.requestId));
 });
 await test("onay penceresi uzun sürse de (App hemen accepted:true) indirme bir kez iptal edilir; 50 eşzamanlı istek", async () => {
   sent.length = 0; calls.length = 0; hostBehavior = "accept"; capture.opts.timeoutMs = 15000; hostDelayMs = 40;
