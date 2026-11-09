@@ -79,4 +79,6 @@ foreach ($k in $keys) {
         Write-Host "Kayit: $k"
     }
 }
-Write-Host "Tamam. Tarayiciyi yeniden baslatmaya gerek yok; eklentiyi yeniden yukleyin."
+Write-Host "Tamam. Tarayiciyi yeniden baslatmaya gerek yok."
+Write-Host "ONEMLI (surum 1.1.0): eklenti yeni bir izin istiyor (downloads.ui). chrome://extensions (veya edge://extensions) sayfasinda"
+Write-Host "T-Downloader eklentisinde 'Yenile' deyin ve izin istemini onaylayin. Eklenti kimligi (sabit key) ve allowed_origins DEGISMEZ."

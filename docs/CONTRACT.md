@@ -149,3 +149,48 @@ Yerel düğme penceresi (`videoGeometry` akışı) yalnızca `UseNativeVideoButt
 ### Diskten Sil (A3)
 - Dosyalar `SHFileOperation(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_WANTNUKEWARNING)` ile Geri Dönüşüm Kutusu'na gönderilir. Kutuya gönderilemeyen dosya için kabuk
   AYRICA "kalıcı silinsin mi?" diye sorar; reddedilirse dosya silinmez ve kullanıcıya bildirilir. Sessiz kalıcı silme yoktur.
+
+
+## Faz 3: tarayıcı indirmelerini devralma, gelen kutusu, T-Suite (sürüm 1.1.0)
+
+### Eklenti: indirme hiç tarayıcıda başlamaz (birincil yol)
+- **Birincil yol `chrome.downloads.onDeterminingFilename`**: tarayıcı dosya adını belirlemeden (diske tek bayt yazılmadan) olay gelir; eklenti `true`
+  dönüp `suggest()` çağrısını erteler, `download` mesajını host'a yollar ve **en çok `takeover.ackMs` (2 sn)** `downloadResult` bekler.
+  - `accepted:true` -> `downloads.cancel(id)` + `downloads.erase({id})` (tarayıcı listesi/balonunda iz kalmaz), `suggest()` ÇAĞRILMAZ.
+  - ACK yok (zaman aşımı) / `accepted:false` / host hatası / desteklenmeyen durum -> `suggest()` çağrılır: **indirme asla kaybolmaz**. ACK geç gelip
+    `accepted:true` olursa mevcut "geç kabul" mantığı tarayıcıdaki kopyayı iptal eder (çift indirme olmaz).
+  - Desteklenmeyen / atlanan: `blob:`, `data:`, `file:`, `filesystem:`, `chrome:`/`edge:`; gizli pencere; kendi eklentimizin başlattığı indirmeler
+    (`byExtensionId`, `addBypass`); Alt basılı; **POST ile başlayanlar** (downloads API yöntemi bildirmez; `webRequest` ile `main_frame`/`sub_frame` POST adresleri
+    60 sn hatırlanır); kullanıcı yakalamayı kapattı; **"Bu sitede duraklat"** (referrer/URL host'u, alt alan adlarıyla); App ayarındaki tür/boyut/hariç site kuralları.
+- **İkincil güvenlik ağı `onCreated`**: `onDeterminingFilename` 4 sn içinde o indirme için gelmezse eski akış (duraklat -> sor -> iptal/devam) çalışır.
+  İki yol aynı indirmeyi çift işlemez (`determined`/`legacy` kümeleri).
+- **İndirme arayüzü (`downloads.ui` izni, `chrome.downloads.setUiOptions`)**: özellik algılanır (yoksa/hata verirse sessizce atlanır). Devralma etkin + host bağlıyken
+  `{enabled:false}` (balon/raf gizli); devralma kapanınca, host koptuğunda veya yedeğe düşen bir indirme için **10 sn** `{enabled:true}` (yedek indirme normal görünsün).
+- Yeni izin: `downloads.ui`. **Eklenti kimliği (manifest `key`) ve `allowed_origins` DEĞİŞMEZ.** Kullanıcı eklentiyi `chrome://extensions`'ta **Yenile**melidir.
+  Eklenti sürümü 1.1.0.
+- Popup: "Tarayıcı indirmelerini devral" (mevcut `setCapture`) ve "Bu sitede duraklat" (yeni dahili mesajlar `getSitePause {host}` / `setSitePause {host,value}`; eklenti içi, host'a gitmez).
+- IPC mesaj şeması DEĞİŞMEDİ (`download`/`downloadResult`): yalnızca anlam eklendi (aşağıda).
+
+### Host: App kapalıyken gelen kutusu (inbox spool)
+- `download` geldiğinde Host önce **ucuz** pipe bağlanma denemesi yapar. App çalışıyorsa mesajı iletir; `downloadResult` yanıtını App hemen döner (= ACK).
+- App çalışmıyorsa (ve `TDownloader.exe` Host'un klasöründe varsa, cooldown yoksa): isteği `%APPDATA%\T-Downloader\inbox\<guid>.json` olarak **atomik** yazar
+  (önce `.tmp`, sonra taşıma; içerik = IPC `download` JSON'u: url, referrer, cookies, userAgent, filename, mime, fileSize), App'i `--background` ile başlatır ve
+  **hemen** `accepted:true` döner. Başlatma başarısızsa dosya silinir ve `accepted:false` döner (tarayıcı kendi indirir). Host'a `--inbox <klasör>` verilebilir (test).
+- App açılışta kutuyu boşaltır, çalışırken `FileSystemWatcher` (+ 30 sn yedek zamanlayıcı) ile izler; her istek `Explicit=true` sayılır (tarayıcı iptal edildi,
+  "yakalama kapalı" ayarı düşürmez) ve normal onay/dosya bilgisi akışına girer. 24 saatten eski / bozuk dosyalar silinir; işlenemeyen dosya kalır (sonra yeniden denenir).
+- `downloadResult.accepted:true` artık "App kabul etti" **veya** "kalıcı olarak gelen kutusuna yazıldı" demektir.
+
+### "İndirme tamamlandı" penceresi
+- `AppSettings.ShowCompletedDialog` (varsayılan true; Seçenekler > Genel'den ve pencerenin kendi onay kutusundan değiştirilir). Açıksa tamamlanma bildirim balonunun
+  yerine `Forms/CompletedDialog` gösterilir (tek pencere, çoklu tamamlanma için "1/N" sayfalayıcı); kapalıysa eski balon.
+- Uzantı noktası: `ICompletedAction` (ör. Faz 5 "Telefonda aç"); şimdilik uygulanmadı.
+
+### T-Link (T-Suite) ve T-Update
+- Kayıt: `%LOCALAPPDATA%\T-Suite\apps\t-downloader.json`; pipe `\\.\pipe\TSuite.t-downloader`; protokol `t-suite/docs/PROTOCOL.md`.
+- Olaylar: `download.progress` {id,name,bytes,total,speed,pct,state} (kimlik başına birleştirilir, en çok 2 Hz, YALNIZCA abone varken üretilir), `download.completed`
+  {id,fileName,path,size,url,mime}, `download.failed` {id,name,error}, `app.update.available`.
+- Komutlar: `download.add {url, referrer?, fileName?}` -> `{id}`, `download.pause {id}`, `download.resume {id}`, `download.list` -> `{items:[...]}`, `app.show`, `app.version`.
+- Bu pipe (T-Link) eklenti<->Host pipe'ından (`TDownloader.Ipc`) AYRIDIR.
+- T-Update: `https://github.com/taha-sa/t-downloader-releases/releases/latest/download/latest.json`; açılıştan 30 sn sonra arka planda, en çok 24 saatte bir.
+  Sürüm paketi `T-Downloader.zip` (App + Host + `TSuite.Updater.*` + `extension\`); güncelleyici dosyaları aynı yolda yerinde değiştirir (eski `.bak`), bu yüzden
+  `TDownloader.Host.exe` yolu ve native messaging kaydı bozulmaz.
