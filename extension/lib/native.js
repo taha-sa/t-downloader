@@ -14,6 +14,10 @@ let lastError = null;
 export const getLastError = () => lastError;
 export const isConnected = () => port !== null;
 export const onHostMessage = (fn) => listeners.add(fn);
+// Baglanti durumu degisince (baglandi/koptu) haber verir: download arayuzu (setUiOptions) buna gore ayarlanir.
+const statusListeners = new Set();
+export const onStatus = (fn) => statusListeners.add(fn);
+const emitStatus = () => { for (const fn of [...statusListeners]) { try { fn(port !== null); } catch { /* yut */ } } };
 
 export function connect() {
   if (port) return;
@@ -26,6 +30,7 @@ export function connect() {
     return;
   }
   port = p;
+  emitStatus();
   p.onMessage.addListener((msg) => {
     lastError = null;
     backoff = MIN_BACKOFF; // canlı host: bekleme sıfırlanır
@@ -36,7 +41,7 @@ export function connect() {
   });
   p.onDisconnect.addListener(() => {
     lastError = chrome.runtime.lastError?.message || "bağlantı kapandı"; // teşhis için sakla
-    if (port === p) port = null;
+    if (port === p) { port = null; emitStatus(); }
     for (const w of [...pending]) { clearTimeout(w.timer); pending.delete(w); w.resolve(null); }
     scheduleReconnect();
   });
@@ -70,5 +75,5 @@ export function request(msg, match, timeoutMs = 5000) {
 export function _reset() {
   port = null; backoff = MIN_BACKOFF;
   if (timer) { clearTimeout(timer); timer = null; }
-  pending.clear(); listeners.clear();
+  pending.clear(); listeners.clear(); statusListeners.clear();
 }

@@ -1098,6 +1098,120 @@ await test("Instagram: aşağı kaydırırken buton mevcut videoda sabit kalır,
   assert.equal(b.getTarget(), v2, "alttaki videoya basınca hedef v2 olmalı");
 });
 
+// ---- onDeterminingFilename: birincil devralma yolu ----
+const uiCalls = [];
+chrome.downloads.setUiOptions = async (o) => { uiCalls.push(o.enabled); };
+chrome.runtime.id = "ext-self";
+const det = (it) => new Promise((resolve) => {
+  let suggested = 0;
+  const ret = capture.onDeterminingFilename(it, () => { suggested++; });
+  assert.equal(ret, true, "suggest asenkron: true dönmeli");
+  setTimeout(() => resolve({ suggested }), 60);
+});
+const resetDet = () => {
+  sent.length = 0; calls.length = 0; uiCalls.length = 0; hostBehavior = "accept"; hostDelayMs = 0;
+  settings.applyAppSettings({ interceptEnabled: true, minFileSizeKb: 0, excludedSites: [], fileTypes: [] });
+  settings.setUserCapture(true);
+  native.connect();
+};
+
+await test("onDeterminingFilename: ACK -> iptal+sil, suggest ÇAĞRILMAZ, duraklatma yok", async () => {
+  resetDet();
+  const it = item();
+  const r = await det(it);
+  assert.equal(r.suggested, 0);
+  const m = sent.find((x) => x.type === "download");
+  validate(m);
+  assert.equal(m.cookies, "a=1; b=2");
+  assert.equal(m.filename, "setup.zip");
+  assert.deepEqual(calls.map((c) => c[0]), ["cancel", "erase"]);
+});
+await test("onDeterminingFilename: host red -> suggest() (indirme kaybolmaz), arayüz geri açılır", async () => {
+  resetDet(); hostBehavior = "reject"; capture.takeover.uiHoldMs = 30;
+  await capture.syncUi(); assert.equal(capture.isUiHidden(), true); uiCalls.length = 0;
+  const r = await det(item());
+  assert.equal(r.suggested, 1);
+  assert.deepEqual(calls, []);
+  assert.ok(uiCalls.includes(true), "yedek indirme görünsün diye downloads UI geri açılmalı");
+});
+await test("onDeterminingFilename: ACK gelmezse zaman aşımı -> suggest()", async () => {
+  resetDet(); hostBehavior = "silent"; capture.takeover.ackMs = 50;
+  const it = item();
+  const t0 = Date.now();
+  const r = await new Promise((resolve) => {
+    let n = 0; capture.onDeterminingFilename(it, () => { n++; });
+    setTimeout(() => resolve({ n }), 250);
+  });
+  assert.equal(r.n, 1);
+  assert.ok(Date.now() - t0 >= 50);
+  capture.takeover.ackMs = 2000;
+});
+await test("onDeterminingFilename: desteklenmeyen/hariç durumlar -> suggest(), host'a hiçbir şey gitmez", async () => {
+  const cases = [
+    ["blob", item({ url: "blob:https://x/1", finalUrl: "blob:https://x/1" })],
+    ["data", item({ url: "data:text/plain,a", finalUrl: "data:text/plain,a" })],
+    ["file", item({ url: "file:///c:/a.zip", finalUrl: "file:///c:/a.zip" })],
+    ["gizli pencere", item({ incognito: true })],
+    ["kendi eklentimiz", item({ byExtensionId: "ext-self" })],
+  ];
+  for (const [name, it] of cases) {
+    resetDet();
+    const r = await det(it);
+    assert.equal(r.suggested, 1, name);
+    assert.equal(sent.filter((x) => x.type === "download").length, 0, name);
+  }
+  resetDet(); capture.notePost("https://dl.test/post.zip");
+  assert.equal((await det(item({ url: "https://dl.test/post.zip", finalUrl: "https://dl.test/post.zip" }))).suggested, 1, "POST");
+  resetDet(); capture.setAlt(5000);
+  assert.equal((await det(item())).suggested, 1, "Alt basılı"); capture.setAlt(0);
+  resetDet(); settings.setUserCapture(false);
+  assert.equal((await det(item())).suggested, 1, "kullanıcı kapattı"); settings.setUserCapture(true);
+  resetDet(); settings.applyAppSettings({ fileTypes: ["pdf"] });
+  assert.equal((await det(item())).suggested, 1, "tür dışı (zip)");
+  resetDet(); settings.applyAppSettings({ minFileSizeKb: 9_000_000 });
+  assert.equal((await det(item())).suggested, 1, "çok küçük dosya");
+  resetDet(); settings.applyAppSettings({ excludedSites: ["dl.test"] });
+  assert.equal((await det(item())).suggested, 1, "hariç site");
+  resetDet(); settings.setHostPaused("dl.test", true);
+  assert.equal((await det(item())).suggested, 1, "bu sitede duraklat");
+  assert.equal(sent.filter((x) => x.type === "download").length, 0);
+  settings.setHostPaused("dl.test", false);
+  resetDet();
+  assert.equal((await det(item())).suggested, 0, "duraklatma kalkınca yeniden devralır");
+});
+await test("site duraklatma: alt alan adı eşleşir, www yok sayılır", () => {
+  settings.setHostPaused("www.Example.com", true);
+  assert.equal(settings.isHostPaused("cdn.example.com"), true);
+  assert.equal(settings.isHostPaused("example.com"), true);
+  assert.equal(settings.isHostPaused("notexample.com"), false);
+  settings.setHostPaused("example.com", false);
+  assert.equal(settings.isHostPaused("example.com"), false);
+});
+await test("onCreated güvenlik ağı: onDeterminingFilename gelmişse dokunmaz, gelmemişse eski yolu çalıştırır", async () => {
+  resetDet(); capture.takeover.safetyNetMs = 40;
+  const a = item(), b = item();
+  capture.onDeterminingFilename(a, () => {});
+  capture.onCreatedSafetyNet(a);
+  capture.onCreatedSafetyNet(b);               // determining gelmedi
+  await sleep(300);
+  assert.ok(!calls.some((c) => c[1] === a.id && c[0] === "pause"), "a için eski yol çalışmamalı");
+  assert.ok(calls.some((c) => c[1] === b.id && c[0] === "pause"), "b için eski yol çalışmalı");
+  capture.takeover.safetyNetMs = 4000;
+});
+await test("downloads.ui: bağlıyken arayüz gizlenir, devralma kapanınca geri açılır", async () => {
+  resetDet(); await sleep(150);                 // önceki yedek-düşme tutma süresi dolsun
+  settings.setUserCapture(false); await capture.syncUi(); uiCalls.length = 0;
+  settings.setUserCapture(true);
+  await capture.syncUi();
+  assert.equal(capture.isUiHidden(), true);
+  assert.equal(uiCalls.at(-1), false);
+  settings.setUserCapture(false);
+  await capture.syncUi();
+  assert.equal(capture.isUiHidden(), false);
+  assert.equal(uiCalls.at(-1), true);
+  settings.setUserCapture(true);
+});
+
 console.log(`
 ${passed} test geçti`);
 process.exit(0);

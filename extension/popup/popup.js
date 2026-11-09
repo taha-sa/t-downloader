@@ -26,3 +26,28 @@ toggle.addEventListener("change", () => {
     void chrome.runtime.lastError;
   });
 });
+
+// "Bu sitede duraklat": etkin sekmenin sitesinde indirmeler tarayıcıda kalır.
+const siteRow = document.getElementById("siteRow");
+const sitePause = document.getElementById("sitePause");
+const siteLabel = document.getElementById("siteLabel");
+let siteHost = "";
+try {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    void chrome.runtime.lastError;
+    try {
+      const u = new URL(tabs?.[0]?.url || "");
+      if (!/^https?:$/.test(u.protocol)) return;
+      siteHost = u.hostname.replace(/^www\./, "");
+    } catch { return; }
+    siteLabel.textContent = `Bu sitede duraklat (${siteHost})`;
+    siteRow.hidden = false;
+    chrome.runtime.sendMessage({ kind: "getSitePause", host: siteHost }, (r) => {
+      void chrome.runtime.lastError;
+      sitePause.checked = !!r?.paused;
+    });
+  });
+} catch { /* test ortamı */ }
+sitePause.addEventListener("change", () => {
+  chrome.runtime.sendMessage({ kind: "setSitePause", host: siteHost, value: sitePause.checked }, () => void chrome.runtime.lastError);
+});

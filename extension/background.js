@@ -25,7 +25,7 @@ let hostVersion = null;
 // ---- App -> eklenti ----
 native.onHostMessage((msg) => {
   if (msg.type === "settings") {
-    settings.applyAppSettings(msg); broadcastCfg();
+    settings.applyAppSettings(msg); broadcastCfg(); capture.syncUi();
     media.resendAll();      // App yeni bağlandığında ilk mesaj budur: açık sayfaların medya listesini yeniden gönder (A8)
   }
   else if (msg.type === "hideButton" && Number.isInteger(msg.tabId)) geometry.hideTab(msg.tabId);
@@ -42,7 +42,15 @@ function broadcastCfg() {
 }
 
 // ---- olay kayıtları (senkron, üst düzeyde) ----
-chrome.downloads.onCreated.addListener((item) => { capture.onDownloadCreated(item); });
+// Birincil: dosya adi belirlenirken (diske yazmadan) devral. Ikincil: onCreated guvenlik agi (4 sn icinde ilki gelmezse).
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => capture.onDeterminingFilename(item, suggest));
+chrome.downloads.onCreated.addListener((item) => { capture.onCreatedSafetyNet(item); });
+// POST ile baslayan istekleri hatirla (downloads API yontemi bildirmez; POST'u App yeniden gonderemez -> tarayici indirsin).
+try {
+  chrome.webRequest.onBeforeRequest.addListener((d) => { if (d.method === "POST") capture.notePost(d.url); },
+    { urls: ["<all_urls>"], types: ["main_frame", "sub_frame"] });
+} catch { /* test ortami */ }
+capture.syncUi();
 media.register();
 chrome.runtime.onInstalled.addListener(menus.createMenus);
 chrome.runtime.onStartup.addListener(menus.createMenus);
@@ -106,7 +114,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true; // asenkron yanıt
     case "setCapture":
       settings.setUserCapture(msg.value);
+      capture.syncUi();
       sendResponse({ captureEnabled: settings.getUserCapture() });
+      return false;
+    case "getSitePause":
+      (async () => { await settings.ready; sendResponse({ paused: settings.isHostPaused(msg.host) }); })();
+      return true;
+    case "setSitePause":
+      settings.setHostPaused(msg.host, !!msg.value);
+      sendResponse({ paused: settings.isHostPaused(msg.host) });
       return false;
   }
   return false;
