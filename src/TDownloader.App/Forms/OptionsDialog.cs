@@ -12,7 +12,7 @@ public sealed class OptionsDialog : DluForm
     private readonly AppSettings _s;
     private readonly Action<AppSettings> _apply;
 
-    private readonly CheckBox _tray, _clip, _showInfo;
+    private readonly CheckBox _tray, _clip, _showInfo, _showCompleted;
     private readonly NumericUpDown _conn, _concurrent, _limit;
     private readonly TextBox _root, _catFolder;
     private readonly ListView _cats;
@@ -46,8 +46,9 @@ public sealed class OptionsDialog : DluForm
         _tray = Put(g, new DarkCheck { Text = "Pencereyi kapatınca sistem tepsisine küçült", AutoEllipsis = true }, 10, 12, 230, 11);
         _clip = Put(g, new DarkCheck { Text = "Panodaki indirilebilir bağlantıları izle ve sor", AutoEllipsis = true }, 10, 28, 230, 11);
         _showInfo = Put(g, new DarkCheck { Text = "Tarayıcıdan gelen indirmelerde \"Dosya bilgisi\" penceresini göster", AutoEllipsis = true }, 10, 44, 238, 11);
-        Put(g, new Label { Text = "Veri klasörü:" }, 10, 70, 80, 10);
-        Put(g, new TextBox { Text = dataFolder, ReadOnly = true }, 10, 82, 232, 14);
+        _showCompleted = Put(g, new DarkCheck { Text = "İndirme bitince \"İndirme tamamlandı\" penceresini göster", AutoEllipsis = true }, 10, 60, 238, 11);
+        Put(g, new Label { Text = "Veri klasörü:" }, 10, 86, 80, 10);
+        Put(g, new TextBox { Text = dataFolder, ReadOnly = true }, 10, 98, 232, 14);
 
         // --- Bağlantı
         var c = Page("Bağlantı");
@@ -163,6 +164,7 @@ public sealed class OptionsDialog : DluForm
         _tray.Checked = _s.MinimizeToTrayOnClose;
         _clip.Checked = _s.ClipboardMonitor;
         _showInfo.Checked = _s.ShowFileInfoOnCapture;
+        _showCompleted.Checked = _s.ShowCompletedDialog;
         _conn.Value = Math.Clamp(_s.Connections, 1, 32);
         _concurrent.Value = Math.Clamp(_s.MaxConcurrentDownloads, 1, 20);
         _limit.Value = Math.Clamp(_s.SpeedLimitKBps, 0, 10_000_000);
@@ -186,6 +188,7 @@ public sealed class OptionsDialog : DluForm
         _s.MinimizeToTrayOnClose = _tray.Checked;
         _s.ClipboardMonitor = _clip.Checked;
         _s.ShowFileInfoOnCapture = _showInfo.Checked;
+        _s.ShowCompletedDialog = _showCompleted.Checked;
         _s.Connections = (int)_conn.Value;
         _s.MaxConcurrentDownloads = (int)_concurrent.Value;
         _s.SpeedLimitKBps = (int)_limit.Value;

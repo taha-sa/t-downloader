@@ -64,6 +64,12 @@ public sealed class AppServices : IAppServices
     public IMediaSink Media { get; set; } = new NullMediaSink();
     public Forms.MainForm? Main { get; set; }
 
+    private Core.Util.Debouncer? _saver;
+    private Core.Util.Debouncer Saver => _saver ??= new Core.Util.Debouncer(TimeSpan.FromSeconds(2), () =>
+    {
+        try { Manager.Settings.Save(Paths.SettingsFile); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    });
+
     public AppSettings Settings => Manager.Settings;
     public ISynchronizeInvoke UiThread => Main ?? throw new InvalidOperationException("Ana pencere yok.");
 
@@ -80,14 +86,15 @@ public sealed class AppServices : IAppServices
     public void ApplySettings(AppSettings s)
     {
         Manager.UpdateSettings(s);
-        try { s.Save(Paths.SettingsFile); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        Saver.Trigger();                 // 2 sn geciktirilmiş, UI dışı kaydetme
         _ = Ipc?.BroadcastAsync(SettingsMessage.From(s));
     }
 
-    public void SaveSettings()
-    {
-        try { Manager.Settings.Save(Paths.SettingsFile); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-    }
+    /// <summary>Ayar kaydını 2 sn geciktirir (art arda değişiklikler tek yazma olur; UI thread'inde disk G/Ç yok).</summary>
+    public void SaveSettings() => Saver.Trigger();
+
+    /// <summary>Bekleyen ayar kaydını hemen yapar (çıkışta).</summary>
+    public void FlushSettings() => _saver?.Flush();
 
     public static string Version => typeof(AppServices).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
 }

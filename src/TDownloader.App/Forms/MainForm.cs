@@ -40,15 +40,23 @@ public sealed class MainForm : Form
     private readonly DarkTree _tree = new();
     private readonly BufferedListView _list = new();
     private readonly ContextMenuStrip _ctx = new();
-    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 250 };   // motorun 250 ms bildirimiyle hizalı
+    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 160 };   // ~6 Hz: ilerleme birleştirilir, tek zamanlayıcı, yalnız görünen değişen satırlar yeniden çizilir
     private readonly Dictionary<string, UpdateGate> _textGates = new();   // satır başına hız/kalan süre metin kısıtlaması (1 sn)
     private ToolStripButton? _btnDiskDelete;
     private ToolStripMenuItem? _viewCats;
 
     // Büyük liste: satır önbelleği (tüm öğeler, bir kez üretilir) + o an listede görünenler; kategori değişince satırlar
     // yeniden üretilmez, önbellekten süzülür. _items: App tarafı O(1) arama (DownloadManager.Get O(n)); sayaçlar artımlı.
-    private readonly Dictionary<string, ListViewItem> _rows = new();
-    private readonly HashSet<string> _shown = new();
+    private sealed class Row : ListViewItem
+    {
+        public bool Stale = true;                // metinler bir sonraki RetrieveVirtualItem'da yenilenir (yalnız görünen satırlar)
+        public readonly DownloadItem Item;
+        public Row(DownloadItem it, int cols) : base(new string[cols]) { Item = it; Tag = it; Name = it.Id; }
+    }
+
+    private readonly Dictionary<string, Row> _rows = new();
+    private readonly ViewIndex<Row> _view = new(r => r.Name);       // süzülmüş + sıralanmış görünüm (VirtualMode)
+    private readonly ListViewItem _blankRow = new(new string[Cols.Length]);
     private readonly Dictionary<string, DownloadItem> _items = new();
     private readonly DownloadStats _stats = new();
     private readonly List<string> _removeQueue = new();
@@ -115,6 +123,7 @@ public sealed class MainForm : Form
         _extensionDir = FindExtensionDir();
         RestoreUiState();
         foreach (var i in _mgr.Items) { _items[i.Id] = i; _stats.Set(i.Id, i.Status == DownloadStatus.Downloading, 0); }
+        _shell.IconsChanged += () => { foreach (var r in _rows.Values) r.Stale = true; _list.Invalidate(); };
         RebuildList();
 
         _mgr.ItemAdded += (_, i) => UiPost(() => AddRow(i));
@@ -341,6 +350,17 @@ public sealed class MainForm : Form
         _list.Dock = DockStyle.Fill;
         _list.BorderStyle = BorderStyle.None;
         _list.View = View.Details;
+        _list.VirtualMode = true;
+        _list.RetrieveVirtualItem += (_, e) =>
+        {
+            if (e.ItemIndex >= 0 && e.ItemIndex < _view.Count)
+            {
+                var r = _view[e.ItemIndex];
+                if (r.Stale) { FillRow(r, r.Item); r.Stale = false; }
+                e.Item = r;
+            }
+            else e.Item = _blankRow;
+        };
         _list.FullRowSelect = true;
         _list.AllowColumnReorder = true;
         _list.HideSelection = false;
@@ -377,7 +397,7 @@ public sealed class MainForm : Form
             {
                 // Toplu seçim: öğe başına SelectedIndexChanged/güncelleme yok; tek BeginUpdate + tek durum güncellemesi.
                 _bulk = true; _list.BeginUpdate();
-                try { foreach (ListViewItem i in _list.Items) i.Selected = true; }
+                try { for (int i = 0; i < _view.Count; i++) _list.SelectedIndices.Add(i); }
                 finally { _list.EndUpdate(); _bulk = false; }
                 UpdateStatus();
                 e.Handled = true;
@@ -477,25 +497,39 @@ public sealed class MainForm : Form
         _ => true,
     };
 
-    private ListViewItem RowFor(DownloadItem i)
+    private Row RowFor(DownloadItem i)
     {
         if (_rows.TryGetValue(i.Id, out var li)) return li;
-        li = new ListViewItem(new string[Cols.Length]) { Tag = i, Name = i.Id };
+        li = new Row(i, Cols.Length);
         _rows[i.Id] = li;
-        FillRow(li, i);
         return li;
     }
 
+    private HashSet<string> SelectedIds()
+    {
+        var set = new HashSet<string>();
+        foreach (int ix in _list.SelectedIndices) if (ix >= 0 && ix < _view.Count) set.Add(_view[ix].Name);
+        return set;
+    }
+
+    private IComparer<Row> CurrentComparer() => new Cmp { Asc = _sortCol < 0 || _sortAsc, Key = _sortCol < 0 ? "added" : Cols[_sortCol].Key };
+
+    // Görünümü (süz + sırala) yeniden kurar; seçim kimliklere göre korunur. Toplu değişiklik: tek BeginUpdate/EndUpdate.
     private void RebuildList()
     {
+        var keep = SelectedIds();
+        _bulk = true;
         _list.BeginUpdate();
-        _list.Items.Clear(); _shown.Clear();
-        var rows = new List<ListViewItem>();
-        foreach (var i in _items.Values.OrderBy(x => x.AddedAt))
-            if (Match(i)) { rows.Add(RowFor(i)); _shown.Add(i.Id); }
-        _list.Items.AddRange(rows.ToArray());
-        ApplySort();
-        _list.EndUpdate();
+        try
+        {
+            foreach (var i in _items.Values) RowFor(i);
+            _view.Rebuild(_rows.Values, r => Match(r.Item), CurrentComparer());
+            _list.VirtualListSize = _view.Count;
+            _list.SelectedIndices.Clear();
+            foreach (var id in keep) { int ix = _view.IndexOf(id); if (ix >= 0) _list.SelectedIndices.Add(ix); }
+        }
+        finally { _list.EndUpdate(); _bulk = false; }
+        _list.Invalidate();
         UpdateStatus();
     }
 
@@ -503,11 +537,16 @@ public sealed class MainForm : Form
     {
         _items[i.Id] = i;
         _stats.Set(i.Id, i.Status == DownloadStatus.Downloading, 0);
-        if (Match(i) && _shown.Add(i.Id)) _list.Items.Add(RowFor(i));
+        var row = RowFor(i);
+        if (Match(i) && !_view.Contains(i.Id))
+        {
+            if (_sortCol < 0) { _view.Append(row); _list.VirtualListSize = _view.Count; }   // sıralama yok: yalnız sona ekle
+            else RebuildList();
+        }
         UpdateStatus();
     }
 
-    // Silmeler toplanır: tek UI geçişinde işlenir; çoğunlukla büyük toplu silmede liste tek seferde yeniden kurulur (O(n)).
+    // Silmeler toplanır: tek UI geçişinde işlenir; görünüm bir kez yeniden kurulur.
     private void QueueRemove(string id)
     {
         bool post;
@@ -519,15 +558,15 @@ public sealed class MainForm : Form
     {
         string[] ids;
         lock (_removeQueue) { ids = _removeQueue.ToArray(); _removeQueue.Clear(); _removePosted = false; }
-        bool bulk = ids.Length >= 20;
+        bool inView = false;
         foreach (var id in ids)
         {
             _items.Remove(id); _stats.Remove(id); _textGates.Remove(id);
-            if (_rows.Remove(id, out var li) && _shown.Remove(id) && !bulk) li.Remove();
+            if (_rows.Remove(id)) inView |= _view.Contains(id);
             _progress.TryRemove(id, out _);
             if (_dialogs.TryGetValue(id, out var d)) d.Close();
         }
-        if (bulk) RebuildList(); else UpdateStatus();
+        if (inView) RebuildList(); else UpdateStatus();
     }
 
     private static string StatusText(DownloadItem it, bool withPct)
@@ -574,25 +613,30 @@ public sealed class MainForm : Form
         if (li.ForeColor != fc) li.ForeColor = fc;
     }
 
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
+    private const int LVM_GETTOPINDEX = 0x1027, LVM_GETCOUNTPERPAGE = 0x1028;
+
+    // Motor olayları tek zamanlayıcıda (~6 Hz) birleşir: kirli kimlikler satırı "bayat" işaretler; metin yalnız görünen satırlar
+    // için (RetrieveVirtualItem) üretilir ve yalnız görünen + değişen satırlar RedrawItems ile yeniden çizilir.
     private void Flush()
     {
         string[] ids;
         lock (_dirtyLock) { ids = _dirty.ToArray(); _dirty.Clear(); }
         if (ids.Length > 0)
         {
-            // BeginUpdate/EndUpdate yok: EndUpdate tüm listeyi geçersiz kılar (titreme); yalnızca değişen hücreler yeniden çizilir.
+            int top = (int)SendMessage(_list.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
+            int last = top + (int)SendMessage(_list.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero) + 1;
+            bool rebuild = false;
             foreach (var id in ids)
             {
                 if (!_items.TryGetValue(id, out var it)) continue;   // eklenme/silinme UI kuyruğunda; sonra işlenir
                 bool match = Match(it);
-                if (_rows.TryGetValue(id, out var li))
-                {
-                    FillRow(li, it);
-                    bool shown = _shown.Contains(id);
-                    if (match && !shown) { _list.Items.Add(li); _shown.Add(id); }
-                    else if (!match && shown) { li.Remove(); _shown.Remove(id); }
-                }
-                else if (match) { _shown.Add(id); _list.Items.Add(RowFor(it)); }
+                var row = RowFor(it);
+                row.Stale = true;
+                int ix = _view.IndexOf(id);
+                if (match != (ix >= 0)) rebuild = true;                    // süzgeçten çıktı / girdi
+                else if (ix >= top && ix <= last) _list.RedrawItems(ix, ix, false);
+
                 bool active = it.Status == DownloadStatus.Downloading;
                 _progress.TryGetValue(id, out var p);
                 _stats.Set(id, active, p?.SpeedBytesPerSec ?? 0);
@@ -603,6 +647,7 @@ public sealed class MainForm : Form
                 }
                 if (!active) _progress.TryRemove(id, out _);   // biten/duran indirmenin ilerleme kaydı tutulmaz
             }
+            if (rebuild) RebuildList();
         }
         UpdateStatus();
     }
@@ -631,22 +676,30 @@ public sealed class MainForm : Form
         }
         try
         {
-            if (_tray.Visible && _mgr.Settings.Scheduler.OnFinished != "none")
-            {
+            if (_mgr.Settings.ShowCompletedDialog) ShowCompleted(i);              // bildirim balonunun yerine tamamlanma penceresi
+            else if (_tray.Visible && _mgr.Settings.Scheduler.OnFinished != "none")
                 _tray.ShowBalloonTip(3000, "İndirme Tamamlandı", $"{i.FileName} başarıyla indirildi.", ToolTipIcon.Info);
-            }
         }
         catch { }
     }
 
+    private CompletedDialog? _completed;
+
+    private void ShowCompleted(DownloadItem i)
+    {
+        if (_completed == null || _completed.IsDisposed)
+            _completed = new CompletedDialog(never => { _mgr.Settings.ShowCompletedDialog = !never; _svc.SaveSettings(); });
+        _completed.Present(new CompletedEntry(i.Id, i.FileName, i.Url, i.SavePath, i.TotalSize > 0 ? i.TotalSize : i.Downloaded));
+    }
+
     // ------------------------------------------------------------ sıralama
 
-    private sealed class Cmp : System.Collections.IComparer
+    private sealed class Cmp : IComparer<Row>
     {
-        public int Col; public bool Asc; public string Key = "";
-        public int Compare(object? a, object? b)
+        public bool Asc; public string Key = "";
+        public int Compare(Row? a, Row? b)
         {
-            var x = (DownloadItem)((ListViewItem)a!).Tag!; var y = (DownloadItem)((ListViewItem)b!).Tag!;
+            var x = a!.Item; var y = b!.Item;
             int r = Key switch
             {
                 "name" => string.Compare(x.FileName, y.FileName, StringComparison.CurrentCultureIgnoreCase),
@@ -658,6 +711,7 @@ public sealed class MainForm : Form
                 "q" => x.Status.CompareTo(y.Status),
                 _ => x.AddedAt.CompareTo(y.AddedAt),
             };
+            if (r == 0) r = x.AddedAt.CompareTo(y.AddedAt);              // kararlı sıra
             return Asc ? r : -r;
         }
     }
@@ -669,17 +723,16 @@ public sealed class MainForm : Form
         ApplySort();
     }
 
-    private void ApplySort()
-    {
-        if (_sortCol < 0) { _list.ListViewItemSorter = null; return; }
-        _list.ListViewItemSorter = new Cmp { Col = _sortCol, Asc = _sortAsc, Key = Cols[_sortCol].Key };
-        _list.Sort();
-        _list.ListViewItemSorter = null;
-    }
+    private void ApplySort() => RebuildList();
 
     // ------------------------------------------------------------ eylemler
 
-    private List<DownloadItem> Selected() => _list.SelectedItems.Cast<ListViewItem>().Select(l => (DownloadItem)l.Tag!).ToList();
+    private List<DownloadItem> Selected()
+    {
+        var res = new List<DownloadItem>(_list.SelectedIndices.Count);
+        foreach (int ix in _list.SelectedIndices) if (ix >= 0 && ix < _view.Count) res.Add(_view[ix].Item);
+        return res;
+    }
 
     private void AddUrl()
     {

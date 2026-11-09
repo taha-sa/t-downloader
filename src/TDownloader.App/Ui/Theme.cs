@@ -307,9 +307,9 @@ public sealed class BufferedListView : ListView
     protected override void OnDrawItem(DrawListViewItemEventArgs e)
     {
         if (View != View.Details) { e.DrawDefault = true; return; }
-        var b = e.Item.Bounds;
+        var b = e.Bounds;
         var row = new Rectangle(0, b.Y, Math.Max(ClientSize.Width, b.Right), b.Height);
-        using var br = new SolidBrush(RowBack(e.Item));
+        using var br = new SolidBrush(RowBack(e.Item, e.ItemIndex));
         e.Graphics.FillRectangle(br, row);
         if (Grid) { using var p = new Pen(Theme.Surface); e.Graphics.DrawLine(p, 0, b.Bottom - 1, row.Right, b.Bottom - 1); }
         e.DrawDefault = false;
@@ -322,11 +322,11 @@ public sealed class BufferedListView : ListView
         int col = e.ColumnIndex;
         var cell = e.Bounds;
         if (col == 0) cell = new Rectangle(cell.X, cell.Y, Columns[0].Width, cell.Height);
-        var sel = e.Item!.Selected;
-        var fg = sel && Focused ? Theme.Black : (e.Item.ForeColor == SystemColors.WindowText ? Theme.Text : e.Item.ForeColor);
+        var sel = IsSel(e.Item!, e.ItemIndex);
+        var fg = sel && Focused ? Theme.Black : (e.Item!.ForeColor == SystemColors.WindowText ? Theme.Text : e.Item!.ForeColor);
         int pad = (int)(4 * Dlu.Scale);
         int x = cell.X + pad;
-        if (col == 0 && SmallImageList != null && e.Item.ImageIndex >= 0 && e.Item.ImageIndex < SmallImageList.Images.Count)
+        if (col == 0 && SmallImageList != null && e.Item!.ImageIndex >= 0 && e.Item!.ImageIndex < SmallImageList.Images.Count)
         {
             var sz = SmallImageList.ImageSize;
             g.DrawImage(SmallImageList.Images[e.Item.ImageIndex], x, cell.Y + (cell.Height - sz.Height) / 2, sz.Width, sz.Height);
@@ -338,7 +338,10 @@ public sealed class BufferedListView : ListView
         if (Grid) { using var p = new Pen(Theme.Surface); g.DrawLine(p, cell.Right - 1, cell.Top, cell.Right - 1, cell.Bottom); }
     }
 
-    private Color RowBack(ListViewItem it) => it.Selected ? (Focused ? Theme.Yellow : Theme.Hover) : BackColor;
+    // Sanal modda ListViewItem.Selected guvenilir degildir: secim dizinden okunur.
+    private bool IsSel(ListViewItem it, int index) => VirtualMode ? SelectedIndices.Contains(index) : it.Selected;
+
+    private Color RowBack(ListViewItem it, int index) => IsSel(it, index) ? (Focused ? Theme.Yellow : Theme.Hover) : BackColor;
 
     private static TextFormatFlags Flags(HorizontalAlignment a) =>
         TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine |

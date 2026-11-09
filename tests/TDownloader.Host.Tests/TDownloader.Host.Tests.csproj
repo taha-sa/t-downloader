@@ -27,6 +27,7 @@
     <!-- WinForms'suz App mantığı doğrudan derlenir -->
     <Compile Include="..\..\src\TDownloader.App\Ui\UiLogic.cs" Link="AppUi\UiLogic.cs" />
     <Compile Include="..\..\src\TDownloader.App\Ui\Format.cs" Link="AppUi\Format.cs" />
+    <Compile Include="..\..\src\TDownloader.App\Ui\CompletedLogic.cs" Link="AppUi\CompletedLogic.cs" />
   </ItemGroup>
 
 </Project>
