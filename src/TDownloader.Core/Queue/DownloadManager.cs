@@ -25,7 +25,11 @@ public sealed class DownloadManager : IAsyncDisposable
     {
         public required Action Stop { get; init; }
         public required Task Task { get; init; }
+        public bool Pausing;   // _gate altında
     }
+
+    // Duraklat tamamlanmadan gelen Devam istekleri (motor _active'ten çıkınca yeniden başlatılır).
+    private readonly HashSet<string> _pendingResume = new();
 
     private readonly object _gate = new();
     private readonly List<DownloadItem> _items = new();
@@ -285,7 +289,14 @@ public sealed class DownloadManager : IAsyncDisposable
         lock (_gate)
         {
             item = _items.FirstOrDefault(i => i.Id == id);
-            if (item == null || item.Status is DownloadStatus.Completed or DownloadStatus.Downloading || _active.ContainsKey(id)) return;
+            if (item == null || item.Status is DownloadStatus.Completed) return;
+            if (_active.TryGetValue(id, out var running))
+            {
+                // Duraklatılıyor: motor çıkınca Devam uygulanır (ikinci tıklama gerekmesin).
+                if (running.Pausing) _pendingResume.Add(id);
+                return;
+            }
+            if (item.Status is DownloadStatus.Downloading) return;
             item.Status = DownloadStatus.Queued;
             item.Error = null;
         }
@@ -305,7 +316,7 @@ public sealed class DownloadManager : IAsyncDisposable
         {
             item = _items.FirstOrDefault(i => i.Id == id);
             if (item == null) return;
-            if (_active.TryGetValue(id, out act)) { /* motor Paused'a geçecek */ }
+            if (_active.TryGetValue(id, out act)) { act.Pausing = true; _pendingResume.Remove(id); /* motor Paused'a geçecek */ }
             else if (item.Status == DownloadStatus.Queued) item.Status = DownloadStatus.Paused;
             else return;
         }
@@ -359,9 +370,10 @@ public sealed class DownloadManager : IAsyncDisposable
             DownloadStatus result;
             try { result = await engine.RunAsync().ConfigureAwait(false); }
             catch (Exception ex) { item.Error = ex.Message; item.Status = DownloadStatus.Failed; result = DownloadStatus.Failed; }
+            bool resume = false;
             try
             {
-                lock (_gate) _active.Remove(item.Id);
+                resume = RemoveActive(item.Id);
                 engine.Dispose();
                 RequestSave();
                 if (result == DownloadStatus.Completed) Raise(DownloadCompleted, item);
@@ -370,10 +382,16 @@ public sealed class DownloadManager : IAsyncDisposable
             finally
             {
                 // Olay abonesi istisna fırlatsa bile kuyruk sürmeli.
+                if (resume) Start(item.Id);
                 ProcessQueue();
             }
         });
         _active[item.Id] = new Active { Stop = engine.Pause, Task = task };
+    }
+
+    private bool RemoveActive(string id)
+    {
+        lock (_gate) { _active.Remove(id); return _pendingResume.Remove(id); }
     }
 
     // _gate altında çağrılır
@@ -426,9 +444,10 @@ public sealed class DownloadManager : IAsyncDisposable
             }
             else { item.Error = res?.Error ?? "Bilinmeyen hata."; item.Status = DownloadStatus.Failed; }
 
+            bool resume = false;
             try
             {
-                lock (_gate) _active.Remove(item.Id);
+                resume = RemoveActive(item.Id);
                 cts.Dispose();
                 Raise(ItemChanged, item);
                 RequestSave();
@@ -437,6 +456,7 @@ public sealed class DownloadManager : IAsyncDisposable
             }
             finally
             {
+                if (resume) Start(item.Id);
                 ProcessQueue();
             }
         });
