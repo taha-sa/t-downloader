@@ -35,6 +35,8 @@ public sealed class CompletedDialog : Form
     private bool _exists = true;
     private bool _neverShow;
     private string _hover = "", _down = "";
+    private readonly List<string> _order = new();   // Tab sırası (çizimde dolar)
+    private string _focus = "";
     private string _flash = "";        // "url" | "path": kopyalandı geri bildirimi
 
     /// <summary>Gelecekteki eylemler (örn. "Telefonda aç"). Boşsa yuva çizilmez.</summary>
@@ -68,6 +70,8 @@ public sealed class CompletedDialog : Form
         BackColor = Theme.Bg;
         Opacity = 0;
         Text = "İndirme tamamlandı";
+        AccessibleName = "İndirme tamamlandı";
+        AccessibleRole = AccessibleRole.Dialog;
         var wa = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
         Location = new Point(wa.Right - W - 16, wa.Bottom - H - 16);
         using (var gp = Round(new Rectangle(0, 0, W, H), Radius)) Region = new Region(gp);
@@ -108,6 +112,8 @@ public sealed class CompletedDialog : Form
     {
         _icon?.Dispose();
         _icon = ShellIcons.Large(_queue.Current?.FileName ?? "");
+        AccessibleName = "İndirme tamamlandı: " + (_queue.Current?.FileName ?? "");
+        _focus = "";
         _exists = true;
         _cacheKey[0] = _cacheKey[1] = "";
         Invalidate();
@@ -144,6 +150,7 @@ public sealed class CompletedDialog : Form
         using (var gp = Round(new Rectangle(0, 0, W - 1, _h - 1), Radius))
         using (var pen = new Pen(Theme.Border, 1)) g.DrawPath(pen, gp);
         _hit.Clear();
+        _order.Clear();
 
         var cur = _queue.Current;
         if (cur == null) return;
@@ -212,6 +219,8 @@ public sealed class CompletedDialog : Form
         var cbText = new Rectangle(cb.Right + 8, 236 + shift, 250, 20);
         TextRenderer.DrawText(g, "Bu pencereyi bir daha gösterme", _fBody, cbText, Theme.TextDim, Flags);
         _hit["never"] = new Rectangle(cb.X, 236 + shift, cbText.Right - cb.X, 20);
+        _order.Add("never");
+        if (_focus == "never") { using var fp = new Pen(Theme.Yellow, 2f) { DashStyle = DashStyle.Dot }; g.DrawRectangle(fp, Rectangle.Inflate(_hit["never"], 2, 1)); }
         if (!_exists)
             TextRenderer.DrawText(g, "Dosya taşınmış veya silinmiş", _fBody, new Rectangle(W - Pad - 170, 236 + shift, 170, 20), Theme.TextDim, Flags | TextFormatFlags.Right);
     }
@@ -255,7 +264,13 @@ public sealed class CompletedDialog : Form
             using var pen = new Pen(border, 1); g.DrawPath(pen, gp);
         }
         TextRenderer.DrawText(g, text, _fBold, r, fg, Flags | TextFormatFlags.HorizontalCenter);
-        if (enabled) _hit[id] = r;
+        if (enabled) { _hit[id] = r; _order.Add(id); }
+        if (enabled && _focus == id)
+        {
+            using var fp = new Pen(Theme.Yellow, 2f) { DashStyle = DashStyle.Dot };
+            var fr = Rectangle.Inflate(r, -3, -3);
+            g.DrawRectangle(fp, fr);
+        }
     }
 
     // ------------------------------------------------------------ fare / klavye
@@ -332,7 +347,16 @@ public sealed class CompletedDialog : Form
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        if (keyData == Keys.Enter) { if (_queue.Current is { } c && _exists) OpenFile(c); return true; }
+        if (keyData is Keys.Tab or (Keys.Tab | Keys.Shift))
+        {
+            _focus = FocusCycle.Next(_order, _focus, keyData.HasFlag(Keys.Shift));
+            Invalidate(); return true;
+        }
+        if (keyData == Keys.Enter || keyData == Keys.Space)
+        {
+            if (_focus != "" && _order.Contains(_focus)) { Activate_(_focus); return true; }
+            if (keyData == Keys.Enter) { if (_queue.Current is { } c && _exists) OpenFile(c); return true; }
+        }
         if (keyData == Keys.Escape) { CloseAll(); return true; }
         return base.ProcessCmdKey(ref msg, keyData);
     }
@@ -348,6 +372,10 @@ public sealed class CompletedDialog : Form
     private void OpenFile(CompletedEntry c)
     {
         if (!_exists) return;
+        if (ExecutableGuard.IsRisky(c.Path)
+            && MessageBox.Show(this, $"\"{c.FileName}\" çalıştırılabilir bir dosya. İnternetten indirilen programlar zararlı olabilir.\n\nYine de açılsın mı?",
+                "T-Downloader", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            return;   // onay iptal: açılmaz, pencere kalır
         try { Process.Start(new ProcessStartInfo(c.Path) { UseShellExecute = true })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         CloseAll();
     }

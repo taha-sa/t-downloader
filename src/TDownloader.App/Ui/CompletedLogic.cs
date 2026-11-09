@@ -111,3 +111,31 @@ public sealed class ViewIndex<T> where T : class
         for (int i = 0; i < _list.Count; i++) _index[_key(_list[i])] = i;
     }
 }
+
+/// <summary>"Aç" öncesi onay gerektiren çalıştırılabilir/betik uzantıları.</summary>
+public static class ExecutableGuard
+{
+    private static readonly HashSet<string> Risky = new(StringComparer.OrdinalIgnoreCase)
+        { ".exe", ".msi", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".lnk", ".scr" };
+
+    public static bool IsRisky(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        string ext;
+        try { ext = System.IO.Path.GetExtension(path.Trim().TrimEnd('.', ' ')); } catch (ArgumentException) { return false; }
+        return Risky.Contains(ext);
+    }
+}
+
+/// <summary>Sekme sırasında odak döngüsü (son düğmeden ilkine, geri yönde sondan başa).</summary>
+public static class FocusCycle
+{
+    public static string Next(IReadOnlyList<string> order, string current, bool back)
+    {
+        if (order.Count == 0) return "";
+        int i = -1;
+        for (int k = 0; k < order.Count; k++) if (order[k] == current) { i = k; break; }
+        if (i < 0) return back ? order[^1] : order[0];
+        return order[((i + (back ? -1 : 1)) % order.Count + order.Count) % order.Count];
+    }
+}

@@ -71,4 +71,26 @@ public class CompletedLogicTests
         Assert.Equal(0, v.IndexOf("i1"));
         Assert.True(v.Contains("i4"));
     }
+
+    [Theory]
+    [InlineData(@"C:\d\setup.EXE", true)]
+    [InlineData(@"C:\d.msi", true)]
+    [InlineData(@"C:\d.ps1", true)]
+    [InlineData(@"C:\d.lnk", true)]
+    [InlineData(@"C:\d.scr", true)]
+    [InlineData(@"C:\d.zip", false)]
+    [InlineData(@"C:\d.pdf", false)]
+    [InlineData("", false)]
+    public void ExecutableGuard_FlagsRiskyExtensions(string path, bool risky) => Assert.Equal(risky, ExecutableGuard.IsRisky(path));
+
+    [Fact]
+    public void FocusCycle_WrapsBothDirections()
+    {
+        var o = new[] { "a", "b", "c" };
+        Assert.Equal("a", FocusCycle.Next(o, "", false));
+        Assert.Equal("c", FocusCycle.Next(o, "", true));
+        Assert.Equal("a", FocusCycle.Next(o, "c", false));
+        Assert.Equal("c", FocusCycle.Next(o, "a", true));
+        Assert.Equal("", FocusCycle.Next(Array.Empty<string>(), "x", false));
+    }
 }
