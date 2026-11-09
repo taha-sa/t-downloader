@@ -45,6 +45,8 @@ public sealed class AppSettings
     public bool ClipboardMonitor { get; set; }
     /// <summary>Tarayıcıdan gelen indirmede "Dosya bilgisi" penceresini göster.</summary>
     public bool ShowFileInfoOnCapture { get; set; } = true;
+    /// <summary>Indirme bitince "Indirme tamamlandi" penceresini goster (kapaliysa tepsi balonu).</summary>
+    public bool ShowCompletedDialog { get; set; } = true;
     public SchedulerSettings Scheduler { get; set; } = new();
     /// <summary>Kullanıcının "+" ile eklediği kategoriler (klasörleri CategoryFolders'ta tutulur).</summary>
     public List<string> CustomCategories { get; set; } = new();

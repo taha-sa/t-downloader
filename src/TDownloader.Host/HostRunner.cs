@@ -8,7 +8,8 @@ public sealed record HostOptions(
     string PipeName,
     string AppExePath,
     TimeSpan AppStartTimeout,
-    TimeSpan RetryCooldown);
+    TimeSpan RetryCooldown,
+    string? InboxDir = null);
 
 /// <summary>
 /// Native messaging (stdin/stdout) ile App named pipe'ı arasında iki yönlü köprü.
@@ -60,6 +61,12 @@ public sealed class HostRunner
         var msg = IpcSerializer.TryDeserialize(Encoding.UTF8.GetString(raw));
         if (msg == null) { _log.Write("Anlaşılmayan tarayıcı mesajı atlandı."); return; }
 
+        if (msg is DownloadMessage dl && _opt.InboxDir != null)
+        {
+            await HandleDownloadAsync(dl, ct).ConfigureAwait(false);
+            return;
+        }
+
         // En fazla iki deneme: mevcut bağlantı kopmuşsa yeniden bağlanıp bir kez daha yaz.
         bool mayLaunch = MayLaunchApp(msg);
         for (int attempt = 0; attempt < 2; attempt++)
@@ -92,6 +99,47 @@ public sealed class HostRunner
             // ping dahil: cevap verilmez; eklenti zaman aşımıyla "App yok" sonucuna varır.
             _log.Write($"App yok; '{msg.GetType().Name}' düşürüldü.");
         }
+    }
+
+    private DateTime _lastLaunchOk = DateTime.MinValue;
+
+    /// <summary>
+    /// download: App çalışıyorsa pipe'a iletir (App hemen downloadResult döner = ACK). Çalışmıyorsa isteği gelen kutusuna
+    /// (inbox spool) atomik yazar, App'i --background başlatır ve HEMEN accepted:true döner; App açılınca kutuyu boşaltır.
+    /// Başlatma imkânsızsa (exe yok / cooldown / başlatma hatası) dosya silinir ve accepted:false döner: indirme tarayıcıda sürer.
+    /// </summary>
+    private async Task HandleDownloadAsync(DownloadMessage d, CancellationToken ct)
+    {
+        var client = await EnsureConnectedAsync(false, ct).ConfigureAwait(false);   // ucuz bağlanma denemesi
+        if (client != null)
+        {
+            try { await client.SendAsync(d, ct).ConfigureAwait(false); return; }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+            { _log.Write("Pipe'a yazılamadı: " + ex.Message); DropClient(); }
+        }
+
+        bool inCooldown = DateTime.UtcNow - _lastLaunchFailure < _opt.RetryCooldown;
+        if (inCooldown || !File.Exists(_opt.AppExePath))
+        {
+            _log.Write($"App yok/başlatılamaz; download {d.RequestId} reddedildi (tarayıcı kendi indirsin).");
+            await WriteToBrowserAsync(new DownloadResultMessage(d.RequestId, false), ct).ConfigureAwait(false);
+            return;
+        }
+
+        string? spooled = null;
+        try { spooled = InboxSpool.Write(_opt.InboxDir!, d); }
+        catch (Exception ex) { _log.Write("Gelen kutusuna yazılamadı: " + ex.Message); }
+
+        bool ok = spooled != null;
+        if (ok && DateTime.UtcNow - _lastLaunchOk > TimeSpan.FromSeconds(5))
+        {
+            ok = TryLaunchApp();
+            if (ok) _lastLaunchOk = DateTime.UtcNow; else _lastLaunchFailure = DateTime.UtcNow;
+        }
+        if (!ok && spooled != null) { try { File.Delete(spooled); } catch (IOException) { } }
+
+        _log.Write(ok ? $"App kapalı; download {d.RequestId} gelen kutusuna yazıldı, App başlatıldı." : $"download {d.RequestId} reddedildi.");
+        await WriteToBrowserAsync(new DownloadResultMessage(d.RequestId, ok), ct).ConfigureAwait(false);
     }
 
     /// <summary>Yalnızca kullanıcı eylemi mesajları App'i başlatabilir (ping/media/tabClosed/... asla).</summary>

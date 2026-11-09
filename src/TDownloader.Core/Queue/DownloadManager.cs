@@ -146,13 +146,16 @@ public sealed class DownloadManager : IAsyncDisposable
         }
     }
 
+    /// <summary>downloads.json kaydı gecikmesi (art arda değişiklikler tek yazma olur; UI thread'inde değil).</summary>
+    public static int SaveDelayMs { get; set; } = 2000;
+
     private void RequestSave()
     {
         if (_disposed) return;
         if (Interlocked.Exchange(ref _saveScheduled, 1) == 1) return;
         _ = Task.Run(async () =>
         {
-            await Task.Delay(500).ConfigureAwait(false);
+            await Task.Delay(SaveDelayMs).ConfigureAwait(false);
             Interlocked.Exchange(ref _saveScheduled, 0);
             Save();
         });

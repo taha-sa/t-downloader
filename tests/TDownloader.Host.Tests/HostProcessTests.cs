@@ -19,6 +19,7 @@ public class HostProcessTests
     {
         public Process P { get; }
         public string LogPath { get; }
+        public string InboxDir { get; } = Path.Combine(Path.GetTempPath(), "tdl-inbox-" + Guid.NewGuid().ToString("N"));
 
         public HostProc(string pipe, string? appExe = null, int startTimeoutMs = 10000)
         {
@@ -32,6 +33,7 @@ public class HostProcessTests
             psi.ArgumentList.Add("chrome-extension://lgceenlgaaekpbeifoookmmkjipmcboc/");
             psi.ArgumentList.Add("--pipe"); psi.ArgumentList.Add(pipe);
             psi.ArgumentList.Add("--log"); psi.ArgumentList.Add(LogPath);
+            psi.ArgumentList.Add("--inbox"); psi.ArgumentList.Add(InboxDir);
             psi.ArgumentList.Add("--start-timeout-ms"); psi.ArgumentList.Add(startTimeoutMs.ToString());
             if (appExe != null) { psi.ArgumentList.Add("--app"); psi.ArgumentList.Add(appExe); }
             P = Process.Start(psi)!;
@@ -52,6 +54,7 @@ public class HostProcessTests
             try { if (!P.HasExited) P.Kill(true); } catch { }
             P.Dispose();
             try { File.Delete(LogPath); } catch { }
+            try { Directory.Delete(InboxDir, true); } catch { }
         }
     }
 
@@ -104,7 +107,7 @@ public class HostProcessTests
     }
 
     [Fact]
-    public async Task NoApp_Download_IsRejected_AndLaunchWasAttempted_PingGetsNoReply()
+    public async Task NoApp_Download_IsSpooled_Acked_AndLaunchWasAttempted_PingGetsNoReply()
     {
         var pipe = "TDownloader.Ipc.Test." + Guid.NewGuid().ToString("N");
         var dir = Path.Combine(Path.GetTempPath(), "tdl-fakeapp-" + Guid.NewGuid().ToString("N"));
@@ -121,7 +124,10 @@ public class HostProcessTests
             // Yalnızca download yanıtı gelmeli (ping sessiz düşer).
             var reply = Assert.IsType<DownloadResultMessage>(await host.Receive());
             Assert.Equal("r2", reply.RequestId);
-            Assert.False(reply.Accepted);
+            Assert.True(reply.Accepted);                       // gelen kutusuna yazıldı + App başlatıldı -> ACK
+            var spooled = Directory.GetFiles(host.InboxDir, "*.json");
+            Assert.Single(spooled);
+            Assert.Contains("https://x/b.zip", File.ReadAllText(spooled[0]));
 
             Assert.True(SpinWait.SpinUntil(() => File.Exists(marker), 5000), "Sahte App başlatılmadı.");
             Assert.Contains("--background", File.ReadAllText(marker));
