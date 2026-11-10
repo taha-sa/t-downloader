@@ -1,18 +1,21 @@
-body { font: 14px system-ui, sans-serif; width: 260px; margin: 0; padding: 14px; color: #111111; background: #FFFFFF; border-top: 4px solid #FFC107; }
+@import url("tokens.css");
+body { font: 14px system-ui, sans-serif; width: 260px; margin: 0; padding: 14px; color: var(--color-neutral-light-text); background: var(--color-neutral-light-bg); border-top: 4px solid var(--color-accent-tDownloader-light-base); }
 h1 { font-size: 16px; margin: 0 0 8px; }
-.status { margin: 0 0 12px; padding: 6px 8px; border-radius: 6px; background: #F1F1F1; }
-.status.ok { background: #FFF3C4; color: #5C4300; }
-.status.bad { background: #FDECEA; color: #8A1F17; }
+.status { margin: 0 0 12px; padding: 6px 8px; border-radius: 6px; background: var(--color-neutral-light-surface1); }
+.status.ok { background: var(--color-accent-tDownloader-light-subtle); color: var(--color-neutral-light-text); }
+.status.bad { background: var(--color-state-light-danger-subtle); color: var(--color-state-light-danger-base); }
 .row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.row input { accent-color: #E0A800; }
-.hint { margin: 10px 0 0; font-size: 12px; color: #555555; }
+.row input { accent-color: var(--color-accent-tDownloader-light-base); }
+.hint { margin: 10px 0 0; font-size: 12px; color: var(--color-neutral-light-textMuted); }
 @media (prefers-color-scheme: dark) {
-  body { background: #1E1E1E; color: #F5F5F5; }
-  h1 { color: #FFC107; }
-  .status { background: #2A2A2A; }
-  .status.ok { background: #3A3000; color: #FFD54F; }
-  .status.bad { background: #43211E; color: #FF9A8F; }
-  .hint { color: #B0B0B0; }
+  .row input { accent-color: var(--color-accent-tDownloader-dark-base); }
+  body { background: var(--color-neutral-dark-bg); color: var(--color-neutral-dark-text); }
+  body { border-top-color: var(--color-accent-tDownloader-dark-base); }
+  h1 { color: var(--color-accent-tDownloader-dark-base); }
+  .status { background: var(--color-neutral-dark-surface1); }
+  .status.ok { background: var(--color-accent-tDownloader-dark-subtle); color: var(--color-neutral-dark-text); }
+  .status.bad { background: var(--color-state-dark-danger-subtle); color: var(--color-state-dark-danger-base); }
+  .hint { color: var(--color-neutral-dark-textMuted); }
 }
 .row[hidden] { display: none; }
 .row + .row { margin-top: 8px; }

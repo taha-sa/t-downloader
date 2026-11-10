@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 
 namespace TDownloader.App.Ui;
@@ -14,6 +14,12 @@ public static class Icons
         lock (Cache)
         {
             if (Cache.TryGetValue(key, out var b)) return b;
+            if (name == "app")
+            {
+                b = new Bitmap(Family("t-downloader", size), size, size);
+                Cache[key] = b;
+                return b;
+            }
             b = new Bitmap(size, size);
             using (var g = Graphics.FromImage(b))
             {
@@ -27,10 +33,23 @@ public static class Icons
         }
     }
 
+    public static Bitmap Family(string appId, int size = 32)
+    {
+        string key = $"family:{appId}:{size}";
+        lock (Cache)
+        {
+            if (Cache.TryGetValue(key, out var bitmap)) return bitmap;
+            using var stream = typeof(Icons).Assembly.GetManifestResourceStream($"Family.{appId}.{(size > 32 ? 64 : 32)}.png")
+                ?? throw new InvalidOperationException("Missing family icon: " + appId);
+            using var source = Image.FromStream(stream);
+            return Cache[key] = new Bitmap(source, size, size);
+        }
+    }
+
     static Pen N(float w = 2f) => new(Theme.IconLine, w) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
-    static Pen T(float w = 2.2f) => new(Theme.Yellow, w) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+    static Pen T(float w = 2.2f) => new(Theme.Accent, w) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
     static SolidBrush NB => new(Theme.IconLine);
-    static SolidBrush TB => new(Theme.Yellow);
+    static SolidBrush TB => new(Theme.Accent);
 
     static void Draw(Graphics g, string name)
     {
@@ -92,7 +111,7 @@ public static class Icons
                 using (var p = T(2.6f)) g.DrawLine(p, 12, 10.5f, 12, 17);
                 break;
             case "folder":
-                g.FillPolygon(new SolidBrush(Theme.YellowDark), new PointF[] { new(2, 6), new(9, 6), new(11, 8.5f), new(22, 8.5f), new(22, 20), new(2, 20) });
+                g.FillPolygon(new SolidBrush(Theme.AccentPressed), new PointF[] { new(2, 6), new(9, 6), new(11, 8.5f), new(22, 8.5f), new(22, 20), new(2, 20) });
                 g.FillRectangle(TB, 2, 11, 20, 9);
                 break;
             case "unfinished":
@@ -101,7 +120,7 @@ public static class Icons
                 break;
             case "finished":
                 g.FillEllipse(TB, 2.5f, 2.5f, 19, 19);
-                using (var p = new Pen(Theme.Black, 2.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                using (var p = new Pen(Theme.OnAccent, 2.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
                     g.DrawLines(p, new PointF[] { new(7, 12.5f), new(10.5f, 16), new(17, 8.5f) });
                 break;
             case "queues":
@@ -113,16 +132,7 @@ public static class Icons
                 g.FillRectangle(NB, 3, 16, 18, 4);
                 break;
             case "app":
-                using (var path = Rounded(0, 0, 24, 24, 5.25f))
-                using (var br = new SolidBrush(Theme.Yellow))
-                    g.FillPath(br, path);
-                g.ScaleTransform(24f / 128f, 24f / 128f);
-                {
-                    var gl = new PointF[] { new(18, 20), new(110, 20), new(110, 46), new(78, 46), new(78, 70), new(102, 70), new(64, 109), new(26, 70), new(50, 70), new(50, 46), new(18, 46) };
-                    using var br = new SolidBrush(Theme.Black);
-                    using var pn = new Pen(Theme.Black, 6f) { LineJoin = LineJoin.Round };
-                    g.FillPolygon(br, gl); g.DrawPolygon(pn, gl);
-                }
+                g.DrawImage(Family("t-downloader"), 0, 0, 24, 24);
                 break;
             case "hash":
                 using (var p = T(2f))

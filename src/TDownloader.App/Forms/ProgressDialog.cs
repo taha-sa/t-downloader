@@ -1,4 +1,4 @@
-using TDownloader.App.Ui;
+﻿using TDownloader.App.Ui;
 using TDownloader.Core.Downloads;
 using TDownloader.Core.Queue;
 
@@ -37,7 +37,7 @@ public sealed class SegmentBar : Control
         var g = e.Graphics;
         var r = ClientRectangle; r.Width -= 1; r.Height -= 1;
         using (var bg = new SolidBrush(Theme.Field)) g.FillRectangle(bg, r);
-        if (_all) { using var b = new SolidBrush(Theme.Yellow); g.FillRectangle(b, r); }
+        if (_all) { using var b = new SolidBrush(Theme.Accent); g.FillRectangle(b, r); }
         else
         {
             int i = 0;

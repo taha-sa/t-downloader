@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using TSuite.Update;
 
 namespace TDownloader.App.Services;
@@ -11,11 +11,9 @@ public sealed class UpdateService
     private const string PublicKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgkFr2/so1JGpFOhkm9gIbx3VKPZ/+YPezxI8C5v2IlYcVmwkYiMld9iSuwHVTroEyVGrwx+HXNeajZp7HK4SvA==";
 
     public static UpdateTheme Theme { get; } = new(
-        Bg: C(0x1E, 0x1E, 0x1E), Surface: C(0x2A, 0x2A, 0x2A), Border: C(0x4A, 0x4A, 0x4A),
-        Accent: C(0xFF, 0xC1, 0x07), AccentHover: C(0xFF, 0xD5, 0x4F),
-        Text: C(0xF5, 0xF5, 0xF5), TextDim: C(0xB0, 0xB0, 0xB0)) { OnAccent = C(0x11, 0x11, 0x11) };
-
-    private static Color C(int r, int g, int b) => Color.FromArgb(r, g, b);
+        Bg: Ui.Theme.Bg, Surface: Ui.Theme.Surface, Border: Ui.Theme.Border,
+        Accent: Ui.Theme.Accent, AccentHover: Ui.Theme.AccentHover,
+        Text: Ui.Theme.Text, TextDim: Ui.Theme.TextDim) { OnAccent = Ui.Theme.OnAccent };
 
     private readonly AppServices _svc;
     private readonly Action<UpdateInfo>? _onAvailable;

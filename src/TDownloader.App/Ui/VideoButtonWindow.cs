@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
@@ -233,12 +233,12 @@ public sealed class VideoButtonWindow : Form
         float pen = Math.Max(1f, L.U);
         var body = new RectangleF(pen / 2, pen / 2, L.W - pen, L.H - pen);
         // sarı-siyah: siyah gövde; ana bölge üzerindeyken sarı zemin + siyah metin
-        Color fgMain = mainHot ? Theme.Black : Theme.Text;
+        Color fgMain = mainHot ? Theme.OnAccent : Theme.Text;
         Color glyph = mainHot ? Theme.TextDim : Theme.TextDim;
         using (var path = Capsule(body))
         {
-            Color top = mainDown ? Theme.YellowDark : mainHot ? Theme.YellowLight : Color.FromArgb(0x26, 0x26, 0x26);
-            Color bottom = mainDown ? Theme.YellowDark : mainHot ? Theme.Yellow : Theme.Black;
+            Color top = mainDown ? Theme.AccentPressed : mainHot ? Theme.AccentHover : Theme.Field;
+            Color bottom = mainDown ? Theme.AccentPressed : mainHot ? Theme.Accent : Theme.OnAccent;
             using (var br = new LinearGradientBrush(new RectangleF(0, 0, L.W, L.H), top, bottom, LinearGradientMode.Vertical))
                 g.FillPath(br, path);
             // sağ bölüm ("?" ve "X") hafif koyu zemin
@@ -246,17 +246,17 @@ public sealed class VideoButtonWindow : Form
             g.SetClip(new RectangleF(L.DividerX, 0, L.W - L.DividerX, L.H));
             using (var br = new SolidBrush(Color.FromArgb(0xB0, Theme.Black))) g.FillPath(br, path);
             g.Clip = clip;
-            using var bp = new Pen(Theme.Yellow, pen);
+            using var bp = new Pen(Theme.Accent, pen);
             g.DrawPath(bp, path);
         }
-        using (var dp = new Pen(Color.FromArgb(0x90, Theme.Yellow), pen))
+        using (var dp = new Pen(Color.FromArgb(0x90, Theme.Accent), pen))
             g.DrawLine(dp, L.DividerX, L.H * 0.2f, L.DividerX, L.H * 0.8f);
 
         // oynat simgesi: sarı daire + siyah üçgen (üzerindeyken siyah daire + sarı üçgen)
         float pd = L.PlayD, px = 6 * L.U, py = (L.H - pd) / 2f;
-        using (var br = new SolidBrush(mainHot ? Theme.Black : Theme.Yellow)) g.FillEllipse(br, px, py, pd, pd);
+        using (var br = new SolidBrush(mainHot ? Theme.OnAccent : Theme.Accent)) g.FillEllipse(br, px, py, pd, pd);
         float cx = px + pd / 2f + pd * 0.06f, cy = py + pd / 2f, s = pd * 0.26f;
-        using (var br = new SolidBrush(mainHot ? Theme.Yellow : Theme.Black))
+        using (var br = new SolidBrush(mainHot ? Theme.Accent : Theme.OnAccent))
             g.FillPolygon(br, new[] { new PointF(cx - s * 0.8f, cy - s), new PointF(cx + s, cy), new PointF(cx - s * 0.8f, cy + s) });
 
         // metin
@@ -268,7 +268,7 @@ public sealed class VideoButtonWindow : Form
         }
 
         // "?" ve "X"
-        if (!L.Help.IsEmpty) DrawHelp(g, L.Help, _hover == ButtonRegion.Help ? Theme.Yellow : glyph, _hover == ButtonRegion.Help, pen);
+        if (!L.Help.IsEmpty) DrawHelp(g, L.Help, _hover == ButtonRegion.Help ? Theme.Accent : glyph, _hover == ButtonRegion.Help, pen);
         DrawClose(g, L.Close, _hover == ButtonRegion.Close ? Theme.Danger : glyph, _hover == ButtonRegion.Close, pen);
     }
 

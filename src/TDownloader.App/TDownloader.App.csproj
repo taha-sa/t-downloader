@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -12,6 +12,16 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="../../assets/logo/logo.ico" LogicalName="logo.ico" />
+    <EmbeddedResource Include="Resources/Family/t-bridge/32.png" LogicalName="Family.t-bridge.32.png" />
+    <EmbeddedResource Include="Resources/Family/t-bridge/64.png" LogicalName="Family.t-bridge.64.png" />
+    <EmbeddedResource Include="Resources/Family/t-downloader/32.png" LogicalName="Family.t-downloader.32.png" />
+    <EmbeddedResource Include="Resources/Family/t-downloader/64.png" LogicalName="Family.t-downloader.64.png" />
+    <EmbeddedResource Include="Resources/Family/t-ramcash/32.png" LogicalName="Family.t-ramcash.32.png" />
+    <EmbeddedResource Include="Resources/Family/t-ramcash/64.png" LogicalName="Family.t-ramcash.64.png" />
+    <EmbeddedResource Include="Resources/Family/t-desktree/32.png" LogicalName="Family.t-desktree.32.png" />
+    <EmbeddedResource Include="Resources/Family/t-desktree/64.png" LogicalName="Family.t-desktree.64.png" />
+    <EmbeddedResource Include="Resources/Family/t-desk-viewer/32.png" LogicalName="Family.t-desk-viewer.32.png" />
+    <EmbeddedResource Include="Resources/Family/t-desk-viewer/64.png" LogicalName="Family.t-desk-viewer.64.png" />
     <EmbeddedResource Include="Resources/tdownloader_tamamlandi.wav" LogicalName="tdownloader_tamamlandi.wav" />
     <ProjectReference Include="..\TDownloader.Core\TDownloader.Core.csproj" />
   </ItemGroup>

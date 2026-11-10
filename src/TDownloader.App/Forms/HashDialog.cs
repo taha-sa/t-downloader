@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Security.Cryptography;
 using TDownloader.App.Ui;
 
@@ -41,7 +41,7 @@ public sealed class HashDialog : DluForm
         {
             Text = fileName,
             Font = Theme.UiFont(8f, FontStyle.Bold),
-            ForeColor = Theme.Yellow,
+            ForeColor = Theme.Accent,
             AutoEllipsis = true
         }, 55, 10, 225, 10);
 
@@ -60,7 +60,7 @@ public sealed class HashDialog : DluForm
         _lblStatus = Add(new Label
         {
             Text = "Hesaplanıyor, lütfen bekleyin...",
-            ForeColor = Theme.YellowLight,
+            ForeColor = Theme.AccentHover,
             Font = Theme.UiFont(7.5f, FontStyle.Italic),
             AutoEllipsis = true
         }, 10, 36, 270, 10);

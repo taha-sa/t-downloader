@@ -95,23 +95,23 @@
   const style = document.createElement("style");
   style.textContent = `
     *{box-sizing:border-box;font:600 13px system-ui,"Segoe UI",Tahoma,sans-serif}
-    #btn{position:fixed;display:none;align-items:center;gap:5px;padding:3px 8px 3px 5px;background:rgba(245,196,0,.75);color:#111;border:1px solid rgba(17,17,17,.7);
+    #btn{position:fixed;display:none;align-items:center;gap:5px;padding:3px 8px 3px 5px;background:#38BDF8;color:#06132B;border:1px solid #06132B;
       border-radius:4px;cursor:pointer;user-select:none;opacity:0;transition:opacity .25s ease,background .12s;pointer-events:auto;white-space:nowrap;
       box-shadow:0 1px 5px #0006;font:600 12px/16px system-ui,"Segoe UI",Tahoma,sans-serif}
     #btn *{font:inherit}
     #btn svg,#btn img{width:14px;height:14px;display:block}
     #btn.vis{opacity:.75}
-    #btn.vis:hover,#btn.vis.on{background:#ffd21f;border-color:#111}
-    #menu{position:fixed;display:none;width:290px;max-height:360px;overflow:auto;background:#141414;color:#f3f3f3;pointer-events:auto;
-      border:1px solid #f5c400;border-radius:6px;box-shadow:0 8px 28px #000b;padding:0 0 4px}
-    #menu .h{padding:8px 12px 7px;font-weight:700;color:#f5c400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid #333;background:#0c0c0c}
-    #menu .g{padding:8px 12px 3px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#9a8a3a}
+    #btn.vis:hover,#btn.vis.on{background:#60A5FA;border-color:#06132B}
+    #menu{position:fixed;display:none;width:290px;max-height:360px;overflow:auto;background:#16191E;color:#ECEFF4;pointer-events:auto;
+      border:1px solid #38BDF8;border-radius:6px;box-shadow:0 8px 28px #000b;padding:0 0 4px}
+    #menu .h{padding:8px 12px 7px;font-weight:700;color:#38BDF8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid #2E3440;background:#0D0F12}
+    #menu .g{padding:8px 12px 3px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#9CA3AF}
     #menu .row{padding:7px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-weight:500}
-    #menu .row:hover,#menu .row.def{background:#2a2400}
-    #menu .row:hover{background:#f5c400;color:#111}
+    #menu .row:hover,#menu .row.def{background:rgba(56, 189, 248, 0.10)}
+    #menu .row:hover{background:#38BDF8;color:#06132B}
     #menu .row.oth{opacity:.6}
     #menu .row small{font-weight:400;opacity:.7}
-    #menu .msg{padding:10px 12px;font-weight:400;font-size:12px;color:#c9c2a0}#menu .err{color:#ff9d8e}
+    #menu .msg{padding:10px 12px;font-weight:400;font-size:12px;color:#9CA3AF}#menu .err{color:#EF4444}
     #menu .spin{display:inline-block;animation:r 1s linear infinite}@keyframes r{to{transform:rotate(360deg)}}
   `;
 

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
@@ -168,9 +168,9 @@ public sealed class CompletedDialog : Form
         {
             var prev = new Rectangle(W - 44 - 90, 4, 24, 26);
             var next = new Rectangle(W - 44 - 24, 4, 24, 26);
-            TextRenderer.DrawText(g, "‹", _fTitle, prev, _queue.Index > 0 ? (_hover == "prev" ? Theme.Yellow : Theme.Text) : Theme.Border, Flags | TextFormatFlags.HorizontalCenter);
+            TextRenderer.DrawText(g, "‹", _fTitle, prev, _queue.Index > 0 ? (_hover == "prev" ? Theme.Accent : Theme.Text) : Theme.Border, Flags | TextFormatFlags.HorizontalCenter);
             TextRenderer.DrawText(g, _queue.Pager, _fBody, new Rectangle(prev.Right, 4, 42, 26), Theme.TextDim, Flags | TextFormatFlags.HorizontalCenter);
-            TextRenderer.DrawText(g, "›", _fTitle, next, _queue.Index + 1 < _queue.Count ? (_hover == "next" ? Theme.Yellow : Theme.Text) : Theme.Border, Flags | TextFormatFlags.HorizontalCenter);
+            TextRenderer.DrawText(g, "›", _fTitle, next, _queue.Index + 1 < _queue.Count ? (_hover == "next" ? Theme.Accent : Theme.Text) : Theme.Border, Flags | TextFormatFlags.HorizontalCenter);
             _hit["prev"] = prev; _hit["next"] = next;
         }
 
@@ -209,20 +209,20 @@ public sealed class CompletedDialog : Form
         var cb = new Rectangle(Pad, 238 + shift, 16, 16);
         using (var gp = Round(cb, 4))
         {
-            using (var b = new SolidBrush(_neverShow ? Theme.Yellow : Theme.Field)) g.FillPath(b, gp);
-            using var pen = new Pen(_neverShow ? Theme.Yellow : (_hover == "never" ? Theme.TextDim : Theme.Border), 1);
+            using (var b = new SolidBrush(_neverShow ? Theme.Accent : Theme.Field)) g.FillPath(b, gp);
+            using var pen = new Pen(_neverShow ? Theme.Accent : (_hover == "never" ? Theme.TextDim : Theme.Border), 1);
             g.DrawPath(pen, gp);
         }
         if (_neverShow)
         {
-            using var pen = new Pen(Theme.Black, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            using var pen = new Pen(Theme.OnAccent, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
             g.DrawLines(pen, new[] { new PointF(cb.X + 3.5f, cb.Y + 8.5f), new PointF(cb.X + 6.8f, cb.Y + 11.5f), new PointF(cb.X + 12.5f, cb.Y + 4.5f) });
         }
         var cbText = new Rectangle(cb.Right + 8, 236 + shift, 250, 20);
         TextRenderer.DrawText(g, "Bu pencereyi bir daha gösterme", _fBody, cbText, Theme.TextDim, Flags);
         _hit["never"] = new Rectangle(cb.X, 236 + shift, cbText.Right - cb.X, 20);
         _order.Add("never");
-        if (_focus == "never") { using var fp = new Pen(Theme.Yellow, 2f) { DashStyle = DashStyle.Dot }; g.DrawRectangle(fp, Rectangle.Inflate(_hit["never"], 2, 1)); }
+        if (_focus == "never") { using var fp = new Pen(Theme.Accent, 2f) { DashStyle = DashStyle.Dot }; g.DrawRectangle(fp, Rectangle.Inflate(_hit["never"], 2, 1)); }
         if (_note != "")
             TextRenderer.DrawText(g, _note, _fBody, new Rectangle(W - Pad - 200, 236 + shift, 200, 20), Theme.Ok, Flags | TextFormatFlags.Right);
         else if (!_exists)
@@ -260,7 +260,7 @@ public sealed class CompletedDialog : Form
         bool hot = enabled && _hover == id, down = hot && _down == id;
         Color fill, fg, border;
         if (!enabled) { fill = primary ? Theme.Surface : Theme.Bg; fg = Theme.TextDim; border = Theme.Border; }
-        else if (primary) { fill = down ? Theme.YellowDark : hot ? Theme.YellowLight : Theme.Yellow; fg = Theme.Black; border = fill; }
+        else if (primary) { fill = down ? Theme.AccentPressed : hot ? Theme.AccentHover : Theme.Accent; fg = Theme.OnAccent; border = fill; }
         else { fill = down ? Theme.Pressed : hot ? Theme.Hover : Theme.Bg; fg = Theme.Text; border = Theme.Border; }
         using (var gp = Round(r, 6))
         {
@@ -271,7 +271,7 @@ public sealed class CompletedDialog : Form
         if (enabled) { _hit[id] = r; _order.Add(id); }
         if (enabled && _focus == id)
         {
-            using var fp = new Pen(Theme.Yellow, 2f) { DashStyle = DashStyle.Dot };
+            using var fp = new Pen(Theme.Accent, 2f) { DashStyle = DashStyle.Dot };
             var fr = Rectangle.Inflate(r, -3, -3);
             g.DrawRectangle(fp, fr);
         }

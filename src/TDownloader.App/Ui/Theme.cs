@@ -1,35 +1,39 @@
+﻿using TSuite.Design;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 
 namespace TDownloader.App.Ui;
 
-/// <summary>Renk ailesi: siyah/koyu gri zemin + sarı vurgu (mavi/turkuaz yok).</summary>
+/// <summary>T-Suite neutral palette with T-Downloader's sky accent.</summary>
 public static class Theme
 {
-    public static readonly Color Yellow = Color.FromArgb(0xFF, 0xC1, 0x07);
-    public static readonly Color YellowDark = Color.FromArgb(0xE0, 0xA8, 0x00);
-    public static readonly Color YellowLight = Color.FromArgb(0xFF, 0xD5, 0x4F);
-    public static readonly Color Black = Color.FromArgb(0x11, 0x11, 0x11);
-    public static readonly Color Bg = Color.FromArgb(0x1E, 0x1E, 0x1E);          // pencere / liste zemini
-    public static readonly Color Surface = Color.FromArgb(0x2A, 0x2A, 0x2A);     // menü, araç çubuğu, durum çubuğu, başlık
-    public static readonly Color Field = Color.FromArgb(0x2D, 0x2D, 0x2D);       // metin kutusu / düğme zemini
-    public static readonly Color Border = Color.FromArgb(0x4A, 0x4A, 0x4A);
-    public static readonly Color Hover = Color.FromArgb(0x3C, 0x3C, 0x3C);
-    public static readonly Color Pressed = Color.FromArgb(0x5C, 0x4A, 0x00);     // koyu amber
-    public static readonly Color Text = Color.FromArgb(0xF5, 0xF5, 0xF5);
-    public static readonly Color TextDim = Color.FromArgb(0xB0, 0xB0, 0xB0);
-    public static readonly Color Disabled = Color.FromArgb(0x80, 0x80, 0x80);
-    public static readonly Color Danger = Color.FromArgb(0xFF, 0x6B, 0x5E);
-    public static readonly Color Ok = Color.FromArgb(0x7C, 0xD9, 0x92);
-    public static readonly Color IconLine = Color.FromArgb(0xE8, 0xE8, 0xE8);
-
-    /// <summary>Bağlantı/segment renkleri: sarı-amber-beyaz-gri tonları.</summary>
+    public static readonly Color Accent = TSuiteTokens.ColorAccentTDownloaderDarkBase;
+    public static readonly Color AccentPressed = TSuiteTokens.ColorAccentTDownloaderDarkPressed;
+    public static readonly Color AccentHover = TSuiteTokens.ColorAccentTDownloaderDarkHover;
+    public static readonly Color OnAccent = TSuiteTokens.ColorAccentTDownloaderDarkOnAccent;
+    public static readonly Color Black = TSuiteTokens.ColorNeutralDarkBg;
+    public static readonly Color Bg = TSuiteTokens.ColorNeutralDarkBg;
+    public static readonly Color Surface = TSuiteTokens.ColorNeutralDarkSurface1;
+    public static readonly Color Field = TSuiteTokens.ColorNeutralDarkSurface2;
+    public static readonly Color Border = TSuiteTokens.ColorNeutralDarkBorder;
+    public static readonly Color Hover = TSuiteTokens.ColorNeutralDarkSurface3;
+    public static readonly Color Pressed = Composite(TSuiteTokens.ColorAccentTDownloaderDarkSubtle, Surface);
+    public static readonly Color Text = TSuiteTokens.ColorNeutralDarkText;
+    public static readonly Color TextDim = TSuiteTokens.ColorNeutralDarkTextMuted;
+    public static readonly Color Disabled = TSuiteTokens.ColorNeutralDarkTextFaint;
+    public static readonly Color Danger = TSuiteTokens.ColorStateDarkDangerBase;
+    public static readonly Color Ok = TSuiteTokens.ColorStateDarkSuccessBase;
+    public static readonly Color IconLine = TSuiteTokens.ColorNeutralDarkText;
     public static readonly Color[] SegmentColors =
     {
-        Color.FromArgb(0xFF, 0xC1, 0x07), Color.FromArgb(0xFF, 0x8F, 0x00), Color.FromArgb(0xFF, 0xE0, 0x82),
-        Color.FromArgb(0xE0, 0xE0, 0xE0), Color.FromArgb(0xE6, 0x51, 0x00), Color.FromArgb(0xBC, 0xAA, 0x64),
-        Color.FromArgb(0xFF, 0xAB, 0x40), Color.FromArgb(0x9E, 0x9E, 0x9E),
+        Accent, AccentHover, AccentPressed, Text, TextDim,
+        TSuiteTokens.ColorNeutralDarkBorderStrong, Disabled, IconLine,
     };
+    private static Color Composite(Color tint, Color background)
+    {
+        int Blend(byte foreground, byte back) => (foreground * tint.A + back * (255 - tint.A) + 127) / 255;
+        return Color.FromArgb(Blend(tint.R, background.R), Blend(tint.G, background.G), Blend(tint.B, background.B));
+    }
 
     public static Font UiFont(float pt = 8f, FontStyle st = FontStyle.Regular) => new("Tahoma", pt, st);
 }
@@ -86,7 +90,7 @@ public static class Dark
                 fa.BorderSize = 1; fa.BorderColor = Theme.Border;
                 fa.MouseOverBackColor = Theme.Hover; fa.MouseDownBackColor = Theme.Pressed;
                 Form? form = b.FindForm();
-                if (form != null && form.AcceptButton == b) fa.BorderColor = Theme.Yellow;
+                if (form != null && form.AcceptButton == b) fa.BorderColor = Theme.Accent;
                 break;
             case TextBox t:
                 t.BackColor = Theme.Field; t.ForeColor = Theme.Text; t.BorderStyle = BorderStyle.FixedSingle;
@@ -98,13 +102,13 @@ public static class Dark
                 break;
             case DateTimePicker d:
                 d.CalendarForeColor = Theme.Text; d.CalendarMonthBackground = Theme.Field; d.CalendarTitleBackColor = Theme.Black;
-                d.CalendarTitleForeColor = Theme.Yellow; d.CalendarTrailingForeColor = Theme.Disabled;
+                d.CalendarTitleForeColor = Theme.Accent; d.CalendarTrailingForeColor = Theme.Disabled;
                 d.BackColor = Theme.Field; d.ForeColor = Theme.Text;
                 WithHandle(d, Explorer);
                 foreach (Control k in d.Controls) { var kk = k; WithHandle(kk, Explorer); }
                 break;
             case LinkLabel l:
-                l.LinkColor = Theme.Yellow; l.ActiveLinkColor = Theme.YellowLight; l.VisitedLinkColor = Theme.YellowDark;
+                l.LinkColor = Theme.Accent; l.ActiveLinkColor = Theme.AccentHover; l.VisitedLinkColor = Theme.AccentPressed;
                 break;
             case TabPage p:
                 p.UseVisualStyleBackColor = false; p.BackColor = Theme.Bg;
@@ -118,17 +122,17 @@ public sealed class ThemeColors : ProfessionalColorTable
 {
     public ThemeColors() { UseSystemColors = false; }
     public override Color ButtonSelectedHighlight => Theme.Hover;
-    public override Color ButtonSelectedHighlightBorder => Theme.Yellow;
+    public override Color ButtonSelectedHighlightBorder => Theme.Accent;
     public override Color ButtonSelectedGradientBegin => Theme.Hover;
     public override Color ButtonSelectedGradientMiddle => Theme.Hover;
     public override Color ButtonSelectedGradientEnd => Theme.Hover;
-    public override Color ButtonSelectedBorder => Theme.Yellow;
+    public override Color ButtonSelectedBorder => Theme.Accent;
     public override Color ButtonPressedHighlight => Theme.Pressed;
-    public override Color ButtonPressedHighlightBorder => Theme.Yellow;
+    public override Color ButtonPressedHighlightBorder => Theme.Accent;
     public override Color ButtonPressedGradientBegin => Theme.Pressed;
     public override Color ButtonPressedGradientMiddle => Theme.Pressed;
     public override Color ButtonPressedGradientEnd => Theme.Pressed;
-    public override Color ButtonPressedBorder => Theme.Yellow;
+    public override Color ButtonPressedBorder => Theme.Accent;
     public override Color ButtonCheckedHighlight => Theme.Pressed;
     public override Color ButtonCheckedGradientBegin => Theme.Pressed;
     public override Color ButtonCheckedGradientMiddle => Theme.Pressed;
@@ -151,7 +155,7 @@ public sealed class ThemeColors : ProfessionalColorTable
     public override Color MenuItemPressedGradientBegin => Theme.Bg;
     public override Color MenuItemPressedGradientMiddle => Theme.Bg;
     public override Color MenuItemPressedGradientEnd => Theme.Bg;
-    public override Color MenuItemBorder => Theme.Yellow;
+    public override Color MenuItemBorder => Theme.Accent;
     public override Color MenuBorder => Theme.Border;
     public override Color ToolStripDropDownBackground => Theme.Bg;
     public override Color ImageMarginGradientBegin => Theme.Bg;
@@ -323,7 +327,7 @@ public sealed class BufferedListView : ListView
         var cell = e.Bounds;
         if (col == 0) cell = new Rectangle(cell.X, cell.Y, Columns[0].Width, cell.Height);
         var sel = IsSel(e.Item!, e.ItemIndex);
-        var fg = sel && Focused ? Theme.Black : (e.Item!.ForeColor == SystemColors.WindowText ? Theme.Text : e.Item!.ForeColor);
+        var fg = sel && Focused ? Theme.OnAccent : (e.Item!.ForeColor == SystemColors.WindowText ? Theme.Text : e.Item!.ForeColor);
         int pad = (int)(4 * Dlu.Scale);
         int x = cell.X + pad;
         if (col == 0 && SmallImageList != null && e.Item!.ImageIndex >= 0 && e.Item!.ImageIndex < SmallImageList.Images.Count)
@@ -341,7 +345,7 @@ public sealed class BufferedListView : ListView
     // Sanal modda ListViewItem.Selected guvenilir degildir: secim dizinden okunur.
     private bool IsSel(ListViewItem it, int index) => VirtualMode ? SelectedIndices.Contains(index) : it.Selected;
 
-    private Color RowBack(ListViewItem it, int index) => IsSel(it, index) ? (Focused ? Theme.Yellow : Theme.Hover) : BackColor;
+    private Color RowBack(ListViewItem it, int index) => IsSel(it, index) ? (Focused ? Theme.Accent : Theme.Hover) : BackColor;
 
     private static TextFormatFlags Flags(HorizontalAlignment a) =>
         TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine |
@@ -367,8 +371,8 @@ public sealed class DarkTree : TreeView
     {
         if (e.Node == null || e.Bounds.IsEmpty) { e.DrawDefault = false; return; }
         bool sel = (e.State & TreeNodeStates.Selected) != 0;
-        var back = sel ? (Focused ? Theme.Yellow : Theme.Hover) : BackColor;
-        var fg = sel && Focused ? Theme.Black : Theme.Text;
+        var back = sel ? (Focused ? Theme.Accent : Theme.Hover) : BackColor;
+        var fg = sel && Focused ? Theme.OnAccent : Theme.Text;
         var r = Rectangle.Inflate(e.Bounds, 2, 0);
         using (var br = new SolidBrush(back)) e.Graphics.FillRectangle(br, r);
         TextRenderer.DrawText(e.Graphics, e.Node.Text, e.Node.NodeFont ?? Font, e.Bounds, fg,
@@ -397,24 +401,24 @@ public sealed class DarkCombo : ComboBox
     {
         var g = e.Graphics;
         using (var br = new SolidBrush(Theme.Field)) g.FillRectangle(br, ClientRectangle);
-        using (var p = new Pen(Focused || DroppedDown ? Theme.Yellow : Theme.Border)) g.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
+        using (var p = new Pen(Focused || DroppedDown ? Theme.Accent : Theme.Border)) g.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
         string txt = SelectedItem is { } si ? GetItemText(si) ?? "" : "";
         int aw = (int)(16 * Dlu.Scale);
         TextRenderer.DrawText(g, txt, Font, new Rectangle(4, 0, Width - aw - 6, Height), Enabled ? Theme.Text : Theme.Disabled,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         float cx = Width - aw / 2f - 1, cy = Height / 2f, s = 3.5f * Dlu.Scale;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var ap = new Pen(Enabled ? Theme.Yellow : Theme.Disabled, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+        using var ap = new Pen(Enabled ? Theme.Accent : Theme.Disabled, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
         g.DrawLines(ap, new[] { new PointF(cx - s, cy - s / 2), new PointF(cx, cy + s / 2), new PointF(cx + s, cy - s / 2) });
     }
 
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
         bool sel = (e.State & DrawItemState.Selected) != 0 && (e.State & DrawItemState.ComboBoxEdit) == 0;
-        using (var br = new SolidBrush(sel ? Theme.Yellow : Theme.Field)) e.Graphics.FillRectangle(br, e.Bounds);
+        using (var br = new SolidBrush(sel ? Theme.Accent : Theme.Field)) e.Graphics.FillRectangle(br, e.Bounds);
         if (e.Index < 0) return;
         var r = new Rectangle(e.Bounds.X + 3, e.Bounds.Y, e.Bounds.Width - 3, e.Bounds.Height);
-        TextRenderer.DrawText(e.Graphics, GetItemText(Items[e.Index]), Font, r, sel ? Theme.Black : Theme.Text,
+        TextRenderer.DrawText(e.Graphics, GetItemText(Items[e.Index]), Font, r, sel ? Theme.OnAccent : Theme.Text,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
     }
 }
@@ -441,9 +445,9 @@ public sealed class DarkCheck : CheckBox
         int by = (Height - box) / 2;
         var br = new Rectangle(0, by, box - 1, box - 1);
         using (var f = new SolidBrush(Enabled ? Theme.Field : Theme.Bg)) g.FillRectangle(f, br);
-        using (var p = new Pen(!Enabled ? Theme.Border : (_hot || Focused) ? Theme.Yellow : Theme.TextDim)) g.DrawRectangle(p, br);
+        using (var p = new Pen(!Enabled ? Theme.Border : (_hot || Focused) ? Theme.Accent : Theme.TextDim)) g.DrawRectangle(p, br);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        var mark = Enabled ? Theme.Yellow : Theme.Disabled;
+        var mark = Enabled ? Theme.Accent : Theme.Disabled;
         if (CheckState == CheckState.Checked)
         {
             using var p = new Pen(mark, Math.Max(2f, 2f * Dlu.Scale)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
@@ -475,7 +479,7 @@ public sealed class DarkGroup : GroupBox
             g.DrawRectangle(p, 0, top, Width - 1, Height - top - 1);
         int tx = (int)(7 * Dlu.Scale);
         using (var br = new SolidBrush(bg)) g.FillRectangle(br, tx - 2, 0, sz.Width + 4, sz.Height);
-        TextRenderer.DrawText(g, Text, Font, new Point(tx, 0), Theme.Yellow, TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+        TextRenderer.DrawText(g, Text, Font, new Point(tx, 0), Theme.Accent, TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
     }
 }
 
@@ -499,8 +503,8 @@ public sealed class DarkTabs : TabControl
             bool sel = i == SelectedIndex;
             using (var br = new SolidBrush(sel ? Theme.Surface : Theme.Bg)) g.FillRectangle(br, r);
             using (var p = new Pen(Theme.Border)) { g.DrawLine(p, r.Left, r.Top, r.Left, r.Bottom); g.DrawLine(p, r.Right - 1, r.Top, r.Right - 1, r.Bottom); g.DrawLine(p, r.Left, r.Top, r.Right, r.Top); }
-            if (sel) { using var br = new SolidBrush(Theme.Yellow); g.FillRectangle(br, r.Left, r.Top, r.Width, 3); }
-            TextRenderer.DrawText(g, TabPages[i].Text, Font, r, sel ? Theme.Yellow : Theme.TextDim,
+            if (sel) { using var br = new SolidBrush(Theme.Accent); g.FillRectangle(br, r.Left, r.Top, r.Width, 3); }
+            TextRenderer.DrawText(g, TabPages[i].Text, Font, r, sel ? Theme.Accent : Theme.TextDim,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
         }
     }
@@ -518,7 +522,7 @@ public sealed class DarkProgress : ProgressBar
         using (var br = new SolidBrush(Theme.Field)) g.FillRectangle(br, r);
         double f = Maximum > Minimum ? (double)(Value - Minimum) / (Maximum - Minimum) : 0;
         int w = (int)Math.Round((r.Width - 1) * Math.Clamp(f, 0, 1));
-        if (w > 0) { using var br = new SolidBrush(Theme.Yellow); g.FillRectangle(br, 1, 1, w, r.Height - 1); }
+        if (w > 0) { using var br = new SolidBrush(Theme.Accent); g.FillRectangle(br, 1, 1, w, r.Height - 1); }
         using var p = new Pen(Theme.Border);
         g.DrawRectangle(p, r);
     }
