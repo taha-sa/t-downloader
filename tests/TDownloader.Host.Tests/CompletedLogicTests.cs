@@ -4,6 +4,19 @@ namespace TDownloader.Host.Tests;
 
 public class CompletedLogicTests
 {
+    [Theory]
+    [InlineData("{\"ok\":true,\"result\":{\"ids\":[\"transfer-1\"]}}", true)]
+    [InlineData("{\"ok\":false,\"error\":\"phone_disconnected\"}", false)]
+    [InlineData("{\"ok\":true,\"result\":{\"ids\":[]}}", false)]
+    [InlineData("{\"ok\":true,\"result\":{\"ids\":[null,\"\"]}}", false)]
+    [InlineData("{\"ok\":true}", false)]
+    [InlineData("null", false)]
+    public void PhoneTransfer_requires_success_and_a_real_transfer_id(string json, bool expected)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal(expected, PhoneTransferReply.Accepted(document.RootElement));
+        Assert.False(PhoneTransferReply.Accepted(null));
+    }
     private static CompletedEntry E(string id) => new(id, id + ".zip", "https://x/" + id, @"C:\d\" + id + ".zip", 1000);
 
     [Fact]
@@ -28,8 +41,8 @@ public class CompletedLogicTests
     [Fact]
     public void SizeLine_TwoDecimals_AndThousandsSeparatedBytes()
     {
-        Assert.Equal("İndirildi: 9.90 MB (10.385.264 bayt)", CompletedText.SizeLine(10_385_264));
-        Assert.Equal("İndirildi: 512 B (512 bayt)", CompletedText.SizeLine(512));
+        Assert.Equal("İndirildi: 9,90 MB (10.385.264 bayt)", CompletedText.SizeLine(10_385_264));
+        Assert.Equal("İndirildi: 512 B (512 bayt)", CompletedText.SizeLine(512));
         Assert.Equal("İndirildi", CompletedText.SizeLine(-1));
     }
 

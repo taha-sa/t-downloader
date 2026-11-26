@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Runtime.InteropServices;
 
 namespace TDownloader.App.Ui;
@@ -44,7 +45,7 @@ internal static class RecycleBin
             };
             int code = SHFileOperation(ref op);
             var outcome = DiskDeletePlan.Interpret(code, op.fAnyOperationsAborted, File.Exists(path));
-            if (outcome == RecycleOutcome.Failed) error = $"Silme başarısız (kod 0x{code:X}): {Path.GetFileName(path)}";
+            if (outcome == RecycleOutcome.Failed) error = Strings.CouldNotDeleteTheFileCode0xCheck(code, Path.GetFileName(path));
             return outcome;
         }
         catch (Exception ex) { error = ex.Message; return RecycleOutcome.Failed; }

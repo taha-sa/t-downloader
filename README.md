@@ -20,6 +20,9 @@ cd extension && node tests/run.mjs
 
 ## CI / Yayın
 
+Türkçe, English ve Deutsch arayüzü, dil tercihi ve kaynak doğrulamaları:
+[Yerelleştirme](docs/localization.md).
+
 Her push ve pull request CI iş akışını çalıştırır. Yayın için sürüm etiketi oluşturup gönderin:
 
 ```powershell

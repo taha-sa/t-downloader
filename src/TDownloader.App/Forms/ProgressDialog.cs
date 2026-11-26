@@ -1,4 +1,5 @@
-﻿using TDownloader.App.Ui;
+using TDownloader.Core.Localization;
+using TDownloader.App.Ui;
 using TDownloader.Core.Downloads;
 using TDownloader.Core.Queue;
 
@@ -84,10 +85,10 @@ public sealed class ProgressDialog : DluForm
         _fullHeight = ClientSize.Height;
         _shortHeight = Dlu.Y(146);
 
-        var grp = Add(new DarkGroup { Text = "İndirme durumu" }, 7, 3, 338, 104);
+        var grp = Add(new DarkGroup { Text = Strings.DownloadStatus }, 7, 3, 338, 104);
         _url = new Label { AutoEllipsis = true, Bounds = new Rectangle(Dlu.X(6), Dlu.Y(11), Dlu.X(325), Dlu.Y(10)) };
         grp.Controls.Add(_url);
-        string[] names = { "Durum", "Dosya boyutu", "İndirilen", "Aktarım hızı", "Kalan süre", "Devam edebilir" };
+        string[] names = { Strings.Status, Strings.FileSize, Strings.Downloaded, Strings.TransferSpeed2, Strings.TimeRemaining2, Strings.ResumeSupport };
         var vals = new Label[names.Length];
         for (int i = 0; i < names.Length; i++)
         {
@@ -99,15 +100,15 @@ public sealed class ProgressDialog : DluForm
         (_status, _size, _done, _speed, _eta, _resume) = (vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
 
         _bar = Add(new DarkProgress { Minimum = 0, Maximum = 1000 }, 7, 111, 338, 10);
-        _toggle = MakeButton("<< Detayları gizle", 15, 126, 93, 15);
-        _pause = MakeButton("Duraklat", 203, 126, 56, 15);
-        _cancel = MakeButton("İptal", 277, 126, 50, 15);
-        _connCaption = MakeLabel("Bağlantılara göre başlangıç konumları ve indirme ilerlemesi", 7, 144, 338, 9);
+        _toggle = MakeButton(Strings.HideDetails, 15, 126, 93, 15);
+        _pause = MakeButton(Strings.Pause, 203, 126, 56, 15);
+        _cancel = MakeButton(Strings.Cancel, 277, 126, 50, 15);
+        _connCaption = MakeLabel(Strings.StartPositionsAndDownloadProgressByConnection, 7, 144, 338, 9);
         _seg = Add(new SegmentBar(), 7, 155, 338, 10);
         _list = Add(new BufferedListView { View = View.Details, FullRowSelect = true, Grid = true, HeaderStyle = ColumnHeaderStyle.Nonclickable }, 7, 169, 338, 77);
-        _list.Columns.Add("N.", Dlu.X(24));
-        _list.Columns.Add("İndirilen", Dlu.X(100));
-        _list.Columns.Add("Bilgi", Dlu.X(200));
+        _list.Columns.Add(Strings.ConnectionNumber, Dlu.X(24));
+        _list.Columns.Add(Strings.Downloaded, Dlu.X(100));
+        _list.Columns.Add(Strings.Information, Dlu.X(200));
 
         _toggle.Click += (_, _) => ToggleDetails();
         _pause.Click += (_, _) => TogglePause();
@@ -118,7 +119,7 @@ public sealed class ProgressDialog : DluForm
     private void ToggleDetails()
     {
         _detailsShown = !_detailsShown;
-        _toggle.Text = _detailsShown ? "<< Detayları gizle" : "Detayları göster >>";
+        _toggle.Text = _detailsShown ? Strings.HideDetails : Strings.ShowDetails;
         foreach (Control c in new Control[] { _connCaption, _seg, _list }) c.Visible = _detailsShown;
         ClientSize = new Size(ClientSize.Width, Dlu.Y(_detailsShown ? 250 : 146));
     }
@@ -134,11 +135,11 @@ public sealed class ProgressDialog : DluForm
 
     public static string StatusText(DownloadItem it) => it.Status switch
     {
-        DownloadStatus.Queued => "Sırada",
-        DownloadStatus.Downloading => "Alınıyor",
-        DownloadStatus.Paused => "Duraklatıldı",
-        DownloadStatus.Completed => "Tamamlandı",
-        DownloadStatus.Failed => string.IsNullOrEmpty(it.Error) ? "Hata" : "Hata: " + it.Error,
+        DownloadStatus.Queued => Strings.Queued,
+        DownloadStatus.Downloading => Strings.Downloading,
+        DownloadStatus.Paused => Strings.Paused2,
+        DownloadStatus.Completed => Strings.Completed3,
+        DownloadStatus.Failed => string.IsNullOrEmpty(it.Error) ? Strings.Error : Strings.ActionFailedTryAgainDetails + it.Error,
         _ => ""
     };
 
@@ -147,17 +148,17 @@ public sealed class ProgressDialog : DluForm
         Text = $"{Percent(it)}% {it.FileName}".TrimStart();
         _url.Text = it.Url;
         _status.Text = StatusText(it);
-        _size.Text = it.TotalSize > 0 ? Fmt.SizeFull(it.TotalSize) : "Bilinmiyor";
+        _size.Text = it.TotalSize > 0 ? Fmt.SizeFull(it.TotalSize) : Strings.Unknown;
         _done.Text = it.TotalSize > 0 ? $"{Fmt.Size(it.Downloaded)}  ({Percent(it)}%)" : Fmt.Size(it.Downloaded);
         SetBar(it.TotalSize > 0 ? (int)Math.Clamp(it.Downloaded * 1000 / it.TotalSize, 0, 1000) : 0);
         if (it.Status != DownloadStatus.Downloading) { _speed.Text = ""; _eta.Text = it.Status == DownloadStatus.Completed ? "-" : ""; _textGate.Reset(); }
-        _pause.Text = it.Status is DownloadStatus.Downloading or DownloadStatus.Queued ? "Duraklat" : (it.Status == DownloadStatus.Completed ? "Kapat" : "Devam");
+        _pause.Text = it.Status is DownloadStatus.Downloading or DownloadStatus.Queued ? Strings.Pause : (it.Status == DownloadStatus.Completed ? Strings.Close : Strings.Resume);
         _pause.Enabled = true;
         if (it.Status == DownloadStatus.Completed)
         {
             _seg.Apply(new DownloadProgress { Id = it.Id, Downloaded = it.TotalSize, TotalSize = it.TotalSize }, true);
             _cancel.Enabled = false;
-            _resume.Text = _maxConn > 1 ? "Evet" : _resume.Text;
+            _resume.Text = _maxConn > 1 ? Strings.Yes : _resume.Text;
         }
         else _cancel.Enabled = true;
     }
@@ -171,14 +172,14 @@ public sealed class ProgressDialog : DluForm
     public void ApplyProgress(DownloadProgress p)
     {
         var it = _mgr.Get(_id);
-        _size.Text = p.TotalSize > 0 ? Fmt.SizeFull(p.TotalSize) : "Bilinmiyor";
+        _size.Text = p.TotalSize > 0 ? Fmt.SizeFull(p.TotalSize) : Strings.Unknown;
         _done.Text = p.TotalSize > 0 ? $"{Fmt.Size(p.Downloaded)}  ({(int)(p.Downloaded * 100 / p.TotalSize)}%)" : Fmt.Size(p.Downloaded);
         bool textDue = _textGate.Due(Environment.TickCount64);   // hız / kalan süre en fazla saniyede 1
         if (textDue) { _speed.Text = Fmt.Speed(p.SpeedBytesPerSec); _eta.Text = Fmt.Eta(p.Eta); }
         SetBar(p.TotalSize > 0 ? (int)Math.Clamp(p.Downloaded * 1000 / p.TotalSize, 0, 1000) : 0);
         if (it != null) Text = $"{(p.TotalSize > 0 ? (int)(p.Downloaded * 100 / p.TotalSize) : 0)}% {it.FileName}";
         _maxConn = Math.Max(_maxConn, p.Connections.Count);
-        _resume.Text = p.TotalSize <= 0 ? "Hayır" : _maxConn > 1 ? "Evet" : "Bilinmiyor";
+        _resume.Text = p.TotalSize <= 0 ? Strings.No : _maxConn > 1 ? Strings.Yes : Strings.Unknown;
         if (it != null) _status.Text = StatusText(it);
         _seg.Apply(p, false);
 
@@ -193,15 +194,15 @@ public sealed class ProgressDialog : DluForm
             SetSub(li, 1, Fmt.Size(Math.Max(0, c.Position - c.SegmentStart)));
             string info = c.State switch
             {
-                ConnectionState.Receiving => $"Alınıyor  {Fmt.Speed(c.SpeedBytesPerSec)}",
-                ConnectionState.Connecting => "Bağlanıyor...",
-                ConnectionState.Retrying => $"Yeniden deneniyor ({c.Retries})",
-                ConnectionState.Done => "Tamamlandı",
-                ConnectionState.Failed => "Başarısız",
-                _ => "Boşta"
+                ConnectionState.Receiving => Strings.Downloading2(Fmt.Speed(c.SpeedBytesPerSec)),
+                ConnectionState.Connecting => Strings.Connecting,
+                ConnectionState.Retrying => Strings.Retrying(c.Retries),
+                ConnectionState.Done => Strings.Completed3,
+                ConnectionState.Failed => Strings.Failed,
+                _ => Strings.Idle
             };
             // Bağlantı hız metni de en fazla saniyede 1 değişir; durum değişimi hemen yansır.
-            if (textDue || c.State != ConnectionState.Receiving || !li.SubItems[2].Text.StartsWith("Alınıyor")) SetSub(li, 2, info);
+            if (textDue || c.State != ConnectionState.Receiving || !li.SubItems[2].Text.StartsWith(Strings.Downloading)) SetSub(li, 2, info);
             var fc = c.State == ConnectionState.Failed ? Theme.Danger : Theme.Text;
             if (li.ForeColor != fc) li.ForeColor = fc;
         }

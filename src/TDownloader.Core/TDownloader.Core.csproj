@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <Version>1.1.0</Version>
     <RootNamespace>TDownloader.Core</RootNamespace>
+    <NeutralLanguage>en</NeutralLanguage>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="TDownloader.Core.Tests" />

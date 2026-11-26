@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Threading.Channels;
 
 namespace TDownloader.Core.Ipc;
@@ -73,7 +74,7 @@ public sealed class DownloadCaptureGate
         if (Interlocked.Increment(ref _pending) > MaxPending || !q.Writer.TryWrite(new Job(d, completed)))
         {
             Interlocked.Decrement(ref _pending);
-            _log?.Invoke("Bekleyen onay penceresi sınırı aşıldı; istek reddedildi.");
+            _log?.Invoke(Strings.TooManyPendingConfirmationsCloseAConfirmationDialog);
             return new DownloadResultMessage(d.RequestId, false);
         }
         return new DownloadResultMessage(d.RequestId, true);

@@ -1,4 +1,15 @@
+using TDownloader.Core.Localization;
+using System.Text.Json;
 namespace TDownloader.App.Ui;
+
+public static class PhoneTransferReply
+{
+    public static bool Accepted(JsonElement? data) => data is { ValueKind: JsonValueKind.Object } value
+        && value.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True
+        && value.TryGetProperty("result", out var result) && result.ValueKind == JsonValueKind.Object
+        && result.TryGetProperty("ids", out var ids) && ids.ValueKind == JsonValueKind.Array
+        && ids.EnumerateArray().Any(id => id.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(id.GetString()));
+}
 
 /// <summary>"İndirme tamamlandı" penceresinde gösterilen bir kayıt.</summary>
 public sealed record CompletedEntry(string Id, string FileName, string Url, string Path, long Size);
@@ -33,13 +44,13 @@ public static class CompletedText
     /// <summary>"İndirildi: 9.90 MB (10.385.264 bayt)" - iki ondalık, bayt sayısı binlik ayraçlı (tr-TR).</summary>
     public static string SizeLine(long bytes)
     {
-        if (bytes < 0) return "İndirildi";
+        if (bytes < 0) return Strings.Downloaded2;
         string[] u = { "B", "KB", "MB", "GB", "TB" };
         double v = bytes; int i = 0;
         while (v >= 1024 && i < u.Length - 1) { v /= 1024; i++; }
-        var tr = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
-        string human = i == 0 ? $"{bytes} B" : v.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " " + u[i];
-        return $"İndirildi: {human} ({bytes.ToString("N0", tr)} bayt)";
+        var tr = System.Globalization.CultureInfo.CurrentCulture;
+        string human = i == 0 ? $"{bytes}\u00a0B" : v.ToString("0.00", System.Globalization.CultureInfo.CurrentCulture) + "\u00a0" + u[i];
+        return Strings.DownloadedBytes(human, bytes.ToString("N0", tr));
     }
 
     /// <summary>

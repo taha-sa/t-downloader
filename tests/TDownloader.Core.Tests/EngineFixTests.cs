@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Security.Cryptography;
 using TDownloader.Core.Downloads;
 using TDownloader.Core.Video;
@@ -183,6 +183,7 @@ public sealed class EngineFixTests : IDisposable
         });
         var ex = await Assert.ThrowsAsync<HlsException>(() => new HlsClient().DownloadAsync($"http://127.0.0.1:{port}/a.m3u8", null, null,
             Path.Combine(_tmp, "o", "f"), new HlsClient.Options(null, WorkDir: Path.Combine(_tmp, "w"), Retries: 0), _ => { }, CancellationToken.None));
-        Assert.Contains("büyük", ex.Message); t.Stop();
+        Assert.Contains("boyut sınırını", ex.Message); t.Stop();
     }
 }
+

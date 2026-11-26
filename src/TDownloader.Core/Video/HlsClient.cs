@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
@@ -75,14 +76,28 @@ public sealed class HlsClient
         {
             using var resp = await EngineHttp.SendFollowingAsync(_http, new Uri(url), u => Req(HttpMethod.Get, u, ctx), HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) throw new HlsException($"Sunucu playlist'i vermedi (HTTP {(int)resp.StatusCode}).", false, (int)resp.StatusCode);
-            var bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
-            if (bytes.Length > 8 * 1024 * 1024) throw new HlsException("Playlist beklenenden büyük.");
-            return Encoding.UTF8.GetString(bytes);
+            const int maxBytes = 8 * 1024 * 1024;
+            if (resp.Content.Headers.ContentLength is > maxBytes)
+                throw new HlsException(Strings.ThePlaylistIsTooLargeChooseAnotherStream);
+            await using var stream = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+            using var ms = new MemoryStream();
+            var buf = ArrayPool<byte>.Shared.Rent(16384);
+            try
+            {
+                int read;
+                while ((read = await stream.ReadAsync(buf.AsMemory(0, buf.Length), cts.Token).ConfigureAwait(false)) > 0)
+                {
+                    if (ms.Length + read > maxBytes) throw new HlsException(Strings.ThePlaylistIsTooLargeChooseAnotherStream);
+                    ms.Write(buf, 0, read);
+                }
+            }
+            finally { ArrayPool<byte>.Shared.Return(buf); }
+            return Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
         }
         // İç zaman aşımı (dış iptal DEĞİL): çağıranın "kullanıcı duraklattı" sanmaması için gerçek hataya çevrilir.
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new HlsException("Sunucu playlist'e zamanında yanıt vermedi (zaman aşımı).");
+            throw new HlsException(Strings.TheServerTimedOutWhileLoadingThePlaylist);
         }
     }
 
@@ -95,26 +110,26 @@ public sealed class HlsClient
     public async Task<VideoInfo> GetInfoAsync(string url, MediaContext? ctx, string? title, CancellationToken ct = default)
     {
         ctx ??= MediaContext.Empty;
-        if (!Uri.TryCreate(url, UriKind.Absolute, out _)) throw new HlsException("Geçersiz adres.");
+        if (!Uri.TryCreate(url, UriKind.Absolute, out _)) throw new HlsException(Strings.InvalidURLEnterAValidHTTPOrHTTPS);
         string text = await GetTextAsync(url, ctx, ct).ConfigureAwait(false);
-        if (!HlsParser.LooksLikeHls(text)) throw new HlsException("Adres bir HLS playlist'i değil.");
+        if (!HlsParser.LooksLikeHls(text)) throw new HlsException(Strings.TheURLIsNotAnHLSPlaylistChoose);
         string name = string.IsNullOrWhiteSpace(title) ? TitleFromUrl(url) : title!;
 
         if (!HlsParser.IsMaster(text))
         {
             var media = HlsParser.ParseMedia(text, url);
-            if (media.Segments.Count == 0) throw new HlsException("Playlist'te parça yok.");
-            if (!media.EndList) throw new HlsException("Canlı yayınlar desteklenmiyor.");
-            if (HlsParser.DrmReason(media) is { } drm) throw new HlsException("Bu içerik DRM korumalı olduğu için indirilemez (" + drm + ").", true);
+            if (media.Segments.Count == 0) throw new HlsException(Strings.ThePlaylistHasNoSegmentsPlayTheVideo);
+            if (!media.EndList) throw new HlsException(Strings.LiveStreamsAreNotSupportedChooseARecorded);
+            if (HlsParser.DrmReason(media) is { } drm) throw new HlsException(Strings.DRMProtectedContentCannotBeDownloadedChooseUnprotected + drm + ").", true);
             int h = HlsParser.HeightFromUrl(url);
             if (h == 0) h = HlsParser.ResolutionHeight(text);
             string dur = media.TotalDuration > 0 ? " (" + FormatDuration(media.TotalDuration) + ")" : "";
-            string label = h > 0 ? $"{h}p hls{dur}" : "Varsayılan kalite" + dur;
+            string label = h > 0 ? $"{h}p hls{dur}" : Strings.DefaultQuality2 + dur;
             return new VideoInfo(name, new List<QualityOption> { new(label, MakeFormat(url, null, h), "mp4", h, 0, false) });
         }
 
         var master = HlsParser.ParseMaster(text, url);
-        if (master.Variants.Count == 0) throw new HlsException("Master playlist'te kalite yok.");
+        if (master.Variants.Count == 0) throw new HlsException(Strings.NoMasterQuality);
 
         // Süre: en yüksek varyantın playlist'inden (boyut tahmini için); başarısız olursa boyut gösterilmez.
         double duration = 0;
@@ -188,8 +203,8 @@ public sealed class HlsClient
             }
             long size = duration > 0 && v.Bandwidth > 0 ? (long)(v.Bandwidth / 8.0 * duration) : 0;
             string fps = v.Fps >= 50 ? ((int)Math.Round(v.Fps)).ToString(CultureInfo.InvariantCulture) : "";
-            string res = v.Height > 0 ? $"{v.Height}p{fps}" : $"{Math.Max(1, v.Bandwidth / 1000)} kb/sn";
-            string sz = size > 0 ? $" (~{size / 1048576.0:0.#} MB)" : "";
+            string res = v.Height > 0 ? $"{v.Height}p{fps}" : $"{Math.Max(1, v.Bandwidth / 1000)}\u00a0kb" + Strings.PerSecond;
+            string sz = size > 0 ? $" (~{size / 1048576.0:0.#}\u00a0MB)" : "";
             options.Add(new QualityOption($"{res} hls{sz}", MakeFormat(v.Url, audio, v.Height), "mp4", v.Height, size, false));
             if (options.Count >= YtDlpParsing.MaxOptions) break;
         }
@@ -294,7 +309,7 @@ public sealed class HlsClient
     {
         ctx ??= MediaContext.Empty;
         if (audioUrl != null && opt.FfmpegPath == null)
-            throw new HlsException("Bu video ses ve görüntüyü ayrı akışlarda sunuyor; birleştirmek için ffmpeg gerekli ama bulunamadı.");
+            throw new HlsException(Strings.FfmpegIsRequiredToMergeSeparateVideoAnd);
         bool persistent = opt.WorkDir != null;
         string tmpDir = opt.WorkDir ?? (outBase + ".hlstmp");
         if (Path.GetDirectoryName(Path.GetFullPath(outBase)) is { Length: > 0 } outDir) Directory.CreateDirectory(outDir);
@@ -327,9 +342,9 @@ public sealed class HlsClient
                 Action<double> onTime = sec =>
                 {
                     int pct = totalDur > 0 ? (int)Math.Clamp(sec / totalDur * 100, 0, 100) : 0;
-                    prog.ReportPhase($"Dönüştürülüyor %{pct}");
+                    prog.ReportPhase(Strings.Converting(pct));
                 };
-                prog.ReportPhase("Dönüştürülüyor %0");
+                prog.ReportPhase(Strings.Converting0);
                 // 1. deneme: hızlı başlangıç (faststart) + gerekirse ADTS->ASC; 2. deneme: bitstream filtresiz, düz kopya.
                 foreach (bool plain in new[] { false, true })
                 {
@@ -351,7 +366,7 @@ public sealed class HlsClient
                     TryDelete(partOut);
                 }
                 if (audioRaw != null)
-                    throw new HlsException("ffmpeg ses ve görüntüyü birleştiremedi; sessiz video üretilmedi (inen parçalar korundu).");
+                    throw new HlsException(Strings.FfmpegCouldNotMergeVideoAndAudioDownloaded);
             }
             // Mevcut dosya silinmez/ezilmez: çakışırsa "ad (1).uzantı" (C4).
             string raw = MoveNoOverwrite(videoRaw.path, Util.UniqueName.Path(outBase + (videoRaw.fmp4 ? ".mp4" : ".ts")));
@@ -424,7 +439,11 @@ public sealed class HlsClient
                 }
                 catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException) { }
             }, CancellationToken.None);
-            _ = p.StandardError.ReadToEndAsync(ct);
+            var errTask = Task.Run(async () =>
+            {
+                try { await p.StandardError.ReadToEndAsync(ct).ConfigureAwait(false); }
+                catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException) { }
+            }, CancellationToken.None);
             using var reg = ct.Register(() => { try { if (!p.HasExited) p.Kill(true); } catch (Exception) { } });
             try { await p.WaitForExitAsync(ct).ConfigureAwait(false); }
             catch (OperationCanceledException)
@@ -433,7 +452,7 @@ public sealed class HlsClient
                 try { if (!p.HasExited) p.Kill(true); p.WaitForExit(5000); } catch (Exception) { }
                 throw;
             }
-            await outTask.ConfigureAwait(false);
+            await Task.WhenAll(outTask, errTask).ConfigureAwait(false);
             return p.ExitCode == 0;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { return false; }
@@ -456,7 +475,7 @@ public sealed class HlsClient
         try { return Path.GetPathRoot(Path.GetFullPath(path)) ?? ""; } catch (Exception ex) when (ex is ArgumentException or NotSupportedException) { return ""; }
     }
 
-    private static string Mb(long b) => (b / 1048576.0).ToString("0", CultureInfo.InvariantCulture) + " MB";
+    private static string Mb(long b) => (b / 1048576.0).ToString("0", CultureInfo.CurrentCulture) + "\u00a0MB";
 
     /// <summary>
     /// Hedef sürücüde boş alan kontrolü. estTotal: parçaların tahmini toplam boyutu, onDisk: şu an diskte olanı.
@@ -476,7 +495,7 @@ public sealed class HlsClient
         {
             long f = free(path);
             if (f >= 0 && f < need)
-                throw new HlsDiskSpaceException($"Diskte yeterli boş alan yok ({stage}): {Mb(f)} boş, yaklaşık {Mb(need)} gerekli ({Path.GetPathRoot(Path.GetFullPath(path))}).");
+                throw new HlsDiskSpaceException(Strings.NotEnoughDiskSpaceFreeAboutRequiredFree(stage, Mb(f), Mb(need), Path.GetPathRoot(Path.GetFullPath(path))));
         }
     }
 
@@ -487,7 +506,7 @@ public sealed class HlsClient
         async Task<(HlsMedia media, string mediaUrl)> LoadMediaAsync(CancellationToken tk)
         {
             string text = await GetTextAsync(playlistUrl, ctx, tk).ConfigureAwait(false);
-            if (!HlsParser.LooksLikeHls(text)) throw new HlsException("Adres bir HLS playlist'i değil.");
+            if (!HlsParser.LooksLikeHls(text)) throw new HlsException(Strings.TheURLIsNotAnHLSPlaylistChoose);
             string url = playlistUrl;
             if (HlsParser.IsMaster(text))
             {
@@ -502,9 +521,9 @@ public sealed class HlsClient
         }
 
         var (media, mediaUrl) = await LoadMediaAsync(ct).ConfigureAwait(false);
-        if (media.Segments.Count == 0) throw new HlsException("Playlist'te parça yok.");
-        if (!media.EndList) throw new HlsException("Canlı yayınlar desteklenmiyor.");
-        if (HlsParser.DrmReason(media) is { } drm) throw new HlsException("Bu içerik DRM korumalı olduğu için indirilemez (" + drm + ").", true);
+        if (media.Segments.Count == 0) throw new HlsException(Strings.ThePlaylistHasNoSegmentsPlayTheVideo);
+        if (!media.EndList) throw new HlsException(Strings.LiveStreamsAreNotSupportedChooseARecorded);
+        if (HlsParser.DrmReason(media) is { } drm) throw new HlsException(Strings.DRMProtectedContentCannotBeDownloadedChooseUnprotected + drm + ").", true);
 
         bool fmp4 = media.Map != null || media.Segments[0].Url.Split('?')[0].EndsWith(".m4s", StringComparison.OrdinalIgnoreCase)
                     || media.Segments[0].Url.Split('?')[0].EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
@@ -600,7 +619,7 @@ public sealed class HlsClient
                 try
                 {
                     k = await FetchBytesAsync(uri, ctx, 0, -1, opt, tk).ConfigureAwait(false);
-                    if (k.Length != 16) throw new HlsException("AES anahtarı geçersiz (" + k.Length + " bayt).");
+                    if (k.Length != 16) throw new HlsException(Strings.InvalidAESKeyChooseAnUnprotectedStream + k.Length + Strings.BytesSuffix);
                     if (opt.WorkDir != null) { try { File.WriteAllBytes(cacheFile, k); } catch (IOException) { } }
                 }
                 catch (HlsException) when (opt.WorkDir != null && File.Exists(cacheFile) && new FileInfo(cacheFile).Length == 16)
@@ -671,7 +690,7 @@ public sealed class HlsClient
         if (countTotals && missing.Count > 0 && seedDur > 0 && media.TotalDuration > 0)
         {
             spaceChecked = 1;
-            CheckSpace(opt, workDir, outBase, (long)(seedBytes / seedDur * media.TotalDuration), seedBytes, "indirme başlarken");
+            CheckSpace(opt, workDir, outBase, (long)(seedBytes / seedDur * media.TotalDuration), seedBytes, Strings.WhenStartingTheDownload);
         }
 
         // ---- eksikleri sınırlı paralellikle indir
@@ -723,18 +742,18 @@ public sealed class HlsClient
             if (firstError != null)
             {
                 // Zaman aşımı gibi iç iptaller HlsException'a çevrilir: çağıran "duraklatıldı" sanmasın.
-                if (firstError is OperationCanceledException) throw new HlsException("İndirme zaman aşımı nedeniyle durdu.", false, null);
+                if (firstError is OperationCanceledException) throw new HlsException(Strings.TheDownloadTimedOutCheckYourNetworkAnd, false, null);
                 System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstError).Throw();
             }
             // Hata kaydı olmadan işçiler durduysa (bir iptal kaçtıysa) eksik parçalarla birleştirmeye ASLA geçilmez.
             if (linked.IsCancellationRequested)
-                throw new HlsException("İndirme beklenmedik şekilde yarıda kesildi (eksik parça).");
+                throw new HlsException(Strings.TheDownloadStoppedWithMissingSegmentsRetryTo);
         }
 
         // ---- sırayla birleştir: parça dosyaları birleştikçe silinir (disk tepesi ~2x yerine ~1x + son dosya)
         long onDisk = 0;
         for (int i = mergedStart; i < count; i++) { var fi = new FileInfo(HlsStateStore.SegPath(workDir, prefix, i)); if (fi.Exists) onDisk += fi.Length; }
-        CheckSpace(opt, workDir, outBase, onDisk, onDisk, "birleştirmeden önce");
+        CheckSpace(opt, workDir, outBase, onDisk, onDisk, Strings.BeforeMerging);
         int lastPct = -1;
         // Parça dosyaları yalnızca işaretçi diske yazıldıktan SONRA silinir: kesinti olsa da silinen her parça birleşik dosyada,
         // işaretçide kayıtlıdır; kayıt dışı (silinmemiş) parçalar diskte durur.
@@ -756,7 +775,7 @@ public sealed class HlsClient
                     recorded = merged;
                 }
                 int pct = merged * 100 / count;
-                if (pct != lastPct) { lastPct = pct; prog.ReportPhase($"Birleştiriliyor %{pct}"); }
+                if (pct != lastPct) { lastPct = pct; prog.ReportPhase(Strings.Merging(pct)); }
             }
             fs.Flush(flushToDisk: true);
         }
@@ -820,12 +839,12 @@ public sealed class HlsClient
                 {
                     int code = (int)resp.StatusCode;
                     // 401/403: imzalı adres süresi dolmuş olabilir (çağıran playlist'i yenileyip dener); 404/410: kalıcı.
-                    if (code is 401 or 403 or 404 or 410) throw new HlsException($"Sunucu parçayı vermedi (HTTP {code}).", false, code);
+                    if (code is 401 or 403 or 404 or 410) throw new HlsException(Strings.TheServerRefusedASegmentHTTPRefreshThe(code), false, code);
                     throw HttpStatusException.From(resp);
                 }
                 // Parça/anahtar/init başına üst sınır: kötü niyetli/bozuk Content-Length ile dev bellek ayrılmasın (C14).
                 if (resp.Content.Headers.ContentLength is { } clen && clen > MaxPartBytes)
-                    throw new HlsException($"Parça beklenenden büyük ({clen / 1048576} MB > {MaxPartBytes / 1048576} MB sınırı).");
+                    throw new HlsException(Strings.ASegmentExceedsTheSizeLimitMBMB(clen / 1048576, MaxPartBytes / 1048576));
                 if (onBytes == null)
                 {
                     using var small = new MemoryStream();
@@ -837,7 +856,7 @@ public sealed class HlsClient
                         while ((r0 = await s0.ReadAsync(b0.AsMemory(), cts.Token).ConfigureAwait(false)) > 0)
                         {
                             small.Write(b0, 0, r0);
-                            if (small.Length > MaxPartBytes) throw new HlsException("Parça beklenenden büyük (sınır aşıldı).");
+                            if (small.Length > MaxPartBytes) throw new HlsException(Strings.ASegmentExceedsTheSizeLimitChooseAnother);
                         }
                     }
                     finally { ArrayPool<byte>.Shared.Return(b0); }
@@ -855,7 +874,7 @@ public sealed class HlsClient
                     while ((n = await stream.ReadAsync(rented.AsMemory(), cts.Token).ConfigureAwait(false)) > 0)
                     {
                         ms.Write(rented, 0, n); got += n; onBytes(n);
-                        if (got > MaxPartBytes) throw new HlsException("Parça beklenenden büyük (sınır aşıldı).");
+                        if (got > MaxPartBytes) throw new HlsException(Strings.ASegmentExceedsTheSizeLimitChooseAnother);
                     }
                     return ms.ToArray();
                 }
@@ -867,7 +886,7 @@ public sealed class HlsClient
             catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
             {
                 if (ex is HttpStatusException hs) retryAfter = hs.RetryAfter;
-                if (++attempt > opt.Retries) throw new HlsException("Parça indirilemedi: " + ex.Message);
+                if (++attempt > opt.Retries) throw new HlsException(Strings.CouldNotDownloadASegmentCheckYourNetwork + ex.Message);
                 // Üstel bekleme (gecikme x 2^(deneme-1), en çok 30 sn) + jitter; Retry-After varsa alt sınır.
                 double ms = Math.Min(delay.TotalMilliseconds * Math.Pow(2, attempt - 1), 30_000) * (1.0 + Random.Shared.NextDouble() * 0.25);
                 if (retryAfter is { } ra) ms = Math.Max(ms, Math.Min(ra.TotalMilliseconds, 30_000));

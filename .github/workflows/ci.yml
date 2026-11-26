@@ -5,6 +5,15 @@ on:
 permissions:
   contents: read
 jobs:
+  extension-localization:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify generated extension resources
+        shell: powershell
+        run: ./tools/Export-ExtensionStrings.ps1 -Check
+      - name: Test browser extension
+        run: node extension/tests/run.mjs
   ci:
     uses: taha-sa/t-suite/.github/workflows/app-ci.yml@main
     with:

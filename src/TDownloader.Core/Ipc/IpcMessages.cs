@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using TDownloader.Core.Settings;
@@ -81,10 +82,10 @@ public sealed record QualitySelectMessage(string SelectionId, int Index) : IpcMe
 public sealed record HideButtonMessage(int TabId) : IpcMessage;
 
 public sealed record SettingsMessage(bool InterceptEnabled, int MinFileSizeKb, List<string> ExcludedSites, List<string> FileTypes,
-    bool ShowVideoButton = true, bool NativeButton = false) : IpcMessage
+    bool ShowVideoButton = true, bool NativeButton = false, string Language = "") : IpcMessage
 {
     public static SettingsMessage From(AppSettings s) =>
-        new(s.BrowserCaptureEnabled, s.MinFileSizeKb, s.ExcludedSites.ToList(), s.FileTypes.ToList(), s.ShowVideoButton, s.UseNativeVideoButton);
+        new(s.BrowserCaptureEnabled, s.MinFileSizeKb, s.ExcludedSites.ToList(), s.FileTypes.ToList(), s.ShowVideoButton, s.UseNativeVideoButton, System.Globalization.CultureInfo.CurrentUICulture.Name);
 }
 
 public static class IpcSerializer
@@ -98,7 +99,7 @@ public static class IpcSerializer
 
     public static IpcMessage Deserialize(string json) =>
         JsonSerializer.Deserialize<IpcMessage>(json, JsonDefaults.Options)
-        ?? throw new JsonException("Boş mesaj.");
+        ?? throw new JsonException(Strings.TheMessageIsEmptyTryAgain);
 
     /// <summary>Bilinmeyen/bozuk mesajlarda null döner (istisna fırlatmaz).</summary>
     public static IpcMessage? TryDeserialize(string json)

@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+using TDownloader.Core.Localization;
+using System.Globalization;
 using System.Security.Cryptography;
 using TDownloader.App.Ui;
 
@@ -27,7 +28,7 @@ public sealed class HashDialog : DluForm
     {
         _filePath = filePath;
 
-        Text = "Sağlama Toplamı (Hash) - " + fileName;
+        Text = Strings.ChecksumHash + fileName;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -36,7 +37,7 @@ public sealed class HashDialog : DluForm
         SetClientDlu(290, 185);
 
         // Dosya bilgisi
-        MakeLabel("Dosya:", 10, 10, 45, 10);
+        MakeLabel(Strings.FileLabel, 10, 10, 45, 10);
         Add(new Label
         {
             Text = fileName,
@@ -48,7 +49,7 @@ public sealed class HashDialog : DluForm
         long size = 0;
         try { if (File.Exists(_filePath)) size = new FileInfo(_filePath).Length; } catch { }
 
-        MakeLabel("Boyut:", 10, 23, 45, 10);
+        MakeLabel(Strings.SizeLabel, 10, 23, 45, 10);
         Add(new Label
         {
             Text = FormatSize(size),
@@ -59,7 +60,7 @@ public sealed class HashDialog : DluForm
         // Durum
         _lblStatus = Add(new Label
         {
-            Text = "Hesaplanıyor, lütfen bekleyin...",
+            Text = Strings.CalculatingPleaseWait,
             ForeColor = Theme.AccentHover,
             Font = Theme.UiFont(7.5f, FontStyle.Italic),
             AutoEllipsis = true
@@ -69,22 +70,22 @@ public sealed class HashDialog : DluForm
         Add(new Panel { BackColor = Theme.Border, Height = 1 }, 10, 48, 270, 1);
 
         // MD5
-        MakeLabel("MD5:", 10, 56, 40, 12);
+        MakeLabel(Strings.Md5Label, 10, 56, 40, 12);
         _txtMd5 = Add(new TextBox { ReadOnly = true, Font = Theme.UiFont(8f) }, 55, 54, 175, 13);
-        _btnCopyMd5 = MakeButton("Kopyala", 235, 54, 45, 13);
+        _btnCopyMd5 = MakeButton(Strings.Copy, 235, 54, 45, 13);
         _btnCopyMd5.Click += (_, _) => CopyToClipboard(_calcMd5, _btnCopyMd5);
 
         // SHA-256
-        MakeLabel("SHA-256:", 10, 73, 40, 12);
+        MakeLabel(Strings.Sha256Label, 10, 73, 40, 12);
         _txtSha256 = Add(new TextBox { ReadOnly = true, Font = Theme.UiFont(8f) }, 55, 71, 175, 13);
-        _btnCopySha256 = MakeButton("Kopyala", 235, 71, 45, 13);
+        _btnCopySha256 = MakeButton(Strings.Copy, 235, 71, 45, 13);
         _btnCopySha256.Click += (_, _) => CopyToClipboard(_calcSha256, _btnCopySha256);
 
         // Ayırıcı
         Add(new Panel { BackColor = Theme.Border, Height = 1 }, 10, 92, 270, 1);
 
         // Doğrulama / Karşılaştırma
-        MakeLabel("Doğrula (Beklenen hash değerini yapıştırın):", 10, 98, 270, 10);
+        MakeLabel(Strings.VerifyPasteTheExpectedHash, 10, 98, 270, 10);
         _txtVerify = Add(new TextBox { Font = Theme.UiFont(8f) }, 10, 110, 270, 13);
         _txtVerify.TextChanged += (_, _) => UpdateMatchStatus();
 
@@ -96,7 +97,7 @@ public sealed class HashDialog : DluForm
         }, 10, 128, 270, 14);
 
         // Kapat
-        var close = MakeButton("Kapat", 115, 155, 60, 15, DialogResult.OK);
+        var close = MakeButton(Strings.Close, 115, 155, 60, 15, DialogResult.OK);
         AcceptButton = close;
         CancelButton = close;
 
@@ -113,7 +114,7 @@ public sealed class HashDialog : DluForm
             {
                 if (!File.Exists(_filePath))
                 {
-                    InvokeSafe(() => _lblStatus.Text = "Hata: Dosya bulunamadı.");
+                    InvokeSafe(() => _lblStatus.Text = Strings.FileNotFoundCheckItsLocationAndTry2);
                     return;
                 }
 
@@ -141,7 +142,7 @@ public sealed class HashDialog : DluForm
                     _calcSha256 = shaHex;
                     _txtMd5.Text = md5Hex;
                     _txtSha256.Text = shaHex;
-                    _lblStatus.Text = "Tamamlandı.";
+                    _lblStatus.Text = Strings.Completed;
                     _lblStatus.ForeColor = Theme.Ok;
                     UpdateMatchStatus();
                 });
@@ -151,7 +152,7 @@ public sealed class HashDialog : DluForm
             {
                 InvokeSafe(() =>
                 {
-                    _lblStatus.Text = "Hesaplama hatası: " + ex.Message;
+                    _lblStatus.Text = Strings.CouldNotCalculateTheChecksumCheckFileAccess + ex.Message;
                     _lblStatus.ForeColor = Theme.Danger;
                 });
             }
@@ -169,7 +170,7 @@ public sealed class HashDialog : DluForm
 
         if (string.IsNullOrEmpty(_calcMd5) && string.IsNullOrEmpty(_calcSha256))
         {
-            _lblMatch.Text = "Hesaplama devam ediyor...";
+            _lblMatch.Text = Strings.CalculationInProgress;
             _lblMatch.ForeColor = Theme.TextDim;
             return;
         }
@@ -177,12 +178,12 @@ public sealed class HashDialog : DluForm
         if (string.Equals(input, _calcMd5, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(input, _calcSha256, StringComparison.OrdinalIgnoreCase))
         {
-            _lblMatch.Text = "✓ Hash eşleşti! (Dosya sağlam ve orijinal)";
+            _lblMatch.Text = Strings.HashMatchesFileIntegrityVerified;
             _lblMatch.ForeColor = Theme.Ok;
         }
         else
         {
-            _lblMatch.Text = "✗ Eşleşmedi! (Beklenen değer ile uyuşmuyor)";
+            _lblMatch.Text = Strings.HashDoesNotMatchDownloadTheFileAgain;
             _lblMatch.ForeColor = Theme.Danger;
         }
     }
@@ -194,7 +195,7 @@ public sealed class HashDialog : DluForm
         {
             Clipboard.SetText(text);
             string old = btn.Text;
-            btn.Text = "Kopyalandı!";
+            btn.Text = Strings.Copied2;
             var t = new System.Windows.Forms.Timer { Interval = 1200 };
             t.Tick += (_, _) => { t.Stop(); t.Dispose(); if (!btn.IsDisposed) btn.Text = old; };
             t.Start();
@@ -210,12 +211,12 @@ public sealed class HashDialog : DluForm
 
     private static string FormatSize(long bytes)
     {
-        if (bytes <= 0) return "0 B";
+        if (bytes <= 0) return "0\u00a0B";
         string[] units = { "B", "KB", "MB", "GB", "TB" };
         double b = bytes;
         int i = 0;
         while (b >= 1024 && i < units.Length - 1) { b /= 1024; i++; }
-        return $"{b:0.##} {units[i]} ({bytes.ToString("N0", CultureInfo.CurrentCulture)} bayt)";
+        return Strings.SizeBytes($"{b:0.##}\u00a0{units[i]}", bytes);
     }
 
     protected override void Dispose(bool disposing)

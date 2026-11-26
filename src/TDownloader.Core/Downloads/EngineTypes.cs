@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Net;
 
 namespace TDownloader.Core.Downloads;
@@ -115,9 +116,9 @@ public static class EngineHttp
                 or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect) || resp.Headers.Location is not { } loc)
                 return resp;
             resp.Dispose();
-            if (hop >= maxRedirects) throw new HttpRequestException("Çok fazla yönlendirme.");
+            if (hop >= maxRedirects) throw new HttpRequestException(Strings.TooManyRedirectsCheckTheURLAndTry);
             var next = loc.IsAbsoluteUri ? loc : new Uri(uri, loc);
-            if (next.Scheme != Uri.UriSchemeHttp && next.Scheme != Uri.UriSchemeHttps) throw new HttpRequestException("Desteklenmeyen yönlendirme adresi.");
+            if (next.Scheme != Uri.UriSchemeHttp && next.Scheme != Uri.UriSchemeHttps) throw new HttpRequestException(Strings.UnsupportedRedirectURLUseAnHTTPOrHTTPS);
             uri = next;
         }
     }

@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 namespace TDownloader.App.Ui;
 
 /// <summary>Metin güncellemelerini en fazla belirli aralıkta bir kez geçiren sayaç (WinForms'tan bağımsız, test edilebilir).</summary>
@@ -39,7 +40,7 @@ public static class DiskDeletePlan
     }
 
     public static string ConfirmText(int count, long totalBytes) =>
-        $"{count} dosya diskten silinecek (toplam {Fmt.Size(totalBytes)}). Dosyalar Geri Dönüşüm Kutusu'na gönderilecek; kutuya gönderilemeyen dosya için ayrıca sorulur (sessizce kalıcı silinmez). Emin misiniz?";
+        Strings.MoveFilesTotalToTheRecycleBinYou(count, Fmt.Size(totalBytes));
 
     /// <summary>
     /// SHFileOperation sonucu: kod 0 ve iptal yok -> dosya gitti (Recycled; hâlâ duruyorsa Failed). Kullanıcı kalıcı silme uyarısını
@@ -53,8 +54,8 @@ public static class DiskDeletePlan
     }
 
     public static string SkippedSummary(int skipped) =>
-        $"{skipped} dosya Geri Dönüşüm Kutusu'na gönderilemediği ve kalıcı silme onaylanmadığı için diskte bırakıldı (listeden kaldırıldı).";
+        Strings.FilesWereKeptOnDiskBecauseRecyclingFailed(skipped);
 
     public static string ErrorSummary(int failed, string? firstError) =>
-        $"{failed} dosya Geri Dönüşüm Kutusu'na gönderilemedi." + (string.IsNullOrEmpty(firstError) ? "" : "\n" + firstError);
+        Strings.CouldNotMoveFilesToTheRecycleBin(failed) + (string.IsNullOrEmpty(firstError) ? "" : "\n" + firstError);
 }

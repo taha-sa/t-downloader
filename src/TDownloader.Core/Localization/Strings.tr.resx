@@ -1,0 +1,1449 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <data name="TDownloaderIsAlreadyOpen" xml:space="preserve">
+    <value>T-Downloader zaten açık.</value>
+  </data>
+  <data name="TDownloaderIsNotRunningOrCouldNot" xml:space="preserve">
+    <value>T-Downloader çalışmıyor veya başlatılamadı. Uygulamayı açıp tekrar deneyin.</value>
+  </data>
+  <data name="AboutTDownloader" xml:space="preserve">
+    <value>T-Downloader hakkında</value>
+  </data>
+  <data name="TDownloader" xml:space="preserve">
+    <value>T-Downloader {0} · {1}</value>
+  </data>
+  <data name="DownloadManagerWithMultipleConnectionsAndResumableDownloads" xml:space="preserve">
+    <value>Çok bağlantılı, devam ettirilebilir indirme yöneticisi.</value>
+  </data>
+  <data name="DataFolder" xml:space="preserve">
+    <value>Veri klasörü: {0}</value>
+  </data>
+  <data name="PartOfTheTSuiteFamily" xml:space="preserve">
+    <value>T-Suite ailesinin parçası</value>
+  </data>
+  <data name="ThisApp" xml:space="preserve">
+    <value>Bu uygulama</value>
+  </data>
+  <data name="Installed" xml:space="preserve">
+    <value>Yüklü</value>
+  </data>
+  <data name="Get" xml:space="preserve">
+    <value>Edin…</value>
+  </data>
+  <data name="Get2" xml:space="preserve">
+    <value> edinin</value>
+  </data>
+  <data name="PrepareErrorReportsAutomatically" xml:space="preserve">
+    <value>Hata raporlarını otomatik hazırla</value>
+  </data>
+  <data name="CouldNotSaveYourPreferenceCheckFolderPermissions" xml:space="preserve">
+    <value>Tercihiniz kaydedilemedi. Klasör izinlerini kontrol edin ve tekrar deneyin.</value>
+  </data>
+  <data name="SendErrorReport" xml:space="preserve">
+    <value>Hata raporu gönder…</value>
+  </data>
+  <data name="YouCanReviewTheErrorReportBeforeSending" xml:space="preserve">
+    <value>Hata raporunu göndermeden önce inceleyebilirsiniz.</value>
+  </data>
+  <data name="SourceAndLicenseInformation" xml:space="preserve">
+    <value>Kaynak ve lisans bilgileri</value>
+  </data>
+  <data name="CopySystemDiagnostics" xml:space="preserve">
+    <value>Sistem tanısını kopyala</value>
+  </data>
+  <data name="TDownloaderOSAppNET" xml:space="preserve">
+    <value>T-Downloader {0}
+{1}
+OS: {2}; App: {3}
+.NET: {4}</value>
+  </data>
+  <data name="ReportAnIssue" xml:space="preserve">
+    <value>Sorun bildir</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Kapat</value>
+  </data>
+  <data name="EnterANewDownloadURL" xml:space="preserve">
+    <value>Yeni indirme adresi gir</value>
+  </data>
+  <data name="EnterTheFileURLToDownload" xml:space="preserve">
+    <value>İndirilecek dosyanın adresini (URL) girin:</value>
+  </data>
+  <data name="OK" xml:space="preserve">
+    <value>Tamam</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>İptal</value>
+  </data>
+  <data name="TheURLIsInvalidEnterAValidHTTP" xml:space="preserve">
+    <value>Adres geçersiz. Geçerli bir HTTP veya HTTPS adresi girin.</value>
+  </data>
+  <data name="DownloadCompleted" xml:space="preserve">
+    <value>İndirme tamamlandı</value>
+  </data>
+  <data name="DownloadCompleted2" xml:space="preserve">
+    <value>İndirme tamamlandı: </value>
+  </data>
+  <data name="URL" xml:space="preserve">
+    <value>Adres</value>
+  </data>
+  <data name="SavedTo" xml:space="preserve">
+    <value>Kaydedildiği yer</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>Aç</value>
+  </data>
+  <data name="OpenWith" xml:space="preserve">
+    <value>Birlikte aç…</value>
+  </data>
+  <data name="OpenFolder" xml:space="preserve">
+    <value>Klasörü aç</value>
+  </data>
+  <data name="DoNotShowThisWindowAgain" xml:space="preserve">
+    <value>Bu pencereyi bir daha gösterme</value>
+  </data>
+  <data name="TheFileWasMovedOrDeletedCheckIts" xml:space="preserve">
+    <value>Dosya taşınmış veya silinmiş. Konumunu kontrol edin.</value>
+  </data>
+  <data name="Copied" xml:space="preserve">
+    <value>  · kopyalandı</value>
+  </data>
+  <data name="FileNotFoundCheckItsLocationAndTry" xml:space="preserve">
+    <value>Dosya bulunamadı. Konumunu kontrol edin ve tekrar deneyin.</value>
+  </data>
+  <data name="IsAnExecutableFileProgramsDownloadedFromThe" xml:space="preserve">
+    <value>"{0}" çalıştırılabilir bir dosya. İnternetten indirilen programlar zararlı olabilir.
+
+Yine de açılsın mı?</value>
+  </data>
+  <data name="NotEnoughDiskSpace" xml:space="preserve">
+    <value>Diskte yeterli yer yok</value>
+  </data>
+  <data name="TheTargetDriveHasFreeThisDownloadNeeds" xml:space="preserve">
+    <value>Hedef sürücüde {0} boş alan var; bu indirme {1} + 1 GB pay gerektiriyor.
+
+Disk dolarsa indirme yarıda kalabilir.</value>
+  </data>
+  <data name="DownloadAnyway" xml:space="preserve">
+    <value>Yine de indir</value>
+  </data>
+  <data name="DownloadFileInformation" xml:space="preserve">
+    <value>Dosya indirme bilgisi</value>
+  </data>
+  <data name="Category" xml:space="preserve">
+    <value>Kategori</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Kaydet</value>
+  </data>
+  <data name="Description" xml:space="preserve">
+    <value>Açıklama</value>
+  </data>
+  <data name="DownloadLater" xml:space="preserve">
+    <value>&amp;daha sonra indir</value>
+  </data>
+  <data name="StartDownload" xml:space="preserve">
+    <value>İndirmeyi &amp;başlat</value>
+  </data>
+  <data name="RememberThisPathForTheCategory" xml:space="preserve">
+    <value>Bu yolu "{0}" kategorisi için hatırla</value>
+  </data>
+  <data name="Unknown" xml:space="preserve">
+    <value>Bilinmiyor</value>
+  </data>
+  <data name="TheSaveLocationIsInvalidChooseAValid" xml:space="preserve">
+    <value>Kayıt yeri geçersiz. Geçerli bir klasör seçin.</value>
+  </data>
+  <data name="NewCategory" xml:space="preserve">
+    <value>Yeni kategori</value>
+  </data>
+  <data name="CategoryName" xml:space="preserve">
+    <value>Kategori adı:</value>
+  </data>
+  <data name="TheCategoryNameIsEmptyEnterAName" xml:space="preserve">
+    <value>Kategori adı boş. Bir ad girin.</value>
+  </data>
+  <data name="TheCategoryNameContainsInvalidCharactersRemoveThem" xml:space="preserve">
+    <value>Kategori adı geçersiz karakter içeriyor. Bu karakterleri kaldırıp tekrar deneyin.</value>
+  </data>
+  <data name="ACategoryWithThisNameAlreadyExistsChoose" xml:space="preserve">
+    <value>Bu adda bir kategori zaten var. Başka bir ad seçin.</value>
+  </data>
+  <data name="ChecksumHash" xml:space="preserve">
+    <value>Sağlama Toplamı (Hash) - </value>
+  </data>
+  <data name="CalculatingPleaseWait" xml:space="preserve">
+    <value>Hesaplanıyor, lütfen bekleyin...</value>
+  </data>
+  <data name="Copy" xml:space="preserve">
+    <value>Kopyala</value>
+  </data>
+  <data name="VerifyPasteTheExpectedHash" xml:space="preserve">
+    <value>Doğrula (beklenen hash değerini yapıştırın):</value>
+  </data>
+  <data name="FileNotFoundCheckItsLocationAndTry2" xml:space="preserve">
+    <value>Dosya bulunamadı. Konumunu kontrol edin ve tekrar deneyin.</value>
+  </data>
+  <data name="Completed" xml:space="preserve">
+    <value>Tamamlandı.</value>
+  </data>
+  <data name="CouldNotCalculateTheChecksumCheckFileAccess" xml:space="preserve">
+    <value>Sağlama toplamı hesaplanamadı. Dosya erişimini kontrol edip tekrar deneyin. Ayrıntılar: </value>
+  </data>
+  <data name="CalculationInProgress" xml:space="preserve">
+    <value>Hesaplama devam ediyor...</value>
+  </data>
+  <data name="HashMatchesFileIntegrityVerified" xml:space="preserve">
+    <value>✓ Hash eşleşti (dosya bütünlüğü doğrulandı)</value>
+  </data>
+  <data name="HashDoesNotMatchDownloadTheFileAgain" xml:space="preserve">
+    <value>✗ Hash eşleşmedi. Dosyayı yeniden indirin ve beklenen hash değerini kontrol edin.</value>
+  </data>
+  <data name="Copied2" xml:space="preserve">
+    <value>Kopyalandı</value>
+  </data>
+  <data name="FileName" xml:space="preserve">
+    <value>Dosya adı</value>
+  </data>
+  <data name="Q" xml:space="preserve">
+    <value>K</value>
+  </data>
+  <data name="Size" xml:space="preserve">
+    <value>Boyut</value>
+  </data>
+  <data name="Status" xml:space="preserve">
+    <value>Durum</value>
+  </data>
+  <data name="TimeRemaining" xml:space="preserve">
+    <value>Kalan süre</value>
+  </data>
+  <data name="TransferSpeed" xml:space="preserve">
+    <value>Aktarım hızı</value>
+  </data>
+  <data name="LastAttempt" xml:space="preserve">
+    <value>Son deneme tarihi</value>
+  </data>
+  <data name="DateAdded" xml:space="preserve">
+    <value>Eklenme tarihi</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Hazır</value>
+  </data>
+  <data name="Active0" xml:space="preserve">
+    <value>Etkin: 0</value>
+  </data>
+  <data name="Speed0BS" xml:space="preserve">
+    <value>Hız: 0 B/sn</value>
+  </data>
+  <data name="Total0" xml:space="preserve">
+    <value>Toplam: 0</value>
+  </data>
+  <data name="ExitingInSStopTheQueueToCancel" xml:space="preserve">
+    <value>Çıkış: {0} sn (iptal için kuyruğu durdurun)</value>
+  </data>
+  <data name="CouldNotAddTheBrowserDownloadTryAgain" xml:space="preserve">
+    <value>Tarayıcıdan gelen indirme eklenemedi: </value>
+  </data>
+  <data name="TryAgainTrayMenu" xml:space="preserve">
+    <value> (Tekrar dene: tepsi simgesi menüsü)</value>
+  </data>
+  <data name="TDownloaderTryAgain" xml:space="preserve">
+    <value>T-Downloader - tekrar dene</value>
+  </data>
+  <data name="ClickToTryAgain" xml:space="preserve">
+    <value>. Tekrar denemek için tıklayın.</value>
+  </data>
+  <data name="ThisURLIsAlreadyBeingAddedOrHas" xml:space="preserve">
+    <value>Aynı bağlantı zaten ekleniyor/eklendi: </value>
+  </data>
+  <data name="ThisURLIsAlreadyBeingAddedOrHas2" xml:space="preserve">
+    <value>Aynı bağlantı zaten ekleniyor/eklendi.</value>
+  </data>
+  <data name="Tasks" xml:space="preserve">
+    <value>&amp;görevler</value>
+  </data>
+  <data name="AddNewURL" xml:space="preserve">
+    <value>Yeni &amp;URL ekle...</value>
+  </data>
+  <data name="AddURLFromClipboard" xml:space="preserve">
+    <value>&amp;panodan URL ekle</value>
+  </data>
+  <data name="OpenBrowserExtensionFolder" xml:space="preserve">
+    <value>&amp;tarayıcı eklentisi klasörünü aç</value>
+  </data>
+  <data name="ExitMenu" xml:space="preserve">
+    <value>Çı&amp;kış</value>
+  </data>
+  <data name="File" xml:space="preserve">
+    <value>&amp;dosya</value>
+  </data>
+  <data name="Stop" xml:space="preserve">
+    <value>&amp;durdur</value>
+  </data>
+  <data name="DownloadNowResume" xml:space="preserve">
+    <value>&amp;şimdi indir / devam et</value>
+  </data>
+  <data name="Remove" xml:space="preserve">
+    <value>&amp;sil</value>
+  </data>
+  <data name="DeleteFromDisk" xml:space="preserve">
+    <value>&amp;diskten sil</value>
+  </data>
+  <data name="OpenFile" xml:space="preserve">
+    <value>Dosyayı &amp;aç</value>
+  </data>
+  <data name="OpenFolder2" xml:space="preserve">
+    <value>&amp;klasörü aç</value>
+  </data>
+  <data name="ProgressWindow" xml:space="preserve">
+    <value>İ&amp;lerleme penceresi</value>
+  </data>
+  <data name="Downloads" xml:space="preserve">
+    <value>İ&amp;ndirmeler</value>
+  </data>
+  <data name="StopAll" xml:space="preserve">
+    <value>&amp;tümünü durdur</value>
+  </data>
+  <data name="RemoveCompletedDownloads" xml:space="preserve">
+    <value>Tamamlananları &amp;sil</value>
+  </data>
+  <data name="Scheduler" xml:space="preserve">
+    <value>&amp;Zamanlayıcı...</value>
+  </data>
+  <data name="StartQueue" xml:space="preserve">
+    <value>Kuyruğu &amp;başlat</value>
+  </data>
+  <data name="StopQueueMenu" xml:space="preserve">
+    <value>Kuyruğu d&amp;urdur</value>
+  </data>
+  <data name="Settings" xml:space="preserve">
+    <value>&amp;Ayarlar...</value>
+  </data>
+  <data name="View" xml:space="preserve">
+    <value>G&amp;örünüm</value>
+  </data>
+  <data name="HideCategories" xml:space="preserve">
+    <value>Kategorileri &amp;gizle</value>
+  </data>
+  <data name="SortFiles" xml:space="preserve">
+    <value>Dosyaları &amp;sırala</value>
+  </data>
+  <data name="ByDateAdded" xml:space="preserve">
+    <value>Eklenme sırasına göre</value>
+  </data>
+  <data name="ByFileName" xml:space="preserve">
+    <value>Dosya adına göre</value>
+  </data>
+  <data name="BySize" xml:space="preserve">
+    <value>Boyuta göre</value>
+  </data>
+  <data name="ByStatus" xml:space="preserve">
+    <value>Duruma göre</value>
+  </data>
+  <data name="ByTimeRemaining" xml:space="preserve">
+    <value>Kalan süreye göre</value>
+  </data>
+  <data name="ByTransferSpeed" xml:space="preserve">
+    <value>Aktarım hızına göre</value>
+  </data>
+  <data name="ByLastAttempt" xml:space="preserve">
+    <value>Son deneme tarihine göre</value>
+  </data>
+  <data name="ByDescription" xml:space="preserve">
+    <value>Açıklamaya göre</value>
+  </data>
+  <data name="Help" xml:space="preserve">
+    <value>&amp;yardım</value>
+  </data>
+  <data name="BrowserExtension" xml:space="preserve">
+    <value>&amp;tarayıcı eklentisi</value>
+  </data>
+  <data name="AboutTDownloader2" xml:space="preserve">
+    <value>T-Downloader &amp;hakkında</value>
+  </data>
+  <data name="AddURL" xml:space="preserve">
+    <value>URL ekle</value>
+  </data>
+  <data name="AddANewDownloadCtrlN" xml:space="preserve">
+    <value>Yeni indirme ekle (ctrl+N)</value>
+  </data>
+  <data name="Resume" xml:space="preserve">
+    <value>Devam</value>
+  </data>
+  <data name="StartOrResumeSelectedDownloads" xml:space="preserve">
+    <value>Seçili indirmeleri başlat / devam ettir</value>
+  </data>
+  <data name="Stop2" xml:space="preserve">
+    <value>Durdur</value>
+  </data>
+  <data name="StopSelectedDownloads" xml:space="preserve">
+    <value>Seçili indirmeleri durdur</value>
+  </data>
+  <data name="StopAll2" xml:space="preserve">
+    <value>Tümü Dur.</value>
+  </data>
+  <data name="StopAllDownloads" xml:space="preserve">
+    <value>Tüm indirmeleri durdur</value>
+  </data>
+  <data name="Remove2" xml:space="preserve">
+    <value>Sil</value>
+  </data>
+  <data name="RemoveSelectedDownloadsFromTheList" xml:space="preserve">
+    <value>Seçili indirmeleri listeden sil</value>
+  </data>
+  <data name="DeleteFromDisk2" xml:space="preserve">
+    <value>Diskten sil</value>
+  </data>
+  <data name="DeleteSelectedFilesMoveToRecycleBin" xml:space="preserve">
+    <value>Seçilenleri diskten sil (Geri Dönüşüm Kutusu)</value>
+  </data>
+  <data name="Clean" xml:space="preserve">
+    <value>Temizle</value>
+  </data>
+  <data name="RemoveCompletedDownloadsFromTheList" xml:space="preserve">
+    <value>Tamamlananları listeden sil</value>
+  </data>
+  <data name="Settings2" xml:space="preserve">
+    <value>Ayarlar</value>
+  </data>
+  <data name="Settings3" xml:space="preserve">
+    <value>Ayarlar</value>
+  </data>
+  <data name="Schedule" xml:space="preserve">
+    <value>Zamanla</value>
+  </data>
+  <data name="SchedulerAndDownloadQueue" xml:space="preserve">
+    <value>Zamanlayıcı ve indirme kuyruğu</value>
+  </data>
+  <data name="StartQueue2" xml:space="preserve">
+    <value>K. Başlat</value>
+  </data>
+  <data name="StartQueue3" xml:space="preserve">
+    <value>Kuyruğu başlat</value>
+  </data>
+  <data name="StopQueue" xml:space="preserve">
+    <value>Kuyruğu durdur</value>
+  </data>
+  <data name="StopQueuePendingDownloads" xml:space="preserve">
+    <value>Kuyruğu durdur (bekleyenleri)</value>
+  </data>
+  <data name="Extension" xml:space="preserve">
+    <value>Eklenti</value>
+  </data>
+  <data name="BrowserExtension2" xml:space="preserve">
+    <value>Tarayıcı eklentisi</value>
+  </data>
+  <data name="About" xml:space="preserve">
+    <value>Hakkında</value>
+  </data>
+  <data name="Categories" xml:space="preserve">
+    <value>Kategoriler</value>
+  </data>
+  <data name="HideCategories2" xml:space="preserve">
+    <value>Kategorileri gizle</value>
+  </data>
+  <data name="AllDownloads" xml:space="preserve">
+    <value>Tüm indirmeler</value>
+  </data>
+  <data name="Unfinished" xml:space="preserve">
+    <value>Tamamlanmayan</value>
+  </data>
+  <data name="Completed2" xml:space="preserve">
+    <value>Tamamlanan</value>
+  </data>
+  <data name="Queues" xml:space="preserve">
+    <value>Kuyruklar</value>
+  </data>
+  <data name="MainQueue" xml:space="preserve">
+    <value>Ana kuyruk</value>
+  </data>
+  <data name="ShowInFolder" xml:space="preserve">
+    <value>Klasörde göster</value>
+  </data>
+  <data name="CalculateChecksumHash" xml:space="preserve">
+    <value>Sağlama Toplamı (Hash)...</value>
+  </data>
+  <data name="Resume2" xml:space="preserve">
+    <value>Devam et</value>
+  </data>
+  <data name="ProgressWindow2" xml:space="preserve">
+    <value>İlerleme penceresi</value>
+  </data>
+  <data name="Open2" xml:space="preserve">
+    <value>&amp;aç</value>
+  </data>
+  <data name="AddURL2" xml:space="preserve">
+    <value>&amp;URL Ekle...</value>
+  </data>
+  <data name="StopAll3" xml:space="preserve">
+    <value>&amp;tümünü durdur</value>
+  </data>
+  <data name="RetryFailedBrowserCaptures" xml:space="preserve">
+    <value>Tarayıcıdan gelip eklenemeyenleri tekrar &amp;dene</value>
+  </data>
+  <data name="Completed3" xml:space="preserve">
+    <value>Tamamlandı</value>
+  </data>
+  <data name="Downloading" xml:space="preserve">
+    <value>Alınıyor</value>
+  </data>
+  <data name="Queued" xml:space="preserve">
+    <value>Sırada</value>
+  </data>
+  <data name="Paused" xml:space="preserve">
+    <value>Duraklatıldı </value>
+  </data>
+  <data name="Paused2" xml:space="preserve">
+    <value>Duraklatıldı</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>Hata</value>
+  </data>
+  <data name="Active" xml:space="preserve">
+    <value>Etkin: {0}</value>
+  </data>
+  <data name="Speed" xml:space="preserve">
+    <value>Hız: </value>
+  </data>
+  <data name="Total" xml:space="preserve">
+    <value>Toplam: {0}</value>
+  </data>
+  <data name="ItemsSelected" xml:space="preserve">
+    <value>{0} öğe seçili</value>
+  </data>
+  <data name="DownloadCompleted3" xml:space="preserve">
+    <value>İndirme tamamlandı</value>
+  </data>
+  <data name="DownloadedSuccessfully" xml:space="preserve">
+    <value>{0} başarıyla indirildi.</value>
+  </data>
+  <data name="TheClipboardHasNoValidHTTPOrHTTPS" xml:space="preserve">
+    <value>Panoda geçerli bir HTTP veya HTTPS bağlantısı yok. Bir indirme adresi kopyalayıp tekrar deneyin.</value>
+  </data>
+  <data name="TheMainWindowIsNotReadyWaitAnd" xml:space="preserve">
+    <value>Ana pencere hazır değil.</value>
+  </data>
+  <data name="TheMainWindowClosedOpenTDownloaderAnd" xml:space="preserve">
+    <value>Ana pencere kapandı.</value>
+  </data>
+  <data name="RemoveDownloadsFromTheListFilesOnDisk" xml:space="preserve">
+    <value>{0} indirme listeden silinsin mi?
+(Diskteki dosyalar silinmez.)</value>
+  </data>
+  <data name="NoCompletedDownloads" xml:space="preserve">
+    <value>Tamamlanmış indirme yok.</value>
+  </data>
+  <data name="RemoveCompletedDownloadsFromTheListFilesOn" xml:space="preserve">
+    <value>{0} tamamlanmış indirme listeden silinsin mi?
+(Diskteki dosyalar silinmez.)</value>
+  </data>
+  <data name="RemoveCompletedDownloads2" xml:space="preserve">
+    <value>Tamamlananları sil</value>
+  </data>
+  <data name="FileNotFoundCheckThisLocation" xml:space="preserve">
+    <value>Dosya bulunamadı:
+</value>
+  </data>
+  <data name="BrowserExtensionFolderNotFoundInChromeEdge" xml:space="preserve">
+    <value>Tarayıcı eklentisi klasörü bulunamadı.
+Chrome/Edge'de "Uzantılar &gt; Geliştirici modu &gt; Paketlenmemiş yükle" ile 'extension' klasörünü seçin.</value>
+  </data>
+  <data name="OpeningTheExtensionFolderInChromeEdgeEnable" xml:space="preserve">
+    <value>Eklenti klasörü açılıyor. Chrome/Edge'de "Uzantılar &gt; Geliştirici modu &gt; Paketlenmemiş yükle" ile bu klasörü seçin.</value>
+  </data>
+  <data name="ShowCategories" xml:space="preserve">
+    <value>Kategorileri &amp;göster</value>
+  </data>
+  <data name="DownloadsAreWaitingForConfirmationExitingNowWill" xml:space="preserve">
+    <value>{0} indirme onay penceresi bekliyor. Şimdi çıkarsanız bu indirmeler kaybolur (tarayıcı kopyaları silinmişti).
+
+Yine de çıkılsın mı?</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>Çıkış</value>
+  </data>
+  <data name="Highest" xml:space="preserve">
+    <value>En yüksek</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>Genel</value>
+  </data>
+  <data name="MinimizeToSystemTrayWhenClosingTheWindow" xml:space="preserve">
+    <value>Pencereyi kapatınca sistem tepsisine küçült</value>
+  </data>
+  <data name="MonitorDownloadableClipboardURLsAndAsk" xml:space="preserve">
+    <value>Panodaki indirilebilir bağlantıları izle ve sor</value>
+  </data>
+  <data name="ShowFileInformationForBrowserDownloads" xml:space="preserve">
+    <value>Tarayıcıdan gelen indirmelerde "Dosya bilgisi" penceresini göster</value>
+  </data>
+  <data name="ShowTheCompletedDialogAfterADownload" xml:space="preserve">
+    <value>İndirme bitince "İndirme tamamlandı" penceresini göster</value>
+  </data>
+  <data name="PlayASoundOnCompletion" xml:space="preserve">
+    <value>Tamamlanınca ses çal</value>
+  </data>
+  <data name="StartWithWindows" xml:space="preserve">
+    <value>Windows ile başlat</value>
+  </data>
+  <data name="DataFolder2" xml:space="preserve">
+    <value>Veri klasörü:</value>
+  </data>
+  <data name="Connection" xml:space="preserve">
+    <value>Bağlantı</value>
+  </data>
+  <data name="ConnectionsPerDownload132" xml:space="preserve">
+    <value>İndirme başına bağlantı sayısı (1-32):</value>
+  </data>
+  <data name="MaximumSimultaneousDownloads" xml:space="preserve">
+    <value>Aynı anda en çok indirme sayısı:</value>
+  </data>
+  <data name="SpeedLimitKBS0Unlimited" xml:space="preserve">
+    <value>Hız sınırı (KB/sn, 0 = sınırsız):</value>
+  </data>
+  <data name="DownloadsUseASingleConnectionIfTheServer" xml:space="preserve">
+    <value>Sunucu Range desteklemiyorsa indirme otomatik olarak tek bağlantıyla yapılır.</value>
+  </data>
+  <data name="SaveLocation" xml:space="preserve">
+    <value>Kayıt yeri</value>
+  </data>
+  <data name="MainSaveFolder" xml:space="preserve">
+    <value>Ana kayıt klasörü:</value>
+  </data>
+  <data name="ChooseTheMainSaveFolder" xml:space="preserve">
+    <value>Ana kayıt klasörünü seç</value>
+  </data>
+  <data name="CategoryFoldersLeaveEmptyToUseTheCategory" xml:space="preserve">
+    <value>Kategori klasörleri (boşsa ana klasör altında kategori adı):</value>
+  </data>
+  <data name="Folder" xml:space="preserve">
+    <value>Klasör</value>
+  </data>
+  <data name="ChooseTheCategoryFolder" xml:space="preserve">
+    <value>Kategori klasörünü seç</value>
+  </data>
+  <data name="RestoreDefaults" xml:space="preserve">
+    <value>Varsayılan</value>
+  </data>
+  <data name="BrowserCapture" xml:space="preserve">
+    <value>Tarayıcı yakalama</value>
+  </data>
+  <data name="CaptureBrowserDownloads" xml:space="preserve">
+    <value>Tarayıcı indirmelerini devral</value>
+  </data>
+  <data name="MinimumFileSizeKB" xml:space="preserve">
+    <value>En küçük dosya boyutu (KB):</value>
+  </data>
+  <data name="FileTypesToCaptureSeparateWithSpaces" xml:space="preserve">
+    <value>Yakalanacak dosya türleri (boşlukla ayırın):</value>
+  </data>
+  <data name="ExcludedSitesOnePerLine" xml:space="preserve">
+    <value>Yakalanmayacak siteler (her satıra bir tane):</value>
+  </data>
+  <data name="Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ShowDownloadThisVideoOverVideos" xml:space="preserve">
+    <value>Videoların üstünde "Bu videoyu indir" düğmesini göster</value>
+  </data>
+  <data name="YtDlpPathLeaveEmptyToSearchAutomatically" xml:space="preserve">
+    <value>yt-dlp yolu (boşsa otomatik aranır):</value>
+  </data>
+  <data name="ChooseTheYtDlpFile" xml:space="preserve">
+    <value>yt-dlp dosyasını seç</value>
+  </data>
+  <data name="FfmpegPathOrFolderLeaveEmptyToSearch" xml:space="preserve">
+    <value>ffmpeg yolu veya klasörü (boşsa otomatik aranır):</value>
+  </data>
+  <data name="ChooseTheFfmpegFile" xml:space="preserve">
+    <value>ffmpeg dosyasını seç</value>
+  </data>
+  <data name="DefaultQuality" xml:space="preserve">
+    <value>Varsayılan kalite:</value>
+  </data>
+  <data name="OpenYtDlpDownloadsGithubComYtDlp" xml:space="preserve">
+    <value>yt-dlp indirme sayfası (github.com/yt-dlp/yt-dlp/releases)</value>
+  </data>
+  <data name="OpenFfmpegBuildsGyanDevFfmpegBuilds" xml:space="preserve">
+    <value>ffmpeg derlemeleri (gyan.dev/ffmpeg/builds)</value>
+  </data>
+  <data name="SearchOrderThisPathAPPDATATDownloaderTools" xml:space="preserve">
+    <value>Arama sırası: buradaki yol, %APPDATA%/T-Downloader/tools, uygulama klasörü/tools, PATH. T-Downloader bu araçları kendisi indirmez veya kurmaz; DRM korumalı içerik desteklenmez.</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Uygula</value>
+  </data>
+  <data name="Found" xml:space="preserve">
+    <value>Bulundu: </value>
+  </data>
+  <data name="YtDlpNotFoundUseTheInstallationLink" xml:space="preserve">
+    <value>yt-dlp bulunamadı — kurulum bilgisi için aşağıdaki bağlantıya bakın</value>
+  </data>
+  <data name="FfmpegNotFoundInstallItToMergeVideo" xml:space="preserve">
+    <value>ffmpeg bulunamadı (video+ses birleştirme için gerekir)</value>
+  </data>
+  <data name="ChooseAFolder" xml:space="preserve">
+    <value>Klasör seçin</value>
+  </data>
+  <data name="DownloadStatus" xml:space="preserve">
+    <value>İndirme durumu</value>
+  </data>
+  <data name="FileSize" xml:space="preserve">
+    <value>Dosya boyutu</value>
+  </data>
+  <data name="Downloaded" xml:space="preserve">
+    <value>İndirilen</value>
+  </data>
+  <data name="TransferSpeed2" xml:space="preserve">
+    <value>Aktarım hızı</value>
+  </data>
+  <data name="TimeRemaining2" xml:space="preserve">
+    <value>Kalan süre</value>
+  </data>
+  <data name="ResumeSupport" xml:space="preserve">
+    <value>Devam edebilir</value>
+  </data>
+  <data name="HideDetails" xml:space="preserve">
+    <value>&lt;&lt; detayları gizle</value>
+  </data>
+  <data name="Pause" xml:space="preserve">
+    <value>Duraklat</value>
+  </data>
+  <data name="StartPositionsAndDownloadProgressByConnection" xml:space="preserve">
+    <value>Bağlantılara göre başlangıç konumları ve indirme ilerlemesi</value>
+  </data>
+  <data name="Information" xml:space="preserve">
+    <value>Bilgi</value>
+  </data>
+  <data name="ShowDetails" xml:space="preserve">
+    <value>Detayları göster &gt;&gt;</value>
+  </data>
+  <data name="ActionFailedTryAgainDetails" xml:space="preserve">
+    <value>İşlem başarısız. Tekrar deneyin. Ayrıntılar: </value>
+  </data>
+  <data name="Yes" xml:space="preserve">
+    <value>Evet</value>
+  </data>
+  <data name="No" xml:space="preserve">
+    <value>Hayır</value>
+  </data>
+  <data name="Downloading2" xml:space="preserve">
+    <value>Alınıyor  {0}</value>
+  </data>
+  <data name="Connecting" xml:space="preserve">
+    <value>Bağlanıyor...</value>
+  </data>
+  <data name="Retrying" xml:space="preserve">
+    <value>Yeniden deneniyor ({0})</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>Başarısız</value>
+  </data>
+  <data name="Idle" xml:space="preserve">
+    <value>Boşta</value>
+  </data>
+  <data name="Monday" xml:space="preserve">
+    <value>Pazartesi</value>
+  </data>
+  <data name="Tuesday" xml:space="preserve">
+    <value>Salı</value>
+  </data>
+  <data name="Wednesday" xml:space="preserve">
+    <value>Çarşamba</value>
+  </data>
+  <data name="Thursday" xml:space="preserve">
+    <value>Perşembe</value>
+  </data>
+  <data name="Friday" xml:space="preserve">
+    <value>Cuma</value>
+  </data>
+  <data name="Saturday" xml:space="preserve">
+    <value>Cumartesi</value>
+  </data>
+  <data name="Sunday" xml:space="preserve">
+    <value>Pazar</value>
+  </data>
+  <data name="Scheduler2" xml:space="preserve">
+    <value>Zamanlayıcı</value>
+  </data>
+  <data name="StartAt" xml:space="preserve">
+    <value>Şu zamanda başlat:</value>
+  </data>
+  <data name="Days" xml:space="preserve">
+    <value>Günler:</value>
+  </data>
+  <data name="WhenTheQueueFinishesThisSelectionOnly" xml:space="preserve">
+    <value>Kuyruk bitince (yalnız bu seçim):</value>
+  </data>
+  <data name="DoNothing" xml:space="preserve">
+    <value>Hiçbir şey yapma</value>
+  </data>
+  <data name="ShowNotification" xml:space="preserve">
+    <value>Bildirim göster</value>
+  </data>
+  <data name="ExitApp30SCountdown" xml:space="preserve">
+    <value>Uygulamadan çık (30 sn geri sayım)</value>
+  </data>
+  <data name="QueuedFiles" xml:space="preserve">
+    <value>Kuyruktaki dosyalar:</value>
+  </data>
+  <data name="FileName2" xml:space="preserve">
+    <value>Dosya adı</value>
+  </data>
+  <data name="StartNow" xml:space="preserve">
+    <value>Şimdi başlat</value>
+  </data>
+  <data name="TheAppClosedUnexpectedly" xml:space="preserve">
+    <value>Uygulama beklenmedik şekilde kapandı</value>
+  </data>
+  <data name="YouCanHelpFixThisProblemByReporting" xml:space="preserve">
+    <value>İsterseniz bu hatayı bildirerek düzeltilmesine yardımcı olabilirsiniz. Rapor herkese açık bir GitHub sorunu olarak oluşturulur; kişisel bilgiler maskelenmiştir.</value>
+  </data>
+  <data name="PersonalDataMaskedErrorReport" xml:space="preserve">
+    <value>Maskelenmiş hata raporu</value>
+  </data>
+  <data name="ReportStatus" xml:space="preserve">
+    <value>Rapor durumu</value>
+  </data>
+  <data name="SendErrorReport2" xml:space="preserve">
+    <value>Raporu gönder</value>
+  </data>
+  <data name="ReportCopied" xml:space="preserve">
+    <value>Rapor kopyalandı.</value>
+  </data>
+  <data name="CouldNotCompleteTheActionTryAgain" xml:space="preserve">
+    <value>İşlem tamamlanamadı. Tekrar deneyebilirsiniz.</value>
+  </data>
+  <data name="Later" xml:space="preserve">
+    <value>Sonra</value>
+  </data>
+  <data name="SkipThisVersion" xml:space="preserve">
+    <value>Bu sürümü atla</value>
+  </data>
+  <data name="PleaseWait" xml:space="preserve">
+    <value>Bekleyin…</value>
+  </data>
+  <data name="TryAgain" xml:space="preserve">
+    <value>Tekrar dene</value>
+  </data>
+  <data name="UpdateNow" xml:space="preserve">
+    <value>Şimdi güncelle</value>
+  </data>
+  <data name="NewVersionAvailable" xml:space="preserve">
+    <value>Güncelleme var</value>
+  </data>
+  <data name="ThisVersionIsNoLongerSupportedUpdateTo" xml:space="preserve">
+    <value>Bu sürüm artık desteklenmiyor; devam etmek için güncelleyin.
+
+</value>
+  </data>
+  <data name="Installing" xml:space="preserve">
+    <value>Yükleniyor…</value>
+  </data>
+  <data name="Downloading3" xml:space="preserve">
+    <value>İndiriliyor… %{0}</value>
+  </data>
+  <data name="VideoSupportIsUnavailableInstallYtDlpIn" xml:space="preserve">
+    <value>Video desteği yok.</value>
+  </data>
+  <data name="TheMainWindowIsUnavailableOpenTDownloader" xml:space="preserve">
+    <value>Ana pencere yok.</value>
+  </data>
+  <data name="CouldNotApplyStartWithWindowsSettingsWere" xml:space="preserve">
+    <value>Windows ile başlat ayarı uygulanamadı. Ayarlar kaydedilmedi. İzinlerinizi kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="CouldNotOpenOrAddTheDownloadTry" xml:space="preserve">
+    <value>Ekleme/pencere hatası</value>
+  </data>
+  <data name="AURLIsRequiredEnterADownloadURL" xml:space="preserve">
+    <value>url gerekli</value>
+  </data>
+  <data name="ADownloadIDIsRequiredSelectADownload" xml:space="preserve">
+    <value>id gerekli</value>
+  </data>
+  <data name="ManualReport" xml:space="preserve">
+    <value>Manual report</value>
+  </data>
+  <data name="ErrorReportPreparedByTheUser" xml:space="preserve">
+    <value>Kullanıcı tarafından hazırlanan hata raporu</value>
+  </data>
+  <data name="OpenOnPhone" xml:space="preserve">
+    <value>Telefonda aç</value>
+  </data>
+  <data name="SendToPhone" xml:space="preserve">
+    <value>Telefona gönder</value>
+  </data>
+  <data name="CouldNotConnectToTBridgeOpenT" xml:space="preserve">
+    <value>T-Bridge'e bağlanılamadı. T-Bridge'i açıp tekrar deneyin.</value>
+  </data>
+  <data name="OpeningOnPhone" xml:space="preserve">
+    <value>Telefonda açılıyor</value>
+  </data>
+  <data name="SentToPhone" xml:space="preserve">
+    <value>Telefona gönderildi</value>
+  </data>
+  <data name="CouldNotSendToYourPhoneCheckThe" xml:space="preserve">
+    <value>Telefonunuza gönderilemedi. T-Bridge bağlantısını kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="CouldNotReadTheStreamOpenTheVideo" xml:space="preserve">
+    <value>Akış okunamadı: </value>
+  </data>
+  <data name="DownloadAll" xml:space="preserve">
+    <value>Tümünü indir</value>
+  </data>
+  <data name="YtDlpNotFoundInstallationInformation" xml:space="preserve">
+    <value>yt-dlp bulunamadı — kurulum bilgisi</value>
+  </data>
+  <data name="LoadingQualities" xml:space="preserve">
+    <value>Kaliteler yükleniyor…</value>
+  </data>
+  <data name="NoDownloadableMediaFoundOnThisPagePlay" xml:space="preserve">
+    <value>Bu sayfada indirilebilir medya bulunamadı</value>
+  </data>
+  <data name="OtherQualities" xml:space="preserve">
+    <value>Diğer kaliteler...</value>
+  </data>
+  <data name="ForAQualityNotListedHereSelectIt" xml:space="preserve">
+    <value>Burada listelenmeyen bir kalite için, videoyu oynatıcıda istediğiniz kaliteye ayarlayıp birkaç saniye oynatın.
+</value>
+  </data>
+  <data name="IfTheBrowserExtensionDetectsThatQualityURL" xml:space="preserve">
+    <value>Tarayıcı eklentisi o kalitenin adresini algılarsa bu listeye eklenir.
+
+Yine de bulamazsanız yt-dlp ile sayfa adresinden indirmeyi deneyin.</value>
+  </data>
+  <data name="TheAppIsNotReadyWaitAndTry" xml:space="preserve">
+    <value>Uygulama hazır değil.</value>
+  </data>
+  <data name="Cancelled" xml:space="preserve">
+    <value>İptal edildi.</value>
+  </data>
+  <data name="CachedQualityList" xml:space="preserve">
+    <value>  (kalite listesi önbellekten)</value>
+  </data>
+  <data name="HLSSelectionFailedTryAgainDetails" xml:space="preserve">
+    <value>  hls-set başarısız: </value>
+  </data>
+  <data name="YtDlpNotFoundSetItsPathIn" xml:space="preserve">
+    <value>yt-dlp bulunamadı. Ayarlar &gt; Video bölümünden yolunu belirtin.</value>
+  </data>
+  <data name="NoDownloadableMediaFoundOnThisPagePlay2" xml:space="preserve">
+    <value>Bu sayfada indirilebilir medya bulunamadı.</value>
+  </data>
+  <data name="TDownloaderVideoPanel" xml:space="preserve">
+    <value>T-Downloader video paneli</value>
+  </data>
+  <data name="TDownloaderVideoPanel2" xml:space="preserve">
+    <value>T-Downloader video paneli
+
+</value>
+  </data>
+  <data name="ClickTheButtonToViewVideoQualitiesA" xml:space="preserve">
+    <value>Düğmeye tıklayınca videonun kalite listesi açılır; tek bir medya varsa doğrudan indirilir.
+</value>
+  </data>
+  <data name="DragThePanelToMoveItSavedPer" xml:space="preserve">
+    <value>Paneli fare ile sürükleyerek taşıyabilirsiniz (site başına hatırlanır); yüzeyine çift tıklarsanız ilk konumuna döner.
+</value>
+  </data>
+  <data name="TheXButtonHidesThePanelInThis" xml:space="preserve">
+    <value>X düğmesi paneli bu sekmede gizler. Panel Ayarlar &gt; Video sekmesinden tamamen kapatılabilir.
+
+</value>
+  </data>
+  <data name="DRMContentIsNotSupportedChooseUnprotectedContent" xml:space="preserve">
+    <value>DRM korumalı içerikler desteklenmiyor. Korumasız bir içerik seçin.</value>
+  </data>
+  <data name="YtDlpNotFound" xml:space="preserve">
+    <value>yt-dlp bulunamadı.
+
+</value>
+  </data>
+  <data name="HLSDASHStreamsAndSitesSuchAsYouTube" xml:space="preserve">
+    <value>HLS/DASH akışları ve YouTube gibi siteler için yt-dlp (ve video+ses birleştirmek için ffmpeg) gerekir. T-Downloader bunları kendisi indirmez/kurmaz.
+
+</value>
+  </data>
+  <data name="FfmpegHttpsWwwGyanDevFfmpegBuildsOr" xml:space="preserve">
+    <value>• ffmpeg: https://www.gyan.dev/ffmpeg/builds/ (veya https://ffmpeg.org)
+
+</value>
+  </data>
+  <data name="PlaceYtDlpExeAndFfmpegExeIn" xml:space="preserve">
+    <value>yt-dlp.exe ve ffmpeg.exe dosyalarını şu klasöre koyun:
+</value>
+  </data>
+  <data name="OrSetTheirPathsInSettingsVideo" xml:space="preserve">
+    <value>ya da Ayarlar &gt; Video sekmesinden yollarını gösterin.
+
+</value>
+  </data>
+  <data name="OpenTheYtDlpDownloadPageInYour" xml:space="preserve">
+    <value>yt-dlp indirme sayfası tarayıcıda açılsın mı?</value>
+  </data>
+  <data name="YtDlpNotFound2" xml:space="preserve">
+    <value>yt-dlp bulunamadı</value>
+  </data>
+  <data name="Downloaded2" xml:space="preserve">
+    <value>İndirildi</value>
+  </data>
+  <data name="DownloadedBytes" xml:space="preserve">
+    <value>İndirildi: {0} ({1} bayt)</value>
+  </data>
+  <data name="Bytes" xml:space="preserve">
+    <value>{0} ({1:N0} bayt)</value>
+  </data>
+  <data name="S" xml:space="preserve">
+    <value>{0} sn</value>
+  </data>
+  <data name="MinS" xml:space="preserve">
+    <value>{0} dk {1} sn</value>
+  </data>
+  <data name="HMin" xml:space="preserve">
+    <value>{0} sa {1} dk</value>
+  </data>
+  <data name="CouldNotDeleteTheFileCode0xCheck" xml:space="preserve">
+    <value>Silme başarısız (kod 0x{0:X}): {1}</value>
+  </data>
+  <data name="MoveFilesTotalToTheRecycleBinYou" xml:space="preserve">
+    <value>{0} dosya diskten silinecek (toplam {1}). Dosyalar Geri Dönüşüm Kutusu'na gönderilecek; kutuya gönderilemeyen dosya için ayrıca sorulur (sessizce kalıcı silinmez). Emin misiniz?</value>
+  </data>
+  <data name="FilesWereKeptOnDiskBecauseRecyclingFailed" xml:space="preserve">
+    <value>{0} dosya Geri Dönüşüm Kutusu'na gönderilemediği ve kalıcı silme onaylanmadığı için diskte bırakıldı (listeden kaldırıldı).</value>
+  </data>
+  <data name="CouldNotMoveFilesToTheRecycleBin" xml:space="preserve">
+    <value>{0} dosya Geri Dönüşüm Kutusu'na gönderilemedi.</value>
+  </data>
+  <data name="DownloadThisVideo" xml:space="preserve">
+    <value>Bu videoyu indir</value>
+  </data>
+  <data name="DownloadThisVideoWithTDownloader" xml:space="preserve">
+    <value>Bu videoyu T-Downloader ile indir</value>
+  </data>
+  <data name="AboutThisPanel" xml:space="preserve">
+    <value>Bu panel hakkında</value>
+  </data>
+  <data name="CloseHideInThisTab" xml:space="preserve">
+    <value>Kapat (bu sekmede gizle)</value>
+  </data>
+  <data name="TheDownloadEngineIsAlreadyRunningWaitFor" xml:space="preserve">
+    <value>İndirme motoru zaten çalışıyor. Tamamlanmasını bekleyin.</value>
+  </data>
+  <data name="InvalidCookieOrHeaderValueRefreshThePage" xml:space="preserve">
+    <value>Çerez veya başlık değeri geçersiz. Sayfayı tarayıcınızda yenileyip tekrar deneyin.</value>
+  </data>
+  <data name="TheRemoteFileChangedDuringDownloadAddThe" xml:space="preserve">
+    <value>Uzak dosya indirme sırasında değişti. Bağlantıyı yeniden ekleyin.</value>
+  </data>
+  <data name="TheServerDidNotReturnAPartialResponse" xml:space="preserve">
+    <value>Sunucu parçalı yanıt vermedi. Tek bağlantıyla tekrar deneyin.</value>
+  </data>
+  <data name="TheServerReturnedAnUnexpectedRangeRequestedReceived" xml:space="preserve">
+    <value>Sunucu beklenmeyen aralık döndürdü (istenen {0}, gelen {1}). İndirmeyi yeniden başlatın.</value>
+  </data>
+  <data name="TheConnectionClosedEarlyCheckYourNetworkAnd" xml:space="preserve">
+    <value>Bağlantı beklenenden erken kapandı. Ağınızı kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="YourSessionCookieMayBeMissingAddThe" xml:space="preserve">
+    <value> — oturum çerezi bulunmuyor olabilir (çerezler güvenlik için kaydedilmez); bağlantıyı tarayıcıdan yeniden ekleyin.</value>
+  </data>
+  <data name="TooManyRedirectsCheckTheURLAndTry" xml:space="preserve">
+    <value>Çok fazla yönlendirme var. Adresi kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="UnsupportedRedirectURLUseAnHTTPOrHTTPS" xml:space="preserve">
+    <value>Yönlendirme adresi desteklenmiyor. HTTP veya HTTPS adresi kullanın.</value>
+  </data>
+  <data name="TooManyPendingConfirmationsCloseAConfirmationDialog" xml:space="preserve">
+    <value>Çok fazla onay penceresi bekliyor. Bir onay penceresini kapatıp tekrar deneyin.</value>
+  </data>
+  <data name="CouldNotProcessTheRequestWithin24Hours" xml:space="preserve">
+    <value>İstek 24 saat içinde işlenemedi. Bağlantıyı yeniden ekleyin.</value>
+  </data>
+  <data name="TheRequestFileIsDamagedAddTheURL" xml:space="preserve">
+    <value>İstek dosyası bozuk. Bağlantıyı yeniden ekleyin.</value>
+  </data>
+  <data name="TheRequestWasRejectedCheckTheURLAnd" xml:space="preserve">
+    <value>İstek reddedildi. Adresi kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="TheMessageIsEmptyTryAgain" xml:space="preserve">
+    <value>Mesaj boş. Tekrar deneyin.</value>
+  </data>
+  <data name="DisconnectedOpenTBridgeAndTryAgain" xml:space="preserve">
+    <value>Bağlantı koptu. T-Bridge'i açıp tekrar deneyin.</value>
+  </data>
+  <data name="DownloadsJsonWasDamagedThePreviousVersionDownloads" xml:space="preserve">
+    <value>downloads.json bozuktu; bir önceki sürüm (downloads.json.bak) yüklendi.</value>
+  </data>
+  <data name="TheDownloadListAndBackupCouldNotBe" xml:space="preserve">
+    <value>downloads.json bozuktu ve yedek okunamadı; liste boş başlatıldı (bozuk dosya downloads.json.corrupt olarak saklandı).</value>
+  </data>
+  <data name="DownloadsJsonWasMissingTheBackupDownloadsJson" xml:space="preserve">
+    <value>downloads.json yoktu; yedekten (downloads.json.bak) yüklendi.</value>
+  </data>
+  <data name="InvalidURLEnterAnHTTPOrHTTPSURL" xml:space="preserve">
+    <value>Adres geçersiz. Bir HTTP veya HTTPS adresi girin.</value>
+  </data>
+  <data name="VideoDownloaderYtDlpIsNotConfiguredSet" xml:space="preserve">
+    <value>Video indirici (yt-dlp) yapılandırılmamış. Ayarlar &gt; Video bölümünden yolunu belirtin.</value>
+  </data>
+  <data name="QueueFinishedExitingInSStopTheQueue" xml:space="preserve">
+    <value>Kuyruk bitti; {0} sn içinde çıkılacak (iptal için kuyruğu durdurun).</value>
+  </data>
+  <data name="AllQueuedDownloadsCompleted" xml:space="preserve">
+    <value>Kuyruktaki tüm indirmeler tamamlandı.</value>
+  </data>
+  <data name="ThePlaylistIsTooLargeChooseAnotherStream" xml:space="preserve">
+    <value>Oynatma listesi çok büyük. Başka bir akış seçin.</value>
+  </data>
+  <data name="TheServerTimedOutWhileLoadingThePlaylist" xml:space="preserve">
+    <value>Oynatma listesi yüklenirken zaman aşımı oldu. Ağınızı kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="InvalidURLEnterAValidHTTPOrHTTPS" xml:space="preserve">
+    <value>Adres geçersiz. Geçerli bir HTTP veya HTTPS adresi girin.</value>
+  </data>
+  <data name="TheURLIsNotAnHLSPlaylistChoose" xml:space="preserve">
+    <value>Adres bir HLS oynatma listesi değil. Geçerli bir akış seçin.</value>
+  </data>
+  <data name="ThePlaylistHasNoSegmentsPlayTheVideo" xml:space="preserve">
+    <value>Oynatma listesinde parça yok. Videoyu oynatıp tekrar deneyin.</value>
+  </data>
+  <data name="LiveStreamsAreNotSupportedChooseARecorded" xml:space="preserve">
+    <value>Canlı yayınlar desteklenmiyor. Kaydedilmiş bir video seçin.</value>
+  </data>
+  <data name="DRMProtectedContentCannotBeDownloadedChooseUnprotected" xml:space="preserve">
+    <value>DRM korumalı içerikler indirilemiyor. Korumasız bir içerik seçin (</value>
+  </data>
+  <data name="DefaultQuality2" xml:space="preserve">
+    <value>Varsayılan kalite</value>
+  </data>
+  <data name="FfmpegIsRequiredToMergeSeparateVideoAnd" xml:space="preserve">
+    <value>Ayrı ses ve görüntü akışlarını birleştirmek için ffmpeg gerekiyor. Ayarlar &gt; Video bölümünden yolunu belirtin.</value>
+  </data>
+  <data name="Converting" xml:space="preserve">
+    <value>Dönüştürülüyor %{0}</value>
+  </data>
+  <data name="Converting0" xml:space="preserve">
+    <value>Dönüştürülüyor %0</value>
+  </data>
+  <data name="FfmpegCouldNotMergeVideoAndAudioDownloaded" xml:space="preserve">
+    <value>ffmpeg ses ve görüntüyü birleştiremedi; indirilen parçalar korundu. ffmpeg yolunu kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="NotEnoughDiskSpaceFreeAboutRequiredFree" xml:space="preserve">
+    <value>Diskte yeterli boş alan yok ({0}): {1} boş, yaklaşık {2} gerekli ({3}). Yer açın veya indirme konumunu değiştirin.</value>
+  </data>
+  <data name="InvalidAESKeyChooseAnUnprotectedStream" xml:space="preserve">
+    <value>AES anahtarı geçersiz. Korumasız bir akış seçin (</value>
+  </data>
+  <data name="WhenStartingTheDownload" xml:space="preserve">
+    <value>indirme başlarken</value>
+  </data>
+  <data name="TheDownloadTimedOutCheckYourNetworkAnd" xml:space="preserve">
+    <value>İndirme zaman aşımı nedeniyle durdu. Ağınızı kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="TheDownloadStoppedWithMissingSegmentsRetryTo" xml:space="preserve">
+    <value>İndirme eksik parçalarla yarıda kesildi. Devam etmek için tekrar deneyin.</value>
+  </data>
+  <data name="BeforeMerging" xml:space="preserve">
+    <value>birleştirmeden önce</value>
+  </data>
+  <data name="Merging" xml:space="preserve">
+    <value>Birleştiriliyor %{0}</value>
+  </data>
+  <data name="TheServerRefusedASegmentHTTPRefreshThe" xml:space="preserve">
+    <value>Sunucu parçayı vermedi (HTTP {0}). Sayfayı yenileyip bağlantıyı yeniden ekleyin.</value>
+  </data>
+  <data name="ASegmentExceedsTheSizeLimitMBMB" xml:space="preserve">
+    <value>Parça boyut sınırını aşıyor ({0} MB &gt; {1} MB). Başka bir akış seçin.</value>
+  </data>
+  <data name="ASegmentExceedsTheSizeLimitChooseAnother" xml:space="preserve">
+    <value>Parça boyut sınırını aşıyor. Başka bir akış seçin.</value>
+  </data>
+  <data name="CouldNotDownloadASegmentCheckYourNetwork" xml:space="preserve">
+    <value>Parça indirilemedi. Ağınızı kontrol edip tekrar deneyin. Ayrıntılar: </value>
+  </data>
+  <data name="SAMPLEAESEncryptedStream" xml:space="preserve">
+    <value>SAMPLE-AES şifreli akış</value>
+  </data>
+  <data name="DRMKey" xml:space="preserve">
+    <value>DRM anahtarı (</value>
+  </data>
+  <data name="NoStreamURLFoundPlayTheVideoAnd" xml:space="preserve">
+    <value>Akış adresi bulunamadı. Videoyu oynatıp tekrar deneyin.</value>
+  </data>
+  <data name="NoUsableVODHLSPlaylistFoundPlayA" xml:space="preserve">
+    <value>Kullanılabilir VOD HLS oynatma listesi bulunamadı. Kaydedilmiş bir videoyu oynatıp tekrar deneyin.</value>
+  </data>
+  <data name="QualityHls" xml:space="preserve">
+    <value>Kalite {0} hls{1}</value>
+  </data>
+  <data name="AudioHls" xml:space="preserve">
+    <value>Ses {0} hls</value>
+  </data>
+  <data name="OtherStreamHls" xml:space="preserve">
+    <value>Diğer akış {0} ({1}) hls</value>
+  </data>
+  <data name="PHlsUnverified" xml:space="preserve">
+    <value>{0}p hls (doğrulanamadı)</value>
+  </data>
+  <data name="DownloadedSegmentsKeptRestartToResume" xml:space="preserve">
+    <value> (inen parçalar korundu; yeniden başlatınca kaldığı yerden devam eder)</value>
+  </data>
+  <data name="CouldNotStartYtDlpCheckItsPath" xml:space="preserve">
+    <value>yt-dlp başlatılamadı. Ayarlar &gt; Video bölümündeki yolunu kontrol edin. Ayrıntılar: </value>
+  </data>
+  <data name="YtDlpTimedOutCheckYourNetworkAnd" xml:space="preserve">
+    <value>yt-dlp zaman aşımına uğradı. Ağınızı kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="CouldNotReadYtDlpOutputUpdateYt" xml:space="preserve">
+    <value>yt-dlp çıktısı okunamadı. yt-dlp aracını güncelleyip tekrar deneyin.</value>
+  </data>
+  <data name="YtDlpNotFoundSetItsPathIn2" xml:space="preserve">
+    <value>yt-dlp bulunamadı. Ayarlar &gt; Video sekmesinden yolunu belirtin veya kurulum bilgisine bakın.</value>
+  </data>
+  <data name="BestQuality" xml:space="preserve">
+    <value>En iyi kalite</value>
+  </data>
+  <data name="AudioOnly" xml:space="preserve">
+    <value>Yalnızca ses ({0}){1}</value>
+  </data>
+  <data name="DRMProtectedContentCannotBeDownloadedChooseUnprotected2" xml:space="preserve">
+    <value>DRM korumalı içerikler indirilemiyor. Korumasız bir içerik seçin.</value>
+  </data>
+  <data name="FfmpegNotFoundSetItsPathInSettings" xml:space="preserve">
+    <value>ffmpeg bulunamadı. Video ve ses birleştirilemiyor; Ayarlar &gt; Video sekmesinden ffmpeg yolunu belirtin.</value>
+  </data>
+  <data name="YtDlpDoesNotSupportThisURLChoose" xml:space="preserve">
+    <value>yt-dlp bu adresi desteklemiyor. Desteklenen bir video adresi seçin.</value>
+  </data>
+  <data name="ThisVideoRequiresSignInSignInThrough" xml:space="preserve">
+    <value>Bu video için oturum açmanız gerekiyor. Tarayıcınızda oturum açıp bağlantıyı yeniden ekleyin.</value>
+  </data>
+  <data name="ThisVideoIsUnavailablePrivateRemovedOrRegion" xml:space="preserve">
+    <value>Video kullanılamıyor (özel, silinmiş veya bölgenize kapalı olabilir). Başka bir video seçin.</value>
+  </data>
+  <data name="TheServerDeniedAccessHTTP403SignIn" xml:space="preserve">
+    <value>Sunucu erişimi reddetti (HTTP 403). Tarayıcınızda oturum açıp tekrar deneyin.</value>
+  </data>
+  <data name="VideoNotFoundHTTP404CheckTheURL" xml:space="preserve">
+    <value>Video bulunamadı (HTTP 404). Adresi kontrol edin veya başka bir video seçin.</value>
+  </data>
+  <data name="CouldNotReachTheServerCheckYourNetwork" xml:space="preserve">
+    <value>Sunucuya ulaşılamadı. Ağınızı kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="YtDlpFailedUpdateYtDlpAndTry" xml:space="preserve">
+    <value>yt-dlp başarısız oldu. yt-dlp aracını güncelleyip tekrar deneyin.</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>Dil</value>
+  </data>
+  <data name="SystemLanguage" xml:space="preserve">
+    <value>Sistem dili (varsayılan)</value>
+  </data>
+  <data name="Turkish" xml:space="preserve">
+    <value>Türkçe</value>
+  </data>
+  <data name="English" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="German" xml:space="preserve">
+    <value>Deutsch</value>
+  </data>
+  <data name="RestartLanguage" xml:space="preserve">
+    <value>Dil tercihiniz kaydedildi. Yeni dili uygulamak için T-Downloader'ı yeniden başlatmak ister misiniz?</value>
+  </data>
+  <data name="LanguageSaved" xml:space="preserve">
+    <value>Dil tercihi kaydedildi</value>
+  </data>
+  <data name="BridgeInvitationTitle" xml:space="preserve">
+    <value>Dosyanızı telefonunuzda kullanın</value>
+  </data>
+  <data name="BridgeInvitationBody" xml:space="preserve">
+    <value>Bu dosyayı telefonunuza göndermek ister misiniz? T-Bridge ile tek tıkla.</value>
+  </data>
+  <data name="GetBridge" xml:space="preserve">
+    <value>T-Bridge'i edinin</value>
+  </data>
+  <data name="PhoneDisconnected" xml:space="preserve">
+    <value>Telefonunuz bağlı değil — T-Bridge'i telefonda açın.</value>
+  </data>
+  <data name="DatePattern" xml:space="preserve">
+    <value>dd.MM.yyyy HH:mm</value>
+  </data>
+  <data name="SizeBytes" xml:space="preserve">
+    <value>{0} ({1:N0} bayt)</value>
+  </data>
+  <data name="Seconds" xml:space="preserve">
+    <value>{0} sn</value>
+  </data>
+  <data name="MinutesSeconds" xml:space="preserve">
+    <value>{0} dk {1} sn</value>
+  </data>
+  <data name="HoursMinutes" xml:space="preserve">
+    <value>{0} sa {1} dk</value>
+  </data>
+  <data name="PerSecond" xml:space="preserve">
+    <value>/sn</value>
+  </data>
+  <data name="GetApp" xml:space="preserve">
+    <value>{0} uygulamasını edinin</value>
+  </data>
+  <data name="CategoryCompressed" xml:space="preserve">
+    <value>Sıkıştırılmış</value>
+  </data>
+  <data name="CategoryDocuments" xml:space="preserve">
+    <value>Belgeler</value>
+  </data>
+  <data name="CategoryMusic" xml:space="preserve">
+    <value>Müzik</value>
+  </data>
+  <data name="CategoryPrograms" xml:space="preserve">
+    <value>Programlar</value>
+  </data>
+  <data name="CategoryVideo" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="CategoryPictures" xml:space="preserve">
+    <value>Resimler</value>
+  </data>
+  <data name="CategoryGeneral" xml:space="preserve">
+    <value>Genel</value>
+  </data>
+  <data name="DownloadFailed" xml:space="preserve">
+    <value>İndirme başarısız. Bağlantınızı kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="FileLabel" xml:space="preserve">
+    <value>Dosya:</value>
+  </data>
+  <data name="SizeLabel" xml:space="preserve">
+    <value>Boyut:</value>
+  </data>
+  <data name="VideoLabel" xml:space="preserve">
+    <value>Video: </value>
+  </data>
+  <data name="ConnectionNumber" xml:space="preserve">
+    <value>No.</value>
+  </data>
+  <data name="AllExecutables" xml:space="preserve">
+    <value>Tüm çalıştırılabilir dosyalar</value>
+  </data>
+  <data name="NoMasterQuality" xml:space="preserve">
+    <value>Ana oynatma listesinde kalite yok. Başka bir akış seçin.</value>
+  </data>
+  <data name="AppName" xml:space="preserve">
+    <value>T-Downloader</value>
+  </data>
+  <data name="InstagramLabel" xml:space="preserve">
+    <value>Instagram:</value>
+  </data>
+  <data name="UrlLabel" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="Md5Label" xml:space="preserve">
+    <value>MD5:</value>
+  </data>
+  <data name="Sha256Label" xml:space="preserve">
+    <value>SHA-256:</value>
+  </data>
+  <data name="DeveloperSignature" xml:space="preserve">
+    <value>Taha Şaprak</value>
+  </data>
+  <data name="ExtDownload" xml:space="preserve">
+    <value>T-Downloader ile indir</value>
+  </data>
+  <data name="ExtAllLinks" xml:space="preserve">
+    <value>Tüm bağlantıları T-Downloader ile indir</value>
+  </data>
+  <data name="ExtSelectedLinks" xml:space="preserve">
+    <value>Seçili bağlantıları indir</value>
+  </data>
+  <data name="ExtVideoDownload" xml:space="preserve">
+    <value>Bu videoyu indir</value>
+  </data>
+  <data name="ExtNoReply" xml:space="preserve">
+    <value>T-Downloader yanıt vermedi. Uygulamayı açıp tekrar deneyin.</value>
+  </data>
+  <data name="ExtLoading" xml:space="preserve">
+    <value>Kaliteler okunuyor…</value>
+  </data>
+  <data name="ExtRetry" xml:space="preserve">
+    <value>↻ Tekrar dene</value>
+  </data>
+  <data name="ExtOtherFiles" xml:space="preserve">
+    <value>Diğer dosyalar</value>
+  </data>
+  <data name="ExtFile" xml:space="preserve">
+    <value>Dosya</value>
+  </data>
+  <data name="ExtAudioOnly" xml:space="preserve">
+    <value>Yalnızca ses</value>
+  </data>
+  <data name="ExtVideo" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ExtSending" xml:space="preserve">
+    <value>Gönderiliyor…</value>
+  </data>
+  <data name="ExtSent" xml:space="preserve">
+    <value>✓ T-Downloader'a gönderildi</value>
+  </data>
+  <data name="ExtSendFailed" xml:space="preserve">
+    <value>T-Downloader'a ulaşılamadı. Uygulamayı açıp tekrar deneyin.</value>
+  </data>
+  <data name="ExtNeedTool" xml:space="preserve">
+    <value>Bu video için yt-dlp gerekiyor. Ayarlar &gt; Video bölümünden yolunu belirtin.</value>
+  </data>
+  <data name="ExtVideoFailed" xml:space="preserve">
+    <value>Video okunamadı. Videoyu oynatıp tekrar deneyin.</value>
+  </data>
+  <data name="ExtConnected" xml:space="preserve">
+    <value>Bağlı</value>
+  </data>
+  <data name="ExtVersion" xml:space="preserve">
+    <value> (sürüm {0})</value>
+  </data>
+  <data name="ExtDisconnected" xml:space="preserve">
+    <value>Uygulamaya bağlı değil</value>
+  </data>
+  <data name="ExtOfflineHint" xml:space="preserve">
+    <value>T-Downloader kurulu veya açık değilse indirmeler tarayıcıda kalır. Uygulamayı açın.</value>
+  </data>
+  <data name="ExtChecking" xml:space="preserve">
+    <value>Denetleniyor…</value>
+  </data>
+  <data name="ExtCapture" xml:space="preserve">
+    <value>Tarayıcı indirmelerini devral</value>
+  </data>
+  <data name="ExtPauseSite" xml:space="preserve">
+    <value>Bu sitede duraklat</value>
+  </data>
+  <data name="ExtPauseHost" xml:space="preserve">
+    <value>Bu sitede duraklat ({0})</value>
+  </data>
+  <data name="ExtDescription" xml:space="preserve">
+    <value>T-Downloader masaüstü uygulamasıyla indirmeleri ve videoları yakalar.</value>
+  </data>
+  <data name="BytesSuffix" xml:space="preserve">
+    <value> bayt).</value>
+  </data>
+  <data name="Legal" xml:space="preserve">
+    <value>Yasal</value>
+  </data>
+  <data name="Privacy" xml:space="preserve">
+    <value>Gizlilik politikası</value>
+  </data>
+  <data name="License" xml:space="preserve">
+    <value>Lisans</value>
+  </data>
+  <data name="Notices" xml:space="preserve">
+    <value>Açık kaynak bildirimleri</value>
+  </data>
+  <data name="QueuedForPhone" xml:space="preserve">
+    <value>Dosya telefonunuza gönderilmek üzere sıraya alındı.</value>
+  </data>
+</root>

@@ -1,4 +1,4 @@
-using TDownloader.Core.Video;
+﻿using TDownloader.Core.Video;
 
 namespace TDownloader.Core.Tests;
 
@@ -30,7 +30,7 @@ public class YtDlpParsingTests
         Assert.StartsWith("720p60 mp4", o[1].Label);
         Assert.StartsWith("360p mp4", o[2].Label);
         Assert.Equal("18", o[2].Format);                                      // birleşik format, ses eklenmeden
-        Assert.Equal("Sadece ses (m4a) (3 MB)", o[3].Label);
+        Assert.Equal("Yalnızca ses (m4a) (3 MB)", o[3].Label);
         Assert.True(o[3].AudioOnly);
         Assert.Equal("m4a", o[3].Ext);
         Assert.Contains("MB", o[0].Label);
@@ -95,7 +95,7 @@ public class YtDlpParsingTests
 
     [Theory]
     [InlineData("ERROR: [youtube] abc: This video is DRM protected", "DRM")]
-    [InlineData("ERROR: Unsupported URL: https://x.test/", "desteklenmiyor")]
+    [InlineData("ERROR: Unsupported URL: https://x.test/", "desteklemiyor")]
     [InlineData("ERROR: [youtube] abc: Sign in to confirm you are not a bot", "oturum")]
     [InlineData("ERROR: [youtube] abc: Video unavailable", "kullanılamıyor")]
     [InlineData("ERROR: unable to download video data: HTTP Error 403: Forbidden", "403")]
@@ -115,3 +115,4 @@ public class YtDlpParsingTests
         Assert.Equal("https://x.test/v", a[^1]); Assert.Equal("--", a[^2]);
     }
 }
+

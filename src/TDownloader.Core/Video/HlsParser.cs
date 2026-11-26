@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -187,9 +188,9 @@ public static class HlsParser
     {
         foreach (var k in m.Segments.Select(s => s.Key).Where(k => k != null).Distinct())
         {
-            if (k!.Method.StartsWith("SAMPLE-AES", StringComparison.Ordinal)) return "SAMPLE-AES şifreli akış";
+            if (k!.Method.StartsWith("SAMPLE-AES", StringComparison.Ordinal)) return Strings.SAMPLEAESEncryptedStream;
             string kf = (k.KeyFormat ?? "identity").ToLowerInvariant();
-            if (kf != "identity") return "DRM anahtarı (" + kf + ")";
+            if (kf != "identity") return Strings.DRMKey + kf + ")";
             if (k.Uri != null && k.Uri.StartsWith("skd:", StringComparison.OrdinalIgnoreCase)) return "FairPlay DRM";
         }
         return null;

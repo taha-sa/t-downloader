@@ -1,3 +1,5 @@
+import "./localization.js";
+const L = globalThis.TDownloaderLocale;
 // T-Downloader service worker: bağlantıları kurar, olayları ilgili modüllere yönlendirir.
 import * as native from "./lib/native.js";
 import * as settings from "./lib/settings.js";
@@ -25,7 +27,7 @@ let hostVersion = null;
 // ---- App -> eklenti ----
 native.onHostMessage((msg) => {
   if (msg.type === "settings") {
-    settings.applyAppSettings(msg); broadcastCfg(); capture.syncUi();
+    L.set(msg.language); menus.createMenus(); settings.applyAppSettings(msg); broadcastCfg(); capture.syncUi();
     media.resendAll();      // App yeni bağlandığında ilk mesaj budur: açık sayfaların medya listesini yeniden gönder (A8)
   }
   else if (msg.type === "hideButton" && Number.isInteger(msg.tabId)) geometry.hideTab(msg.tabId);
@@ -86,7 +88,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           frameUrl: sender.url, src: msg.src, players, cookies,
         }), (m) => m.type === "qualitiesResult" && m.requestId === requestId, 100000);
         qlist.done(requestId);
-        sendResponse(res ? { ...res } : { ok: false, errorCode: "silent", error: "T-Downloader yanıt vermedi. Uygulama çalışıyor mu?" });
+        sendResponse(res ? { ...res } : { ok: false, errorCode: "silent", error: L.t("ExtNoReply") });
       })();
       return true;
     case "qualitiesCancel":
@@ -108,6 +110,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           hostOk: !!pong,
           version: pong?.version || hostVersion,
           captureEnabled: settings.getUserCapture(),
+          language: settings.uiConfig().language,
           error: native.getLastError(),
         });
       })();
@@ -128,4 +131,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
+settings.ready.then(() => { L.set(settings.uiConfig().language); menus.createMenus(); });
 native.connect();

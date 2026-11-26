@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using TDownloader.Core.Ipc;
 
 namespace TDownloader.App.Services;
@@ -38,7 +39,7 @@ public sealed class InboxService : IDisposable
                 {
                     // Dosya YALNIZ iş hatasız bittiğinde (eklendi / kullanıcı iptal etti) silinir; hata olursa saklanır ve bildirilir.
                     if (ok) { try { File.Delete(path); } catch (IOException) { } }
-                    else if (InboxSpool.MoveToFailed(path, "Ekleme/pencere hatası") is { } dest) Notify(dest);
+                    else if (InboxSpool.MoveToFailed(path, Strings.CouldNotOpenOrAddTheDownloadTry) is { } dest) Notify(dest);
                 }
                 finally { _inflight.TryRemove(id, out _); }
             });

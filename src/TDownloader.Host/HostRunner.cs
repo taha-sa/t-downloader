@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Diagnostics;
 using System.Text;
 using TDownloader.Core.Ipc;
@@ -92,7 +93,7 @@ public sealed class HostRunner
             // Yanıtsız bırakılırsa düğme menüsü 100 sn "Kaliteler okunuyor" döner: hemen hata dön.
             _log.Write($"App yok; qualities {q.RequestId} hata ile yanıtlandı.");
             await WriteToBrowserAsync(new QualitiesResultMessage(q.RequestId, false,
-                "T-Downloader çalışmıyor veya başlatılamadı. Uygulamayı açıp tekrar deneyin.", "error", null, null, null), ct).ConfigureAwait(false);
+                Strings.TDownloaderIsNotRunningOrCouldNot, "error", null, null, null), ct).ConfigureAwait(false);
         }
         else
         {

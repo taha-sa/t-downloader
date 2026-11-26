@@ -33,7 +33,9 @@ public sealed class CookieJarFile : IDisposable
     /// <summary>"a=1; b=2" -> Netscape satırları (alan adı .host, alt alanlar dahil, gizli çerez, uzak bitiş).</summary>
     internal static string Build(string host, string cookieHeader)
     {
-        string domain = "." + host.Trim().TrimStart('.');
+        string cleanHost = host.Trim().TrimStart('.');
+        if (cleanHost.Length == 0 || cleanHost.Any(c => c < 0x21 || c == 0x7F || c == '/' || c == '\\')) return "";
+        string domain = "." + cleanHost;
         var sb = new StringBuilder("# Netscape HTTP Cookie File\n");
         int n = 0;
         foreach (var part in cookieHeader.Split(';'))
@@ -41,7 +43,7 @@ public sealed class CookieJarFile : IDisposable
             int eq = part.IndexOf('=');
             if (eq <= 0) continue;
             string name = part[..eq].Trim(), value = part[(eq + 1)..].Trim();
-            if (name.Length == 0 || name.Contains('\t') || value.Contains('\t') || name.Contains('\n') || value.Contains('\n') || value.Contains('\r')) continue;
+            if (name.Length == 0 || name.IndexOfAny(['\t', '\r', '\n']) >= 0 || value.IndexOfAny(['\t', '\r', '\n']) >= 0) continue;
             sb.Append(domain).Append("\tTRUE\t/\tFALSE\t2147483647\t").Append(name).Append('\t').Append(value).Append('\n');
             n++;
         }

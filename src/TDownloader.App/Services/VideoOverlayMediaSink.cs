@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Diagnostics;
 using TDownloader.App.Ui;
 using TDownloader.Core.Ipc;
@@ -334,7 +335,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
                 catch (Exception ex) when (ex is HlsException or HttpRequestException or OperationCanceledException or UriFormatException)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (_yt.FindYtDlp() == null) throw new YtDlpException("Akış okunamadı: " + ex.Message);
+                    if (_yt.FindYtDlp() == null) throw new YtDlpException(Strings.CouldNotReadTheStreamOpenTheVideo + ex.Message);
                 }
             }
             await _ytGate.WaitAsync(ct).ConfigureAwait(false);
@@ -365,7 +366,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         }
         if (direct.Count >= 2)
         {
-            var all = new ToolStripMenuItem("Tümünü indir");
+            var all = new ToolStripMenuItem(Strings.DownloadAll);
             all.Click += (_, _) => { foreach (var d in direct) DownloadDirect(d, page, tab.PageTitle); };
             menu.Items.Insert(0, all);
             menu.Items.Insert(1, new ToolStripSeparator());
@@ -376,24 +377,24 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         {
             if (!hls && _yt.FindYtDlp() == null)
             {
-                var miss = new ToolStripMenuItem("yt-dlp bulunamadı — kurulum bilgisi") { ForeColor = Theme.Danger };
+                var miss = new ToolStripMenuItem(Strings.YtDlpNotFoundInstallationInformation) { ForeColor = Theme.Danger };
                 miss.Click += (_, _) => ShowInstallInfo();
                 menu.Items.Add(miss);
             }
             else
             {
-                loading = new ToolStripMenuItem("Kaliteler yükleniyor…") { Enabled = false };
+                loading = new ToolStripMenuItem(Strings.LoadingQualities) { Enabled = false };
                 menu.Items.Add(loading);
             }
         }
         else if (direct.Count == 0)
         {
-            menu.Items.Add(new ToolStripMenuItem("Bu sayfada indirilebilir medya bulunamadı") { Enabled = false });
+            menu.Items.Add(new ToolStripMenuItem(Strings.NoDownloadableMediaFoundOnThisPagePlay) { Enabled = false });
         }
         menu.Items.Add(new ToolStripSeparator());
-        var other = new ToolStripMenuItem("Diğer kaliteler...");
-        other.Click += (_, _) => Msg("Burada listelenmeyen bir kalite için, videoyu oynatıcıda istediğiniz kaliteye ayarlayıp birkaç saniye oynatın.\n" +
-                                      "Tarayıcı eklentisi o kalitenin adresini algılarsa bu listeye eklenir.\n\nYine de bulamazsanız yt-dlp ile sayfa adresinden indirmeyi deneyin.",
+        var other = new ToolStripMenuItem(Strings.OtherQualities);
+        other.Click += (_, _) => Msg(Strings.ForAQualityNotListedHereSelectIt +
+                                      Strings.IfTheBrowserExtensionDetectsThatQualityURL,
                                       MessageBoxIcon.Information);
         menu.Items.Add(other);
 
@@ -425,9 +426,9 @@ public sealed class VideoOverlayMediaSink : IMediaSink
                     Post(() => { if (ReferenceEquals(_menu, menu)) FillQualities(menu, loadingItem, info, src, ctx, page ?? referer); });
                 }
                 catch (OperationCanceledException) { }
-                catch (YtDlpNotFoundException) { Post(() => ReplaceLoading(menu, loadingItem, "yt-dlp bulunamadı — kurulum bilgisi", ShowInstallInfo)); }
-                catch (YtDlpException ex) { Post(() => ReplaceLoading(menu, loadingItem, "Hata: " + Shorten(ex.Message, 80), () => Msg(ex.Message, MessageBoxIcon.Warning))); }
-                catch (Exception ex) { Post(() => ReplaceLoading(menu, loadingItem, "Hata: " + Shorten(ex.Message, 80), null)); }
+                catch (YtDlpNotFoundException) { Post(() => ReplaceLoading(menu, loadingItem, Strings.YtDlpNotFoundInstallationInformation, ShowInstallInfo)); }
+                catch (YtDlpException ex) { Post(() => ReplaceLoading(menu, loadingItem, Strings.ActionFailedTryAgainDetails + Shorten(ex.Message, 80), () => Msg(ex.Message, MessageBoxIcon.Warning))); }
+                catch (Exception ex) { Post(() => ReplaceLoading(menu, loadingItem, Strings.ActionFailedTryAgainDetails + Shorten(ex.Message, 80), null)); }
             });
         }
     }
@@ -484,7 +485,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     public async Task<QualitiesResultMessage> GetQualitiesAsync(QualitiesMessage q)
     {
         static QualitiesResultMessage Fail(string id, string msg, string code) => new(id, false, msg, code, null, null, null);
-        if (_svc == null) return Fail(q.RequestId, "Uygulama hazır değil.", "error");
+        if (_svc == null) return Fail(q.RequestId, Strings.TheAppIsNotReadyWaitAndTry, "error");
 
         var tcs = new TaskCompletionSource<(Sources S, string? Title, string? Page, Snap Snap, CancellationToken Ct)>(TaskCreationOptions.RunContinuationsAsynchronously);
         Post(() =>
@@ -516,7 +517,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         });
         var (src, pageTitle, pageUrl, snap, reqCt) = await tcs.Task.ConfigureAwait(false);
         try { return await BuildQualitiesAsync(q, src, pageTitle, pageUrl, snap, reqCt).ConfigureAwait(false); }
-        catch (OperationCanceledException) when (reqCt.IsCancellationRequested) { return Fail(q.RequestId, "İptal edildi.", "error"); }
+        catch (OperationCanceledException) when (reqCt.IsCancellationRequested) { return Fail(q.RequestId, Strings.Cancelled, "error"); }
         finally { Post(() => { if (_running.Remove(q.RequestId, out var r)) r.Cts.Dispose(); }); }
     }
 
@@ -534,7 +535,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
 
         var entries = new List<Entry>();
         var infos = new List<QualityOptionInfo>();
-        string title = string.IsNullOrWhiteSpace(pageTitle) ? "Video" : pageTitle!;
+        string title = string.IsNullOrWhiteSpace(pageTitle) ? Strings.Video : pageTitle!;
         string? error = null, code = null;
         string? streamSource = src.Source;
         var ctx = src.Ctx;
@@ -566,7 +567,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             {
                 bool fresh = !_info.Contains(key);
                 var info = await _info.GetOrStart(key, ct => _hls.GetInfoSetAsync(cands, ctx, pageTitle, probeMaster: true, l => Mlog.Write("  " + l), ct), reqCt).ConfigureAwait(false);
-                if (!fresh) Mlog.Write("  (kalite listesi önbellekten)");
+                if (!fresh) Mlog.Write(Strings.CachedQualityList);
                 if (!string.IsNullOrWhiteSpace(info.Title)) title = info.Title;
                 streamOpts.AddRange(info.Options.Where(o => !o.Other));
                 otherOpts.AddRange(info.Options.Where(o => o.Other));
@@ -575,9 +576,9 @@ public sealed class VideoOverlayMediaSink : IMediaSink
             catch (Exception ex) when (ex is HlsException or HttpRequestException or OperationCanceledException or UriFormatException)
             {
                 reqCt.ThrowIfCancellationRequested();
-                Mlog.Write("  hls-set başarısız: " + Scrub(ex.Message));
+                Mlog.Write(Strings.HLSSelectionFailedTryAgainDetails + Scrub(ex.Message));
                 // yt-dlp'ye düş (varsa): en yeni akış adresiyle
-                if (_yt.FindYtDlp() == null) { error = "Akış okunamadı: " + ex.Message; code = "error"; }
+                if (_yt.FindYtDlp() == null) { error = Strings.CouldNotReadTheStreamOpenTheVideo + ex.Message; code = "error"; }
                 else
                 {
                     try
@@ -595,7 +596,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         }
         else if (streamSource != null)
         {
-            if (!src.Hls && _yt.FindYtDlp() == null) { error = "yt-dlp bulunamadı."; code = "no_ytdlp"; }
+            if (!src.Hls && _yt.FindYtDlp() == null) { error = Strings.YtDlpNotFoundSetItsPathIn; code = "no_ytdlp"; }
             else
             {
                 try
@@ -605,7 +606,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
                     streamOpts.AddRange(info.Options);
                 }
                 catch (OperationCanceledException) when (reqCt.IsCancellationRequested) { throw; }
-                catch (YtDlpNotFoundException) { error = "yt-dlp bulunamadı."; code = "no_ytdlp"; }
+                catch (YtDlpNotFoundException) { error = Strings.YtDlpNotFoundSetItsPathIn; code = "no_ytdlp"; }
                 catch (YtDlpException ex) { error = ex.Message; code = "error"; }
                 catch (Exception ex) { error = ex.Message; code = "error"; }
             }
@@ -653,7 +654,7 @@ public sealed class VideoOverlayMediaSink : IMediaSink
         if (entries.Count == 0)
         {
             Mlog.Write($"RESULT fail code={code ?? "no_media"} err={Scrub(error)}");
-            return Fail(q.RequestId, error ?? "Bu sayfada indirilebilir medya bulunamadı.", code ?? "no_media");
+            return Fail(q.RequestId, error ?? Strings.NoDownloadableMediaFoundOnThisPagePlay2, code ?? "no_media");
         }
         Mlog.Write($"RESULT ok n={infos.Count} [{string.Join(" | ", infos.Select(i => i.Kind + ":" + i.Label))}]");
 
@@ -715,31 +716,31 @@ public sealed class VideoOverlayMediaSink : IMediaSink
     {
         using var owner = new Form { TopMost = true, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new Point(-32000, -32000), Size = new Size(1, 1) };
         owner.Show();
-        MessageBox.Show(owner, text, "T-Downloader video paneli", MessageBoxButtons.OK, icon);
+        MessageBox.Show(owner, text, Strings.TDownloaderVideoPanel, MessageBoxButtons.OK, icon);
     }
 
     private void ShowAbout() => Msg(
-        "T-Downloader video paneli\n\n" +
-        "Düğmeye tıklayınca videonun kalite listesi açılır; tek bir medya varsa doğrudan indirilir.\n" +
-        "Paneli fare ile sürükleyerek taşıyabilirsiniz (site başına hatırlanır); yüzeyine çift tıklarsanız ilk konumuna döner.\n" +
-        "X düğmesi paneli bu sekmede gizler. Panel Seçenekler > Video sekmesinden tamamen kapatılabilir.\n\n" +
-        "DRM korumalı içerikler desteklenmez.", MessageBoxIcon.Information);
+        Strings.TDownloaderVideoPanel2 +
+        Strings.ClickTheButtonToViewVideoQualitiesA +
+        Strings.DragThePanelToMoveItSavedPer +
+        Strings.TheXButtonHidesThePanelInThis +
+        Strings.DRMContentIsNotSupportedChooseUnprotectedContent, MessageBoxIcon.Information);
 
     public static string InstallInfoText(string toolsDir) =>
-        "yt-dlp bulunamadı.\n\n" +
-        "HLS/DASH akışları ve YouTube gibi siteler için yt-dlp (ve video+ses birleştirmek için ffmpeg) gerekir. T-Downloader bunları kendisi indirmez/kurmaz.\n\n" +
+        Strings.YtDlpNotFound +
+        Strings.HLSDASHStreamsAndSitesSuchAsYouTube +
         "• yt-dlp: https://github.com/yt-dlp/yt-dlp/releases\n" +
-        "• ffmpeg: https://www.gyan.dev/ffmpeg/builds/ (veya https://ffmpeg.org)\n\n" +
-        "yt-dlp.exe ve ffmpeg.exe dosyalarını şu klasöre koyun:\n" + toolsDir + "\n" +
-        "ya da Seçenekler > Video sekmesinden yollarını gösterin.\n\n" +
-        "yt-dlp indirme sayfası tarayıcıda açılsın mı?";
+        Strings.FfmpegHttpsWwwGyanDevFfmpegBuildsOr +
+        Strings.PlaceYtDlpExeAndFfmpegExeIn + toolsDir + "\n" +
+        Strings.OrSetTheirPathsInSettingsVideo +
+        Strings.OpenTheYtDlpDownloadPageInYour;
 
     private void ShowInstallInfo()
     {
         var tools = (_svc as AppServices)?.Paths.ToolsDir ?? AppPaths.Default.ToolsDir;
         using var owner = new Form { TopMost = true, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new Point(-32000, -32000), Size = new Size(1, 1) };
         owner.Show();
-        var r = MessageBox.Show(owner, InstallInfoText(tools), "yt-dlp bulunamadı", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+        var r = MessageBox.Show(owner, InstallInfoText(tools), Strings.YtDlpNotFound2, MessageBoxButtons.YesNo, MessageBoxIcon.Information);
         if (r == DialogResult.Yes)
         {
             try { Process.Start(new ProcessStartInfo("https://github.com/yt-dlp/yt-dlp/releases") { UseShellExecute = true }); }

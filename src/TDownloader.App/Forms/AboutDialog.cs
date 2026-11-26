@@ -1,4 +1,6 @@
-﻿using TSuite.Diagnostics;
+using CrashReportDialog = TDownloader.App.Sdk.CrashReportDialog;
+using TDownloader.Core.Localization;
+using TSuite.Diagnostics;
 using System.Diagnostics;
 using TSuite.Link;
 using System.Runtime.InteropServices;
@@ -17,7 +19,7 @@ public sealed class AboutDialog : DluForm
 
     public AboutDialog(string dataFolder)
     {
-        Text = "T-Downloader hakkında";
+        Text = Strings.AboutTDownloader;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -38,7 +40,7 @@ public sealed class AboutDialog : DluForm
         // Başlık ve sürüm
         Add(new Label
         {
-            Text = $"T-Downloader {AppServices.Version} · {RuntimeInformation.ProcessArchitecture}",
+            Text = Strings.TDownloader(AppServices.Version, RuntimeInformation.ProcessArchitecture),
             Font = Theme.UiFont(11f, FontStyle.Bold),
             ForeColor = Theme.Accent,
             AutoEllipsis = true,
@@ -48,7 +50,7 @@ public sealed class AboutDialog : DluForm
         // Açıklama
         Add(new Label
         {
-            Text = "Çok bağlantılı, devam ettirilebilir indirme yöneticisi.",
+            Text = Strings.DownloadManagerWithMultipleConnectionsAndResumableDownloads,
             ForeColor = Theme.Text,
             Font = Theme.UiFont(8f),
             AutoEllipsis = true
@@ -57,7 +59,7 @@ public sealed class AboutDialog : DluForm
         // Veri klasörü
         Add(new Label
         {
-            Text = $"Veri klasörü: {dataFolder}",
+            Text = Strings.DataFolder(dataFolder),
             ForeColor = Theme.TextDim,
             Font = Theme.UiFont(7.5f),
             AutoEllipsis = true
@@ -70,11 +72,11 @@ public sealed class AboutDialog : DluForm
             Height = 1
         }, 12, 102, 270, 1);
 
-        Add(new Label { Text = "T-Suite ailesinin parçası", ForeColor = Theme.Accent,
+        Add(new Label { Text = Strings.PartOfTheTSuiteFamily, ForeColor = Theme.Accent,
             Font = Theme.UiFont(10f, FontStyle.Bold) }, 12, 108, 270, 16);
         var registry = new AppRegistry();
         (string Id, string Name)[] family = [
-            ("t-bridge", "T-Bridge"), ("t-downloader", "T-Downloader"),
+            ("t-bridge", "T-Bridge"), ("t-downloader", Strings.AppName),
             ("t-ramcash", "T-RamCash"), ("t-desktree", "T-DeskTree"),
             ("t-desk-viewer", "T-Desk Viewer")
         ];
@@ -98,13 +100,13 @@ public sealed class AboutDialog : DluForm
             Add(new Label { Text = app.Name + (installed ? $"  {version}" : ""), AutoEllipsis = true,
                 TextAlign = ContentAlignment.MiddleLeft }, 38, rowY, 162, 20);
             if (installed)
-                Add(new Label { Text = current ? "Bu uygulama" : "Yüklü", ForeColor = Theme.TextDim,
+                Add(new Label { Text = current ? Strings.ThisApp : Strings.Installed, ForeColor = Theme.TextDim,
                     TextAlign = ContentAlignment.MiddleRight }, 202, rowY, 80, 20);
             else
             {
-                var get = Add(new LinkLabel { Text = "Edin…", TextAlign = ContentAlignment.MiddleRight,
-                    AccessibleName = app.Name + " edin", LinkColor = Theme.Accent }, 202, rowY, 80, 20);
-                get.LinkClicked += (_, _) => Open($"https://github.com/taha-sa/{app.Id}-releases/releases/latest");
+                var get = Add(new LinkLabel { Text = Strings.Get, TextAlign = ContentAlignment.MiddleRight,
+                    AccessibleName = Strings.GetApp(app.Name), LinkColor = Theme.Accent }, 202, rowY, 80, 20);
+                get.LinkClicked += (_, _) => Open($"https://github.com/taha-sa/{(app.Id == "t-desk-viewer" ? "tdesk-viewer" : app.Id)}-releases/releases/latest");
             }
             rowY += 26;
         }
@@ -112,7 +114,7 @@ public sealed class AboutDialog : DluForm
         // Instagram
         Add(new Label
         {
-            Text = "Instagram:",
+            Text = Strings.InstagramLabel,
             ForeColor = Theme.TextDim,
             Font = Theme.UiFont(8f)
         }, 12, 264, 50, 12);
@@ -136,11 +138,11 @@ public sealed class AboutDialog : DluForm
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         };
 
-        // İmza: "Taha Şaprak " (küçük boyutlu signature fontu)
+        // İmza: Strings.DeveloperSignature (küçük boyutlu signature fontu)
         _signatureFont = CreateSignatureFont(9.5f);
         Add(new Label
         {
-            Text = "Taha Şaprak ",
+            Text = Strings.DeveloperSignature,
             Font = _signatureFont,
             ForeColor = Theme.AccentHover,
             TextAlign = ContentAlignment.MiddleRight,
@@ -150,7 +152,7 @@ public sealed class AboutDialog : DluForm
         // Tamam düğmesi
         var automatic = Add(new CheckBox
         {
-            Text = "Hata raporlarını otomatik hazırla", ForeColor = Theme.Text,
+            Text = Strings.PrepareErrorReportsAutomatically, ForeColor = Theme.Text,
             Font = Theme.UiFont(8f), Checked = CrashReporter.AutomaticallyPrepareReports
         }, 12, 282, 270, 14);
         automatic.CheckedChanged += (_, _) =>
@@ -159,12 +161,12 @@ public sealed class AboutDialog : DluForm
             catch (Exception ex)
             {
                 Log.Error("Could not save crash report preference: " + ex);
-                MessageBox.Show(this, "Tercih kaydedilemedi.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, Strings.CouldNotSaveYourPreferenceCheckFolderPermissions, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         };
         var reportLink = Add(new LinkLabel
         {
-            Text = "Hata raporu gönder…", Font = Theme.UiFont(8f), LinkColor = Theme.Accent,
+            Text = Strings.SendErrorReport, Font = Theme.UiFont(8f), LinkColor = Theme.Accent,
             ActiveLinkColor = Theme.AccentHover, VisitedLinkColor = Theme.Accent
         }, 12, 302, 270, 14);
         reportLink.LinkClicked += (_, _) =>
@@ -173,19 +175,19 @@ public sealed class AboutDialog : DluForm
             dialog.ShowDialog(this);
             automatic.Checked = CrashReporter.AutomaticallyPrepareReports;
         };
-        Add(new Label { Text = "Hata raporunu göndermeden önce inceleyebilirsiniz.",
+        Add(new Label { Text = Strings.YouCanReviewTheErrorReportBeforeSending,
             ForeColor = Theme.TextDim }, 12, 322, 270, 14);
-        var source = Add(new LinkLabel { Text = "Kaynak ve lisans bilgileri", LinkColor = Theme.Accent }, 12, 342, 270, 14);
-        source.LinkClicked += (_, _) => Open("https://github.com/taha-sa/T-Downloader");
-        var diagnostics = MakeButton("Sistem tanısını kopyala", 12, 364, 132, 22);
+        var source = Add(new LinkLabel { Text = Strings.Legal, LinkColor = Theme.Accent }, 12, 342, 270, 14);
+        source.LinkClicked += (_, _) => { using var legal = new LegalDialog(); legal.ShowDialog(this); };
+        var diagnostics = MakeButton(Strings.CopySystemDiagnostics, 12, 364, 132, 22);
         diagnostics.Click += (_, _) =>
         {
-            try { Clipboard.SetText($"T-Downloader {AppServices.Version}\r\n{RuntimeInformation.OSDescription}\r\nOS: {RuntimeInformation.OSArchitecture}; App: {RuntimeInformation.ProcessArchitecture}\r\n.NET: {RuntimeInformation.FrameworkDescription}"); }
+            try { Clipboard.SetText(Strings.TDownloaderOSAppNET(AppServices.Version, RuntimeInformation.OSDescription, RuntimeInformation.OSArchitecture, RuntimeInformation.ProcessArchitecture, RuntimeInformation.FrameworkDescription)); }
             catch (ExternalException) { }
         };
-        var issue = MakeButton("Sorun bildir", 150, 364, 132, 22);
+        var issue = MakeButton(Strings.ReportAnIssue, 150, 364, 132, 22);
         issue.Click += (_, _) => Open("https://github.com/taha-sa/t-downloader-releases/issues");
-        var ok = MakeButton("Kapat", 115, 398, 64, 22, DialogResult.OK);
+        var ok = MakeButton(Strings.Close, 115, 398, 64, 22, DialogResult.OK);
         ok.FlatStyle = FlatStyle.Flat;
         ok.FlatAppearance.BorderSize = 0;
         ok.BackColor = Theme.Accent;

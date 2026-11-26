@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Buffers;
 using System.Diagnostics;
 using System.Net;
@@ -71,7 +72,7 @@ public sealed class DownloadEngine : IDisposable
         _item = item;
         _opt = options ?? new EngineOptions();
         _limiter = limiter ?? new RateLimiter();
-        _dir = Path.Combine(dataRoot, item.Id);
+        _dir = Path.Combine(dataRoot, ValidateId(item.Id));
         _partPath = Path.Combine(_dir, "data.part");
         _statePath = Path.Combine(_dir, "state.json");
         _http = http ?? EngineHttp.Shared;
@@ -90,7 +91,7 @@ public sealed class DownloadEngine : IDisposable
     /// <summary>İndirmeyi çalıştırır. Completed / Paused / Failed döner (istisna fırlatmaz).</summary>
     public async Task<DownloadStatus> RunAsync(CancellationToken external = default)
     {
-        if (Interlocked.Exchange(ref _running, 1) == 1) throw new InvalidOperationException("Motor zaten çalışıyor.");
+        if (Interlocked.Exchange(ref _running, 1) == 1) throw new InvalidOperationException(Strings.TheDownloadEngineIsAlreadyRunningWaitFor);
         _fatal = null;
         var cts0 = CancellationTokenSource.CreateLinkedTokenSource(external);
         Interlocked.Exchange(ref _cts, cts0);   // tam bariyer: Pause() ile Dekker tarzı yarış kapanır
@@ -221,6 +222,11 @@ public sealed class DownloadEngine : IDisposable
         SyncItem();
     }
 
+    private static string ValidateId(string id) =>
+        !string.IsNullOrEmpty(id) && id.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_')
+            ? id
+            : throw new ArgumentException("Invalid download id.", nameof(id));
+
     private static string HostKey(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Authority : url;
 
@@ -233,7 +239,7 @@ public sealed class DownloadEngine : IDisposable
     private void ValidateHeaders()
     {
         if (HasControlChars(_item.Cookie) || HasControlChars(_item.UserAgent) || HasControlChars(_item.Referrer))
-            throw new NonRetryableException("Çerez/başlık değeri geçersiz (satır sonu veya denetim karakteri içeriyor).");
+            throw new NonRetryableException(Strings.InvalidCookieOrHeaderValueRefreshThePage);
     }
 
     private HttpRequestMessage BuildRequest(Uri? target = null)
@@ -440,10 +446,10 @@ public sealed class DownloadEngine : IDisposable
                         throw HttpStatusException.From(resp);
                     if (_ranges && resp.StatusCode != HttpStatusCode.PartialContent)
                         throw new NonRetryableException(ifRange != null && resp.StatusCode == HttpStatusCode.OK
-                            ? "Uzak dosya indirme sırasında değişti (If-Range)." : "Sunucu Range isteğine parçalı yanıt vermedi.");
+                            ? Strings.TheRemoteFileChangedDuringDownloadAddThe : Strings.TheServerDidNotReturnAPartialResponse);
                     // Sunucu/ara proxy farklı aralık döndürdüyse veri yanlış konuma yazılırdı (C13).
                     if (_ranges && resp.Content.Headers.ContentRange?.From is long cf && cf != startPos)
-                        throw new IOException($"Sunucu beklenmeyen aralık döndürdü (istenen {startPos}, gelen {cf}).");
+                        throw new IOException(Strings.TheServerReturnedAnUnexpectedRangeRequestedReceived(startPos, cf));
 
                     w.State = ConnectionState.Receiving;
                     await using var stream = await resp.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
@@ -463,7 +469,7 @@ public sealed class DownloadEngine : IDisposable
                                 lock (_gate) { seg.End = seg.Position; _total = seg.Position; }
                                 return;
                             }
-                            throw new IOException("Bağlantı beklenenden erken kapandı.");
+                            throw new IOException(Strings.TheConnectionClosedEarlyCheckYourNetworkAnd);
                         }
                         // Hız sınırı beklemesi okuma zaman aşımına sayılmasın: zamanlayıcı yalnızca soket okumasını ölçer.
                         cts.CancelAfter(Timeout.InfiniteTimeSpan);
@@ -636,7 +642,7 @@ public sealed class DownloadEngine : IDisposable
         _item.Error = ex.Message;
         // Çerez kalıcı yazılmadığı için yeniden başlatma sonrası kimlik doğrulamalı indirme 401/403 alır: nedeni açıkla (C10).
         if (ex is HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } && string.IsNullOrWhiteSpace(_item.Cookie))
-            _item.Error += " — oturum çerezi bulunmuyor olabilir (çerezler güvenlik için kaydedilmez); bağlantıyı tarayıcıdan yeniden ekleyin.";
+            _item.Error += Strings.YourSessionCookieMayBeMissingAddThe;
         SetStatus(DownloadStatus.Failed);
         return DownloadStatus.Failed;
     }

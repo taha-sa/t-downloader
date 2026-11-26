@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.IO.Pipes;
 using System.Text;
 
@@ -34,16 +35,34 @@ public sealed class IpcConnection : IDisposable
         finally { _writeLock.Release(); }
     }
 
-    /// <summary>Sıradaki geçerli mesajı okur; bağlantı kapanınca null. Anlaşılmayan satırlar atlanır.</summary>
+    private const int MaxLineChars = 2 * 1024 * 1024;
+
+    /// <summary>Sıradaki geçerli mesajı okur; bağlantı kapanınca veya satır sınırı aşılınca null. Anlaşılmayan satırlar atlanır.</summary>
     public async Task<IpcMessage?> ReceiveAsync(CancellationToken ct = default)
     {
+        var sb = new StringBuilder();
+        var ch = new char[1];
         while (true)
         {
-            var line = await _reader.ReadLineAsync(ct).ConfigureAwait(false);
-            if (line == null) return null;
-            if (line.Length == 0) continue;
-            var msg = IpcSerializer.TryDeserialize(line);
+            sb.Clear();
+            bool eof = false;
+            while (true)
+            {
+                int n = await _reader.ReadAsync(ch.AsMemory(), ct).ConfigureAwait(false);
+                if (n == 0) { eof = true; break; }
+                char c = ch[0];
+                if (c == '\n') break;
+                if (c != '\r')
+                {
+                    if (sb.Length >= MaxLineChars) return null;
+                    sb.Append(c);
+                }
+            }
+            if (eof && sb.Length == 0) return null;
+            if (sb.Length == 0) continue;
+            var msg = IpcSerializer.TryDeserialize(sb.ToString());
             if (msg != null) return msg;
+            if (eof) return null;
         }
     }
 
@@ -212,10 +231,10 @@ public sealed class IpcClient : IDisposable
     }
 
     public Task SendAsync(IpcMessage m, CancellationToken ct = default) =>
-        (_conn ?? throw new InvalidOperationException("Bağlı değil.")).SendAsync(m, ct);
+        (_conn ?? throw new InvalidOperationException(Strings.DisconnectedOpenTBridgeAndTryAgain)).SendAsync(m, ct);
 
     public Task<IpcMessage?> ReceiveAsync(CancellationToken ct = default) =>
-        (_conn ?? throw new InvalidOperationException("Bağlı değil.")).ReceiveAsync(ct);
+        (_conn ?? throw new InvalidOperationException(Strings.DisconnectedOpenTBridgeAndTryAgain)).ReceiveAsync(ct);
 
     /// <summary>Bir mesaj gönderip ilk yanıtı bekler.</summary>
     public async Task<IpcMessage?> RequestAsync(IpcMessage m, CancellationToken ct = default)

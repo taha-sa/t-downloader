@@ -1,19 +1,21 @@
+import "../localization.js";
+const L = globalThis.TDownloaderLocale;
 // Sağ tık menüsü (Türkçe).
 import * as native from "./native.js";
 import { sendDownload, addBypass } from "./capture.js";
 
 export const BATCH = 10;
-const ITEMS = [
-  { id: "td-link", title: "T-Downloader ile indir", contexts: ["link"] },
-  { id: "td-page", title: "Tüm linkleri T-Downloader ile indir", contexts: ["page"] },
-  { id: "td-selection", title: "Seçili linkleri indir", contexts: ["selection"] },
-  { id: "td-media", title: "Bu videoyu indir", contexts: ["video", "audio"] },
+const ITEMS = () => [
+  { id: "td-link", title: L.t("ExtDownload"), contexts: ["link"] },
+  { id: "td-page", title: L.t("ExtAllLinks"), contexts: ["page"] },
+  { id: "td-selection", title: L.t("ExtSelectedLinks"), contexts: ["selection"] },
+  { id: "td-media", title: L.t("ExtVideoDownload"), contexts: ["video", "audio"] },
 ];
 
 export function createMenus() {
   chrome.contextMenus.removeAll(() => {
     void chrome.runtime.lastError;
-    for (const it of ITEMS) chrome.contextMenus.create(it);
+    for (const it of ITEMS()) chrome.contextMenus.create(it);
   });
 }
 

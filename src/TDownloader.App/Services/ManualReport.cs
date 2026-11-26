@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using TDownloader.Core.Localization;
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using TSuite.Diagnostics;
@@ -23,7 +24,7 @@ internal static class ManualReport
             RuntimeInformation.OSDescription + " (" + Environment.OSVersion.Version + ")",
             RuntimeInformation.FrameworkDescription, CultureInfo.CurrentCulture.Name,
             DateTime.UtcNow - process.StartTime.ToUniversalTime(),
-            new ExceptionDetails("Manual report", "Kullanıcı tarafından hazırlanan hata raporu", null, []),
+            new ExceptionDetails(Strings.ManualReport, Strings.ErrorReportPreparedByTheUser, null, []),
             lines.TakeLast(200).ToArray());
     }
 }

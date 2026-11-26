@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using TDownloader.Core.Downloads;
 using TDownloader.Core.Queue;
 
@@ -27,6 +28,7 @@ public sealed class VideoRunner : IExternalRunner
         string outBase = Path.Combine(dir, Path.GetFileNameWithoutExtension(item.SavePath));
         string? error;
         // Parçalar DwnlData\<id>\hls\ altında saklanır: duraklat/yarıda kalma sonrası yalnızca eksik parçalar iner.
+        if (string.IsNullOrEmpty(item.Id) || !item.Id.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_')) return new ExternalResult(false, "Invalid download id.", null);
         string idDir = Path.Combine(_yt.Paths.DwnlDataDir, item.Id);
         string hlsDir = Path.Combine(idDir, "hls");
         try
@@ -44,7 +46,7 @@ public sealed class VideoRunner : IExternalRunner
             error = ex.Message;
             // İnmiş parça varsa yt-dlp'ye GEÇME (hepsini sıfırdan indirirdi): hata ver, parçalar korunur, yeniden başlatınca devam edilir.
             if (HasDownloadedParts(hlsDir))
-                return new ExternalResult(false, error + " (inen parçalar korundu; yeniden başlatınca kaldığı yerden devam eder)", null);
+                return new ExternalResult(false, error + Strings.DownloadedSegmentsKeptRestartToResume, null);
         }
 
         // Doğrudan indirme olmadı: yt-dlp varsa aynı başlıklarla onu dene.

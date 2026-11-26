@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.ComponentModel;
 using TDownloader.Core.Ipc;
 using TDownloader.Core.Queue;
@@ -33,7 +34,7 @@ public sealed class NullMediaSink : IMediaSink
     public void OnMedia(MediaMessage message) { }
     public void OnVideoGeometry(VideoGeometryMessage message) { }
     public Task<QualitiesResultMessage> GetQualitiesAsync(QualitiesMessage m) =>
-        Task.FromResult(new QualitiesResultMessage(m.RequestId, false, "Video desteği yok.", "error", null, null, null));
+        Task.FromResult(new QualitiesResultMessage(m.RequestId, false, Strings.VideoSupportIsUnavailableInstallYtDlpIn, "error", null, null, null));
     public void OnQualitySelect(QualitySelectMessage message) { }
     public void OnTabClosed(int tabId) { }
     public void OnQualitiesCancel(string requestId) { }
@@ -63,6 +64,7 @@ public sealed class AppServices : IAppServices
     public IpcServer? Ipc { get; set; }
     public IMediaSink Media { get; set; } = new NullMediaSink();
     public Forms.MainForm? Main { get; set; }
+    public bool RestartRequested { get; private set; }
 
     private Core.Util.Debouncer? _saver;
     private Core.Util.Debouncer Saver => _saver ??= new Core.Util.Debouncer(TimeSpan.FromSeconds(2), () =>
@@ -71,7 +73,7 @@ public sealed class AppServices : IAppServices
     });
 
     public AppSettings Settings => Manager.Settings;
-    public ISynchronizeInvoke UiThread => Main ?? throw new InvalidOperationException("Ana pencere yok.");
+    public ISynchronizeInvoke UiThread => Main ?? throw new InvalidOperationException(Strings.TheMainWindowIsUnavailableOpenTDownloader);
 
     public Task SendToExtensionAsync(IpcMessage message) => Ipc?.BroadcastAsync(message) ?? Task.CompletedTask;
 
@@ -81,7 +83,7 @@ public sealed class AppServices : IAppServices
 
     /// <summary>Tarayıcı yakalama yolu: pencere/ekleme hatasında istisna fırlatır (Main yoksa da).</summary>
     public Task<bool> PromptCaptureAsync(string url, string? referrer, string? cookies, string? userAgent, string? fileName, long fileSize)
-        => Main?.PromptCaptureAsync(url, referrer, cookies, userAgent, fileName, fileSize) ?? throw new InvalidOperationException("Ana pencere yok.");
+        => Main?.PromptCaptureAsync(url, referrer, cookies, userAgent, fileName, fileSize) ?? throw new InvalidOperationException(Strings.TheMainWindowIsUnavailableOpenTDownloader);
 
     public Task<bool> PromptExternalAsync(string source, string? referer, string title, TDownloader.Core.Video.QualityOption option, TDownloader.Core.Video.MediaContext? ctx = null)
         => Main?.PromptExternalAsync(source, referer, title, option, ctx) ?? Task.FromResult(false);
@@ -91,13 +93,20 @@ public sealed class AppServices : IAppServices
     {
         if (!WindowsStartup.TryApply(s.StartWithWindows))
         {
-            MessageBox.Show(Main, "Windows ile başlat ayarı uygulanamadı. Ayarlar kaydedilmedi.",
+            MessageBox.Show(Main, Strings.CouldNotApplyStartWithWindowsSettingsWere,
                 "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
+        bool languageChanged = Settings.Language != s.Language;
         Manager.UpdateSettings(s);
         Saver.Trigger();                 // 2 sn geciktirilmiş, UI dışı kaydetme
         _ = Ipc?.BroadcastAsync(SettingsMessage.From(s));
+        if (languageChanged && MessageBox.Show(Main, Strings.RestartLanguage, Strings.LanguageSaved, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+        {
+            FlushSettings();
+            RestartRequested = true;
+            Main?.ExitApp();
+        }
     }
 
     /// <summary>Ayar kaydını 2 sn geciktirir (art arda değişiklikler tek yazma olur; UI thread'inde disk G/Ç yok).</summary>

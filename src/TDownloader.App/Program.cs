@@ -1,3 +1,5 @@
+using CrashReportDialog = TDownloader.App.Sdk.CrashReportDialog;
+using TDownloader.Core.Localization;
 using TSuite.Diagnostics;
 using TDownloader.App.Forms;
 using TDownloader.App.Services;
@@ -16,6 +18,10 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        var paths = AppPaths.Default;
+        var settings = AppSettings.Load(paths.SettingsFile);
+        LanguagePreference.Apply(settings.Language);
+
         // T-Bridge "Hepsini güncelle": kapalıyken `--update` ile başlatılır -> kontrol, indirme, yardımcıyı başlat, çık (arayüz yok).
         if (TSuite.Update.UpdateCli.IsRequested(args))
         {
@@ -45,7 +51,7 @@ internal static class Program
                     Opacity = 0
                 };
                 owner.Show();
-                MessageBox.Show(owner, "T-Downloader zaten açık.", "T-Downloader",
+                MessageBox.Show(owner, Strings.TDownloaderIsAlreadyOpen, Strings.AppName,
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             return;
@@ -53,12 +59,10 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
         Application.SetDefaultFont(new Font("Tahoma", 8f));
-        CrashReporter.Install(UpdateService.AppId, "T-Downloader", AppServices.Version, "taha-sa/t-downloader-releases", UpdateService.Theme);
+        CrashReporter.Install(UpdateService.AppId, Strings.AppName, AppServices.Version, "taha-sa/t-downloader-releases", UpdateService.Theme);
         CrashReporter.InstallWinForms();
         Log.Info("Application starting");
 
-        var paths = AppPaths.Default;
-        var settings = AppSettings.Load(paths.SettingsFile);
         WindowsStartup.TryApply(settings.StartWithWindows);
         var manager = new DownloadManager(paths, settings);
         manager.Load();
@@ -93,7 +97,7 @@ internal static class Program
         upd.ScheduleCheck();
 
         using var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         var waiter = new Thread(() =>
         {
             var handles = new[] { showEvent, cts.Token.WaitHandle };
@@ -112,5 +116,11 @@ internal static class Program
         try { link.DisposeAsync().AsTask().Wait(1500); } catch (Exception) { }
         try { ipc.DisposeAsync().AsTask().Wait(2000); } catch (Exception) { }
         try { manager.ShutdownAsync().Wait(10000); } catch (Exception) { }
+        if (svc.RestartRequested)
+        {
+            // Release single-instance ownership after flushing and stopping this instance.
+            mutex.ReleaseMutex();
+            Application.Restart();
+        }
     }
 }

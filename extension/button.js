@@ -1,21 +1,24 @@
-// T-Downloader sayfa içi video düğmesi ("T-Downloader ile İndir").
+// T-Downloader sayfa içi video düğmesi (L.t("ExtDownload")).
 // Düğme ve kalite menüsü sayfanın DOM'una (Shadow DOM içinde, sayfa CSS'inden yalıtılmış) çizilir; böylece
 // kaydırmada video ile birlikte akıcı hareket eder. Her çerçeve (iframe dahil) kendi videosu için kendi düğmesini çizer.
 // Kaliteler App'ten gelir: eklenti -> App `qualities`, App -> eklenti `qualitiesResult`; seçim `qualitySelect` ile gider.
 (() => { try {
+  const L = globalThis.TDownloaderLocale;
   if (window.__tdButtonLoaded) return;
   window.__tdButtonLoaded = true;
   // Küçük çerçeveler (reklam/izleyici) yükleme anında 0 genişlikte olabilir; eleme qualifies() içinde, fare hareketinde yapılır.
 
   let enabled = true;
+  let labelReady = false;
+  function applyLanguage(language) { L.set(language); if (labelReady) btnSpan.textContent = L.t("ExtDownload"); }
   const send = (msg, cb) => {
     try { chrome.runtime.sendMessage(msg, (r) => { void chrome.runtime.lastError; cb && cb(r); }); }
     catch { cb && cb(undefined); }                       // eklenti yenilendi: bağlam geçersiz
   };
-  send({ kind: "cfg" }, (r) => { if (r) { enabled = r.showVideoButton !== false; syncTick(); } });
+  send({ kind: "cfg" }, (r) => { if (r) { applyLanguage(r.language); enabled = r.showVideoButton !== false; syncTick(); } });
   try {
     chrome.runtime.onMessage.addListener((m) => {
-      if (m && m.kind === "cfg") { enabled = m.showVideoButton !== false; if (!enabled) hideAll(); syncTick(); }
+      if (m && m.kind === "cfg") { applyLanguage(m.language); enabled = m.showVideoButton !== false; if (!enabled) hideAll(); syncTick(); }
     });
   } catch { /* test ortamı */ }
 
@@ -141,7 +144,8 @@
     } catch { /* svg destegi yoksa sessizce atla */ }
   }
   const btnSpan = document.createElement("span");
-  btnSpan.textContent = "T-Downloader ile İndir";
+  btnSpan.textContent = L.t("ExtDownload");
+  labelReady = true;
   append(btn, btnSpan);
 
   const menu = (sh.getElementById && sh.getElementById("menu")) || document.createElement("div");
@@ -462,7 +466,7 @@
   document.addEventListener("visibilitychange", () => { if (document.hidden) { closeMenu(); hide(); } });
 
   // ---------------------------------------------------------------- menü
-  const mb = (n) => (n > 0 ? (n >= 1073741824 ? (n / 1073741824).toFixed(2) + " GB" : (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB") : "");
+  const mb = (n) => n > 0 ? new Intl.NumberFormat(L.language, { minimumFractionDigits: n >= 1073741824 ? 2 : n < 10485760 ? 1 : 0, maximumFractionDigits: n >= 1073741824 ? 2 : n < 10485760 ? 1 : 0 }).format(n / (n >= 1073741824 ? 1073741824 : 1048576)) + "\u00a0" + (n >= 1073741824 ? "GB" : "MB") : "";
 
   function clearMenu() {
     if (!menu) return;
@@ -500,7 +504,7 @@
     spin.className = "spin";
     spin.textContent = "↻";
     const textSpan = document.createElement("span");
-    textSpan.textContent = " Kaliteler okunuyor…";
+    textSpan.textContent = L.t("ExtLoading");
     append(m, spin);
     append(m, textSpan);
     append(menu, m);
@@ -527,7 +531,7 @@
       retry.id = "retry";
       retry.style.cssText = "margin:8px -12px -10px";
       const span = document.createElement("span");
-      span.textContent = "↻ Tekrar dene";
+      span.textContent = L.t("ExtRetry");
       append(retry, span);
       retry.onclick = (e) => {
         if (!e.isTrusted) return;
@@ -539,11 +543,11 @@
     placeMenu();
   }
 
-  function groupOf(o) { return o.kind === "other" ? "Diğer dosyalar" : o.kind === "file" ? "Dosya" : o.audioOnly ? "Sadece ses" : "Video"; }
+  function groupOf(o) { return o.kind === "other" ? L.t("ExtOtherFiles") : o.kind === "file" ? L.t("ExtFile") : o.audioOnly ? L.t("ExtAudioOnly") : L.t("ExtVideo"); }
 
   function drawOptions(res) {
     clearMenu();
-    const titleText = res.title || "Video";
+    const titleText = res.title || L.t("ExtVideo");
     const h = document.createElement("div");
     h.className = "h";
     h.title = titleText;
@@ -582,14 +586,14 @@
       if (!e.isTrusted) return;                        // yalnızca gerçek kullanıcı tıklaması indirme başlatır (A2)
       const row = e.target.closest(".row"); if (!row) return;
       const rowI = row.dataset ? row.dataset.i : (typeof row.getAttribute === "function" ? row.getAttribute("data-i") : null); const i = +(rowI ?? -1), my = token;
-      drawMessage(res.title || "Video", "Gönderiliyor…");
+      drawMessage(res.title || L.t("ExtVideo"), L.t("ExtSending"));
       send({ kind: "qualitySelect", selectionId: res.selectionId, index: i }, (r) => {
         if (my !== token) return;                      // menü bu arada kapandı
         if (r && r.ok === true) {
-          drawMessage(res.title || "Video", "✓ T-Downloader'a gönderildi");
+          drawMessage(res.title || L.t("ExtVideo"), L.t("ExtSent"));
           setTimeout(() => { if (my === token) { closeMenu(); hide(); } }, 1100);
         } else {
-          drawMessage(res.title || "Video", "T-Downloader'a ulaşılamadı; indirme başlatılamadı. Uygulama çalışıyor mu?", "err");
+          drawMessage(res.title || L.t("ExtVideo"), L.t("ExtSendFailed"), "err");
           setTimeout(() => { if (my === token) { closeMenu(); hide(); } }, 4000);
         }
       });
@@ -700,9 +704,9 @@
       if (pendingRid === rid) pendingRid = null;
       if (r && r.ok && r.options && r.options.length) return drawOptions(r);
       const code = r && r.errorCode;
-      const msg = !r ? "T-Downloader yanıt vermedi. Uygulama çalışıyor mu?"
-        : code === "no_ytdlp" ? "Bu video için yt-dlp gerekiyor (Seçenekler > Video)."
-        : (r.error || "Bu video okunamadı.");
+      const msg = !r ? L.t("ExtNoReply")
+        : code === "no_ytdlp" ? L.t("ExtNeedTool")
+        : (r.error || L.t("ExtVideoFailed"));
       drawError(title, msg, () => { closeMenu(); if (target) openMenu(); });
     };
     setTimeout(() => fin(null), 100000);

@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Globalization;
 using TDownloader.App.Ui;
 using TDownloader.Core.Downloads;
@@ -12,7 +13,7 @@ namespace TDownloader.App.Forms;
 /// </summary>
 public sealed class FileInfoDialog : DluForm
 {
-    private static readonly CultureInfo Tr = new("tr-TR");
+    private static CultureInfo Tr => CultureInfo.CurrentCulture;
 
     private readonly DownloadManager _mgr;
     private readonly TextBox _url, _save, _folder, _desc;
@@ -40,21 +41,23 @@ public sealed class FileInfoDialog : DluForm
         _mgr = mgr;
         _fileSize = fileSize;
         _probe = probeSize; _referrer = referrer; _cookies = cookies; _userAgent = userAgent;
-        Text = "Dosya İndirme Bilgisi";
+        Text = Strings.DownloadFileInformation;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = true;
         StartPosition = FormStartPosition.Manual;
         TopMost = true;
         SetClientDlu(380, 128);
 
-        MakeLabel("URL", 7, 5, 55, 10);
+        MakeLabel(Strings.UrlLabel, 7, 5, 55, 10);
         _url = Add(new TextBox { Text = url }, 64, 3, 244, 14);
-        MakeLabel("Kategori", 7, 24, 55, 10);
+        MakeLabel(Strings.Category, 7, 24, 55, 10);
         _cat = Add(new DarkCombo { DropDownStyle = ComboBoxStyle.DropDownList }, 64, 22, 116, 64);
         var plus = MakeButton("+", 183, 22, 16, 14);
-        MakeLabel("Kaydet", 7, 41, 55, 10);
+        MakeLabel(Strings.Save, 7, 41, 55, 10);
         _save = Add(new TextBox(), 64, 39, 223, 14);
         var browse = MakeButton("...", 292, 39, 16, 14);
+        plus.AccessibleName = Strings.NewCategory;
+        browse.AccessibleName = Strings.ChooseAFolder;
 
         var grp = Add(new DarkGroup { Text = "" }, 64, 55, 244, 34);
         _remember = new DarkCheck { AutoEllipsis = true, Bounds = Dlu.R(6, 8, 230, 11) };
@@ -62,16 +65,16 @@ public sealed class FileInfoDialog : DluForm
         grp.Controls.Add(_remember);
         grp.Controls.Add(_folder);
 
-        MakeLabel("Açıklama", 7, 93, 55, 10);
+        MakeLabel(Strings.Description, 7, 93, 55, 10);
         _desc = Add(new TextBox { Text = description ?? "" }, 64, 91, 244, 14);
 
         _icon = Add(new PictureBox { SizeMode = PictureBoxSizeMode.CenterImage, BackColor = Theme.Bg }, 330, 6, 32, 32);
         _size = MakeLabel("", 316, 42, 58, 10, ContentAlignment.TopCenter);
         _size.ForeColor = Theme.TextDim;
 
-        MakeButton("&Daha Sonra İndir", 64, 110, 74, 14, DialogResult.No);
-        var start = MakeButton("İndirmeyi &Başlat", 149, 110, 74, 14, DialogResult.Yes);
-        var cancel = MakeButton("İptal", 234, 110, 74, 14, DialogResult.Cancel);
+        MakeButton(Strings.DownloadLater, 64, 110, 74, 14, DialogResult.No);
+        var start = MakeButton(Strings.StartDownload, 149, 110, 74, 14, DialogResult.Yes);
+        var cancel = MakeButton(Strings.Cancel, 234, 110, 74, 14, DialogResult.Cancel);
         AcceptButton = start; CancelButton = cancel;
 
         _cat.Items.AddRange(Categories.All);
@@ -81,6 +84,8 @@ public sealed class FileInfoDialog : DluForm
         SetCategoryAndPath(Categories.FromFileName(name), name);
         UpdateSizeAndIcon();
 
+        _cat.Format += (_, e) => { if (e.ListItem is string id) e.Value = CategoryLabels.Display(id); };
+        _cat.FormattingEnabled = true;
         _cat.SelectedIndexChanged += (_, _) => { if (!_updating && _cat.SelectedItem is string c) SetCategoryAndPath(c, FileName); };
         _save.TextChanged += (_, _) =>
         {
@@ -105,7 +110,7 @@ public sealed class FileInfoDialog : DluForm
         plus.Click += (_, _) => AddCategory();
         browse.Click += (_, _) =>
         {
-            using var sfd = new SaveFileDialog { FileName = FileName, InitialDirectory = Directory.Exists(SaveFolder) ? SaveFolder : null, Title = "Kaydet", OverwritePrompt = false };
+            using var sfd = new SaveFileDialog { FileName = FileName, InitialDirectory = Directory.Exists(SaveFolder) ? SaveFolder : null, Title = Strings.Save, OverwritePrompt = false };
             if (sfd.ShowDialog(this) == DialogResult.OK) _save.Text = sfd.FileName;
         };
         FormClosing += OnClosing;
@@ -131,7 +136,7 @@ public sealed class FileInfoDialog : DluForm
         var folder = _mgr.FolderForCategory(cat);
         _save.Text = Path.Combine(folder, name);
         _folder.Text = folder;
-        _remember.Text = $"Bu yolu \"{cat}\" kategorisi için hatırla";
+        _remember.Text = Strings.RememberThisPathForTheCategory(CategoryLabels.Display(cat));
         _updating = false;
         _pathEdited = false;
     }
@@ -151,11 +156,11 @@ public sealed class FileInfoDialog : DluForm
 
     private static string SizeText(long b)
     {
-        if (b <= 0) return "Bilinmiyor";
+        if (b <= 0) return Strings.Unknown;
         string[] u = { "B", "KB", "MB", "GB", "TB" };
         double v = b; int i = 0;
         while (v >= 1024 && i < u.Length - 1) { v /= 1024; i++; }
-        return i == 0 ? $"{b} B" : v.ToString("0.00", Tr) + " " + u[i];
+        return i == 0 ? $"{b} B" : v.ToString("0.00", Tr) + "\u00a0" + u[i];
     }
 
     private void UpdateSizeAndIcon()
@@ -213,12 +218,12 @@ public sealed class FileInfoDialog : DluForm
         if (DialogResult is not (DialogResult.Yes or DialogResult.No)) return;
         string err = "";
         if (!Uri.TryCreate(Url, UriKind.Absolute, out var u) || (u.Scheme != "http" && u.Scheme != "https"))
-            err = "Geçerli bir http/https adresi girin.";
+            err = Strings.TheURLIsInvalidEnterAValidHTTP;
         else if (string.IsNullOrWhiteSpace(FileName) || string.IsNullOrWhiteSpace(SaveFolder))
-            err = "Geçerli bir kayıt yeri girin.";
+            err = Strings.TheSaveLocationIsInvalidChooseAValid;
         if (err.Length > 0)
         {
-            MessageBox.Show(this, err, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, err, Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             e.Cancel = true; DialogResult = DialogResult.None; return;
         }
         StartNow = DialogResult == DialogResult.Yes;
@@ -240,25 +245,25 @@ public sealed class AddCategoryDialog : DluForm
     public AddCategoryDialog(IEnumerable<string> existing)
     {
         _existing = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
-        Text = "Yeni kategori";
+        Text = Strings.NewCategory;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
         SetClientDlu(200, 56);
-        MakeLabel("Kategori adı:", 7, 7, 186, 10);
+        MakeLabel(Strings.CategoryName, 7, 7, 186, 10);
         _name = Add(new TextBox(), 7, 20, 186, 14);
-        var ok = MakeButton("Tamam", 63, 38, 60, 14, DialogResult.OK);
-        var cancel = MakeButton("İptal", 133, 38, 60, 14, DialogResult.Cancel);
+        var ok = MakeButton(Strings.OK, 63, 38, 60, 14, DialogResult.OK);
+        var cancel = MakeButton(Strings.Cancel, 133, 38, 60, 14, DialogResult.Cancel);
         AcceptButton = ok; CancelButton = cancel;
         FormClosing += (_, e) =>
         {
             if (DialogResult != DialogResult.OK) return;
             string err = "";
-            if (CategoryName.Length == 0) err = "Bir kategori adı girin.";
-            else if (CategoryName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) err = "Kategori adında geçersiz karakter var.";
-            else if (_existing.Contains(CategoryName)) err = "Bu adda bir kategori zaten var.";
+            if (CategoryName.Length == 0) err = Strings.TheCategoryNameIsEmptyEnterAName;
+            else if (CategoryName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) err = Strings.TheCategoryNameContainsInvalidCharactersRemoveThem;
+            else if (_existing.Contains(CategoryName)) err = Strings.ACategoryWithThisNameAlreadyExistsChoose;
             if (err.Length == 0) return;
-            MessageBox.Show(this, err, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, err, Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             e.Cancel = true;
         };
     }

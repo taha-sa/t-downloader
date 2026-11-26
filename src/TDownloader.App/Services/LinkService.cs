@@ -1,6 +1,8 @@
+using TDownloader.Core.Localization;
 using System.Text.Json;
 using TDownloader.Core.Downloads;
 using TDownloader.Core.Queue;
+using TDownloader.Core.Ipc;
 using TDownloader.Core.Util;
 using TSuite.Link;
 using TSuite.Update;
@@ -15,7 +17,7 @@ namespace TDownloader.App.Services;
 public sealed class LinkService : IAsyncDisposable
 {
     public const string AppId = "t-downloader";
-    private static readonly string[] Events = ["download.progress", "download.completed", "download.failed", "app.update.available"];
+    private static readonly string[] Events = ["download.progress", "download.state", "download.completed", "download.failed", "app.update.available"];
     private static readonly string[] Commands = ["download.add", "download.pause", "download.resume", "download.list", "app.show", "app.version", .. UpdateLink.Commands];
 
     private readonly AppServices _svc;
@@ -43,8 +45,8 @@ public sealed class LinkService : IAsyncDisposable
         {
             var srv = new LinkServer(AppId, AppServices.Version, Events, Commands);
             srv.OnCommand("download.add", OnAdd);
-            srv.OnCommand("download.pause", (d, _) => Task.FromResult(WithId(d, id => _mgr.Pause(id))));
-            srv.OnCommand("download.resume", (d, _) => Task.FromResult(WithId(d, id => { using var _s = DiskGate.Silent(); _mgr.Start(id); })));
+            srv.OnCommand("download.pause", (d, _) => Task.FromResult(ControlDownload(d, pause: true)));
+            srv.OnCommand("download.resume", (d, _) => Task.FromResult(ControlDownload(d, pause: false)));
             srv.OnCommand("download.list", (_, _) => Task.FromResult<JsonElement?>(ListItems()));
             srv.OnCommand("app.show", (_, _) =>
             {
@@ -108,6 +110,8 @@ public sealed class LinkService : IAsyncDisposable
     private void OnItemChanged(object? sender, DownloadItem i)
     {
         if (i.Status != DownloadStatus.Downloading) lock (_lastProgress) _lastProgress.Remove(i.Id);
+        if (_server is { } srv && srv.HasSubscriber("download.state") && DownloadStateEvent.Create(i) is { } state)
+            srv.Publish("download.state", state, key: i.Id);
     }
 
     private void OnItemRemoved(object? sender, DownloadItem i)
@@ -129,23 +133,38 @@ public sealed class LinkService : IAsyncDisposable
     private Task<JsonElement?> OnAdd(JsonElement? d, CancellationToken ct)
     {
         var url = Str(d, "url");
-        if (string.IsNullOrWhiteSpace(url)) throw new ArgumentException("url gerekli");
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var parsedUri)
+            || (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+            throw new ArgumentException(Strings.InvalidURLEnterAnHTTPOrHTTPSURL);
         // Disk koruması (T-Link üzerinden gelen eklemede de): yer yoksa "disk_full;free=<bayt>;needed=<bayt>" ile reddet.
         long needed = d is { ValueKind: JsonValueKind.Object } o && o.TryGetProperty("size", out var sv) && sv.ValueKind == JsonValueKind.Number && sv.TryGetInt64(out var sz) && sz > 0 ? sz : 0;
         // Hedef sürücü dosya adının kategori klasörüne göre; boyut yoksa yalnız 1 GB payı denetlenir.
-        var v = TDownloader.Core.Util.DiskSpaceGuard.Evaluate(_mgr.TargetFolder(null, Str(d, "fileName") ?? System.IO.Path.GetFileName(new Uri(url, UriKind.RelativeOrAbsolute).IsAbsoluteUri ? new Uri(url).AbsolutePath : url)), needed);
+        var probeName = Str(d, "fileName") ?? System.IO.Path.GetFileName(parsedUri.AbsolutePath);
+        var v = TDownloader.Core.Util.DiskSpaceGuard.Evaluate(_mgr.TargetFolder(null, probeName), needed);
         if (v.Warn && v.Free is { } fb)
             throw new InvalidOperationException($"disk_full;free={fb};needed={v.Needed}");
         var item = _mgr.Add(new AddDownloadRequest(url, FileName: Str(d, "fileName"), Referrer: Str(d, "referrer")));
         return Task.FromResult<JsonElement?>(LinkJson.Obj(("id", item.Id)));
     }
 
-    private static JsonElement? WithId(JsonElement? d, Action<string> act)
+    private JsonElement? ControlDownload(JsonElement? d, bool pause)
     {
         var id = Str(d, "id");
-        if (string.IsNullOrEmpty(id)) throw new ArgumentException("id gerekli");
-        act(id);
-        return LinkJson.Obj();
+        if (string.IsNullOrEmpty(id)) throw new ArgumentException(Strings.ADownloadIDIsRequiredSelectADownload);
+        var item = _mgr.Get(id) ?? throw new InvalidOperationException("download_unavailable");
+        if (pause)
+        {
+            if (item.Status is not (DownloadStatus.Downloading or DownloadStatus.Queued)) throw new InvalidOperationException("download_not_active");
+            _mgr.Pause(id); // Running downloads report the final paused state after the worker stops.
+        }
+        else
+        {
+            if (item.Status is not (DownloadStatus.Paused or DownloadStatus.Failed)) throw new InvalidOperationException("download_not_paused");
+            using var _s = DiskGate.Silent();
+            _mgr.Start(id);
+            if (item.Status is DownloadStatus.Paused or DownloadStatus.Failed) throw new InvalidOperationException("download_not_started");
+        }
+        return LinkJson.Obj(("accepted", true));
     }
 
     private JsonElement ListItems()

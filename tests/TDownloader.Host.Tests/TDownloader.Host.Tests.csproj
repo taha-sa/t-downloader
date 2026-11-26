@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <!-- WinForms'suz App mantığı doğrudan derlenir -->
+    <Content Include="..\..\src\TDownloader.Core\Localization\Strings*.resx" Link="Localization\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\..\src\TDownloader.App\Ui\UiLogic.cs" Link="AppUi\UiLogic.cs" />
     <Compile Include="..\..\src\TDownloader.App\Ui\Format.cs" Link="AppUi\Format.cs" />
     <Compile Include="..\..\src\TDownloader.App\Ui\CompletedLogic.cs" Link="AppUi\CompletedLogic.cs" />

@@ -1,5 +1,9 @@
+using TDownloader.Core.Localization;
+using TDownloader.Core.Settings;
 using TDownloader.Core.Ipc;
 using TDownloader.Host;
+
+LanguagePreference.Apply(AppSettings.Load(AppPaths.Default.SettingsFile).Language);
 
 // stdout YALNIZCA native messaging çerçeveleri içindir; Console.Write* kullanılmaz.
 string pipe = IpcSerializer.PipeName;

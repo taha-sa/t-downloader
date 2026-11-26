@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -57,7 +58,7 @@ public sealed class HlsQualityResolver
     {
         var cands = input.Where(c => IsHttp(c.Url)).GroupBy(c => c.Url, StringComparer.Ordinal)
             .Select(g => g.FirstOrDefault(x => x.FromPlayer) ?? g.First()).Take(MaxCandidates).ToList();
-        if (cands.Count == 0) throw new HlsException("Akış adresi yok.");
+        if (cands.Count == 0) throw new HlsException(Strings.NoStreamURLFoundPlayTheVideoAnd);
 
         var loaded = await Task.WhenAll(cands.Select(c => LoadAsync(c, ct))).ConfigureAwait(false);
         var medias = new List<MediaPl>();
@@ -97,8 +98,8 @@ public sealed class HlsQualityResolver
             // Doğrulanamayan ama oynatıcının bildirdiği çözünürlüklü adresler (ör. çerez/başlık yüzünden 403): yine de sun.
             var unverified = loaded.Where(l => l.Text == null && l.C.FromPlayer && QualityHeight(l.C, null) > 0).ToList();
             if (unverified.Count > 0) return new VideoInfo(title, UnverifiedOptions(unverified));
-            if (drm != null) throw new HlsException("Bu içerik DRM korumalı olduğu için indirilemez (" + drm + ").", true);
-            throw new HlsException(lastErr ?? "Kullanılabilir (VOD) HLS playlist'i bulunamadı.");
+            if (drm != null) throw new HlsException(Strings.DRMProtectedContentCannotBeDownloadedChooseUnprotected + drm + ").", true);
+            throw new HlsException(lastErr ?? Strings.NoUsableVODHLSPlaylistFoundPlayA);
         }
 
         // 3) her medya playlist'i ayrı kalite
@@ -242,16 +243,16 @@ public sealed class HlsQualityResolver
         {
             double dur = e.P.M.TotalDuration;
             long size = e.BytesPerSec > 0 ? (long)(e.BytesPerSec * dur) : 0;
-            string sz = size > 0 ? $" (~{size / 1048576.0:0.#} MB)" : "";
+            string sz = size > 0 ? $" (~{size / 1048576.0:0.#}\u00a0MB)" : "";
             string label;
             if (e.Height > 0) label = $"{e.Height}p hls{sz}" + (sole && dur > 0 ? " (" + HlsClient.FormatDuration(dur) + ")" : "");
-            else if (sole) label = "Varsayılan kalite" + (dur > 0 ? " (" + HlsClient.FormatDuration(dur) + ")" : "");
-            else label = $"Kalite {++unlabeled} hls{sz}";
+            else if (sole) label = Strings.DefaultQuality2 + (dur > 0 ? " (" + HlsClient.FormatDuration(dur) + ")" : "");
+            else label = Strings.QualityHls(++unlabeled, sz);
             options.Add(new QualityOption(label, HlsClient.MakeFormat(e.P.C.Url, null, e.Height), "mp4", e.Height, size, false));
         }
         int ai = 0;
         foreach (var e in audios)
-            options.Add(new QualityOption($"Ses {++ai} hls", HlsClient.MakeFormat(e.P.C.Url, null, 0), "m4a", 0, 0, true));
+            options.Add(new QualityOption(Strings.AudioHls(++ai), HlsClient.MakeFormat(e.P.C.Url, null, 0), "m4a", 0, 0, true));
 
         // Doğrulanamayan ama oynatıcının bildirdiği çözünürlükler (henüz listede olmayanlar)
         var haveHeights = options.Select(o => o.Height).ToHashSet();
@@ -261,7 +262,7 @@ public sealed class HlsQualityResolver
         options = options.OrderByDescending(o => !o.AudioOnly ? 1 : 0).ThenByDescending(o => o.Height > 0 ? o.Height : 1).ToList();
         int k = 0;
         foreach (var m in other.OrderByDescending(m => m.M.TotalDuration))
-            options.Add(new QualityOption($"Diğer akış {++k} ({HlsClient.FormatDuration(m.M.TotalDuration)}) hls", HlsClient.MakeFormat(m.C.Url, null, QualityHeight(m.C, m.Text)), "mp4", 0, 0, false, Other: true));
+            options.Add(new QualityOption(Strings.OtherStreamHls(++k, HlsClient.FormatDuration(m.M.TotalDuration)), HlsClient.MakeFormat(m.C.Url, null, QualityHeight(m.C, m.Text)), "mp4", 0, 0, false, Other: true));
         if (options.Count > YtDlpParsing.MaxOptions) options = options.Take(YtDlpParsing.MaxOptions).ToList();
         Log($"using-media-list main={main.Count} other={other.Count} options={options.Count}");
         return options;
@@ -269,5 +270,5 @@ public sealed class HlsQualityResolver
 
     private static List<QualityOption> UnverifiedOptions(List<Loaded> ls) =>
         ls.Select(l => (L: l, H: QualityHeight(l.C, null))).GroupBy(x => x.H).Select(g => g.First()).OrderByDescending(x => x.H)
-          .Select(x => new QualityOption($"{x.H}p hls (doğrulanamadı)", HlsClient.MakeFormat(x.L.C.Url, null, x.H), "mp4", x.H, 0, false)).ToList();
+          .Select(x => new QualityOption(Strings.PHlsUnverified(x.H), HlsClient.MakeFormat(x.L.C.Url, null, x.H), "mp4", x.H, 0, false)).ToList();
 }

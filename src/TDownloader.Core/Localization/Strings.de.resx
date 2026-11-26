@@ -1,0 +1,1449 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <data name="TDownloaderIsAlreadyOpen" xml:space="preserve">
+    <value>T-Downloader ist bereits geöffnet.</value>
+  </data>
+  <data name="TDownloaderIsNotRunningOrCouldNot" xml:space="preserve">
+    <value>T-Downloader läuft nicht oder konnte nicht gestartet werden. Öffnen Sie die App und versuchen Sie es erneut.</value>
+  </data>
+  <data name="AboutTDownloader" xml:space="preserve">
+    <value>Über T-Downloader</value>
+  </data>
+  <data name="TDownloader" xml:space="preserve">
+    <value>T-Downloader {0} · {1}</value>
+  </data>
+  <data name="DownloadManagerWithMultipleConnectionsAndResumableDownloads" xml:space="preserve">
+    <value>Download-Manager mit mehreren Verbindungen und fortsetzbaren Downloads.</value>
+  </data>
+  <data name="DataFolder" xml:space="preserve">
+    <value>Datenordner: {0}</value>
+  </data>
+  <data name="PartOfTheTSuiteFamily" xml:space="preserve">
+    <value>Teil der T-Suite-Familie</value>
+  </data>
+  <data name="ThisApp" xml:space="preserve">
+    <value>Diese App</value>
+  </data>
+  <data name="Installed" xml:space="preserve">
+    <value>Installiert</value>
+  </data>
+  <data name="Get" xml:space="preserve">
+    <value>Holen…</value>
+  </data>
+  <data name="Get2" xml:space="preserve">
+    <value> holen</value>
+  </data>
+  <data name="PrepareErrorReportsAutomatically" xml:space="preserve">
+    <value>Fehlerberichte automatisch vorbereiten</value>
+  </data>
+  <data name="CouldNotSaveYourPreferenceCheckFolderPermissions" xml:space="preserve">
+    <value>Ihre Einstellung konnte nicht gespeichert werden. Prüfen Sie die Ordnerberechtigungen und versuchen Sie es erneut.</value>
+  </data>
+  <data name="SendErrorReport" xml:space="preserve">
+    <value>Fehlerbericht senden…</value>
+  </data>
+  <data name="YouCanReviewTheErrorReportBeforeSending" xml:space="preserve">
+    <value>Sie können den Fehlerbericht vor dem Senden prüfen.</value>
+  </data>
+  <data name="SourceAndLicenseInformation" xml:space="preserve">
+    <value>Quellcode und Lizenzinformationen</value>
+  </data>
+  <data name="CopySystemDiagnostics" xml:space="preserve">
+    <value>Systemdiagnose kopieren</value>
+  </data>
+  <data name="TDownloaderOSAppNET" xml:space="preserve">
+    <value>T-Downloader {0}
+{1}
+Betriebssystem: {2}; App: {3}
+.NET: {4}</value>
+  </data>
+  <data name="ReportAnIssue" xml:space="preserve">
+    <value>Problem melden</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Schließen</value>
+  </data>
+  <data name="EnterANewDownloadURL" xml:space="preserve">
+    <value>Neue Download-Adresse eingeben</value>
+  </data>
+  <data name="EnterTheFileURLToDownload" xml:space="preserve">
+    <value>Geben Sie die Download-Adresse (URL) ein:</value>
+  </data>
+  <data name="OK" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Abbrechen</value>
+  </data>
+  <data name="TheURLIsInvalidEnterAValidHTTP" xml:space="preserve">
+    <value>Die Adresse ist ungültig. Geben Sie eine gültige HTTP- oder HTTPS-Adresse ein.</value>
+  </data>
+  <data name="DownloadCompleted" xml:space="preserve">
+    <value>Download abgeschlossen</value>
+  </data>
+  <data name="DownloadCompleted2" xml:space="preserve">
+    <value>Download abgeschlossen: </value>
+  </data>
+  <data name="URL" xml:space="preserve">
+    <value>Adresse</value>
+  </data>
+  <data name="SavedTo" xml:space="preserve">
+    <value>Gespeichert unter</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>Öffnen</value>
+  </data>
+  <data name="OpenWith" xml:space="preserve">
+    <value>Öffnen mit…</value>
+  </data>
+  <data name="OpenFolder" xml:space="preserve">
+    <value>Ordner öffnen</value>
+  </data>
+  <data name="DoNotShowThisWindowAgain" xml:space="preserve">
+    <value>Dieses Fenster nicht mehr anzeigen</value>
+  </data>
+  <data name="TheFileWasMovedOrDeletedCheckIts" xml:space="preserve">
+    <value>Die Datei wurde verschoben oder gelöscht. Prüfen Sie den Speicherort.</value>
+  </data>
+  <data name="Copied" xml:space="preserve">
+    <value>  · kopiert</value>
+  </data>
+  <data name="FileNotFoundCheckItsLocationAndTry" xml:space="preserve">
+    <value>Datei nicht gefunden. Prüfen Sie den Speicherort und versuchen Sie es erneut.</value>
+  </data>
+  <data name="IsAnExecutableFileProgramsDownloadedFromThe" xml:space="preserve">
+    <value>„{0}“ ist eine ausführbare Datei. Programme aus dem Internet können schädlich sein.
+
+Trotzdem öffnen?</value>
+  </data>
+  <data name="NotEnoughDiskSpace" xml:space="preserve">
+    <value>Nicht genügend Speicherplatz vorhanden</value>
+  </data>
+  <data name="TheTargetDriveHasFreeThisDownloadNeeds" xml:space="preserve">
+    <value>Auf dem Ziellaufwerk sind {0} frei; dieser Download benötigt {1} und 1 GB Reserve.
+
+Geben Sie Speicherplatz frei oder ändern Sie den Speicherort, um eine Unterbrechung zu vermeiden.</value>
+  </data>
+  <data name="DownloadAnyway" xml:space="preserve">
+    <value>Trotzdem herunterladen</value>
+  </data>
+  <data name="DownloadFileInformation" xml:space="preserve">
+    <value>Download-Dateiinformationen</value>
+  </data>
+  <data name="Category" xml:space="preserve">
+    <value>Kategorie</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Speichern</value>
+  </data>
+  <data name="Description" xml:space="preserve">
+    <value>Beschreibung</value>
+  </data>
+  <data name="DownloadLater" xml:space="preserve">
+    <value>&amp;Später herunterladen</value>
+  </data>
+  <data name="StartDownload" xml:space="preserve">
+    <value>Download &amp;starten</value>
+  </data>
+  <data name="RememberThisPathForTheCategory" xml:space="preserve">
+    <value>Diesen Pfad für die Kategorie „{0}“ speichern</value>
+  </data>
+  <data name="Unknown" xml:space="preserve">
+    <value>Unbekannt</value>
+  </data>
+  <data name="TheSaveLocationIsInvalidChooseAValid" xml:space="preserve">
+    <value>Der Speicherort ist ungültig. Wählen Sie einen gültigen Ordner.</value>
+  </data>
+  <data name="NewCategory" xml:space="preserve">
+    <value>Neue Kategorie</value>
+  </data>
+  <data name="CategoryName" xml:space="preserve">
+    <value>Kategoriename:</value>
+  </data>
+  <data name="TheCategoryNameIsEmptyEnterAName" xml:space="preserve">
+    <value>Der Kategoriename ist leer. Geben Sie einen Namen ein.</value>
+  </data>
+  <data name="TheCategoryNameContainsInvalidCharactersRemoveThem" xml:space="preserve">
+    <value>Der Kategoriename enthält ungültige Zeichen. Entfernen Sie diese und versuchen Sie es erneut.</value>
+  </data>
+  <data name="ACategoryWithThisNameAlreadyExistsChoose" xml:space="preserve">
+    <value>Eine Kategorie mit diesem Namen ist bereits vorhanden. Wählen Sie einen anderen Namen.</value>
+  </data>
+  <data name="ChecksumHash" xml:space="preserve">
+    <value>Prüfsumme (Hash) — </value>
+  </data>
+  <data name="CalculatingPleaseWait" xml:space="preserve">
+    <value>Wird berechnet, bitte warten…</value>
+  </data>
+  <data name="Copy" xml:space="preserve">
+    <value>Kopieren</value>
+  </data>
+  <data name="VerifyPasteTheExpectedHash" xml:space="preserve">
+    <value>Prüfen (erwarteten Hash einfügen):</value>
+  </data>
+  <data name="FileNotFoundCheckItsLocationAndTry2" xml:space="preserve">
+    <value>Datei nicht gefunden. Prüfen Sie den Speicherort und versuchen Sie es erneut.</value>
+  </data>
+  <data name="Completed" xml:space="preserve">
+    <value>Abgeschlossen.</value>
+  </data>
+  <data name="CouldNotCalculateTheChecksumCheckFileAccess" xml:space="preserve">
+    <value>Die Prüfsumme konnte nicht berechnet werden. Prüfen Sie den Dateizugriff und versuchen Sie es erneut. Details: </value>
+  </data>
+  <data name="CalculationInProgress" xml:space="preserve">
+    <value>Berechnung läuft…</value>
+  </data>
+  <data name="HashMatchesFileIntegrityVerified" xml:space="preserve">
+    <value>✓ Hash stimmt überein (Dateiintegrität geprüft)</value>
+  </data>
+  <data name="HashDoesNotMatchDownloadTheFileAgain" xml:space="preserve">
+    <value>✗ Hash stimmt nicht überein. Laden Sie die Datei erneut herunter und prüfen Sie den erwarteten Hash.</value>
+  </data>
+  <data name="Copied2" xml:space="preserve">
+    <value>Kopiert</value>
+  </data>
+  <data name="FileName" xml:space="preserve">
+    <value>Dateiname</value>
+  </data>
+  <data name="Q" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Size" xml:space="preserve">
+    <value>Größe</value>
+  </data>
+  <data name="Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="TimeRemaining" xml:space="preserve">
+    <value>Verbleibende Zeit</value>
+  </data>
+  <data name="TransferSpeed" xml:space="preserve">
+    <value>Übertragungsgeschwindigkeit</value>
+  </data>
+  <data name="LastAttempt" xml:space="preserve">
+    <value>Letzter Versuch</value>
+  </data>
+  <data name="DateAdded" xml:space="preserve">
+    <value>Hinzugefügt am</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Bereit</value>
+  </data>
+  <data name="Active0" xml:space="preserve">
+    <value>Aktiv: 0</value>
+  </data>
+  <data name="Speed0BS" xml:space="preserve">
+    <value>Geschwindigkeit: 0 B/s</value>
+  </data>
+  <data name="Total0" xml:space="preserve">
+    <value>Gesamt: 0</value>
+  </data>
+  <data name="ExitingInSStopTheQueueToCancel" xml:space="preserve">
+    <value>Beenden in {0} s (zum Abbrechen Warteschlange anhalten)</value>
+  </data>
+  <data name="CouldNotAddTheBrowserDownloadTryAgain" xml:space="preserve">
+    <value>Der Browser-Download konnte nicht hinzugefügt werden. Versuchen Sie es im Infobereich-Menü erneut. Details: </value>
+  </data>
+  <data name="TryAgainTrayMenu" xml:space="preserve">
+    <value> (Wiederholen: Infobereich-Menü)</value>
+  </data>
+  <data name="TDownloaderTryAgain" xml:space="preserve">
+    <value>T-Downloader — Wiederholen</value>
+  </data>
+  <data name="ClickToTryAgain" xml:space="preserve">
+    <value>. Klicken Sie zum Wiederholen.</value>
+  </data>
+  <data name="ThisURLIsAlreadyBeingAddedOrHas" xml:space="preserve">
+    <value>Diese Adresse wird bereits hinzugefügt oder wurde hinzugefügt: </value>
+  </data>
+  <data name="ThisURLIsAlreadyBeingAddedOrHas2" xml:space="preserve">
+    <value>Diese Adresse wird bereits hinzugefügt oder wurde hinzugefügt.</value>
+  </data>
+  <data name="Tasks" xml:space="preserve">
+    <value>&amp;Aufgaben</value>
+  </data>
+  <data name="AddNewURL" xml:space="preserve">
+    <value>Neue &amp;URL hinzufügen…</value>
+  </data>
+  <data name="AddURLFromClipboard" xml:space="preserve">
+    <value>URL aus &amp;Zwischenablage hinzufügen</value>
+  </data>
+  <data name="OpenBrowserExtensionFolder" xml:space="preserve">
+    <value>Ordner der &amp;Browser-Erweiterung öffnen</value>
+  </data>
+  <data name="ExitMenu" xml:space="preserve">
+    <value>&amp;Beenden</value>
+  </data>
+  <data name="File" xml:space="preserve">
+    <value>&amp;Datei</value>
+  </data>
+  <data name="Stop" xml:space="preserve">
+    <value>&amp;Anhalten</value>
+  </data>
+  <data name="DownloadNowResume" xml:space="preserve">
+    <value>Jetzt herunterladen / &amp;Fortsetzen</value>
+  </data>
+  <data name="Remove" xml:space="preserve">
+    <value>&amp;Entfernen</value>
+  </data>
+  <data name="DeleteFromDisk" xml:space="preserve">
+    <value>Vom &amp;Datenträger löschen</value>
+  </data>
+  <data name="OpenFile" xml:space="preserve">
+    <value>Datei ö&amp;ffnen</value>
+  </data>
+  <data name="OpenFolder2" xml:space="preserve">
+    <value>&amp;Ordner öffnen</value>
+  </data>
+  <data name="ProgressWindow" xml:space="preserve">
+    <value>&amp;Fortschrittsfenster</value>
+  </data>
+  <data name="Downloads" xml:space="preserve">
+    <value>&amp;Downloads</value>
+  </data>
+  <data name="StopAll" xml:space="preserve">
+    <value>Alle &amp;anhalten</value>
+  </data>
+  <data name="RemoveCompletedDownloads" xml:space="preserve">
+    <value>&amp;Abgeschlossene Downloads entfernen</value>
+  </data>
+  <data name="Scheduler" xml:space="preserve">
+    <value>&amp;Zeitplan…</value>
+  </data>
+  <data name="StartQueue" xml:space="preserve">
+    <value>Warteschlange &amp;starten</value>
+  </data>
+  <data name="StopQueueMenu" xml:space="preserve">
+    <value>Warteschlange an&amp;halten</value>
+  </data>
+  <data name="Settings" xml:space="preserve">
+    <value>&amp;Einstellungen…</value>
+  </data>
+  <data name="View" xml:space="preserve">
+    <value>&amp;Ansicht</value>
+  </data>
+  <data name="HideCategories" xml:space="preserve">
+    <value>Kategorien &amp;ausblenden</value>
+  </data>
+  <data name="SortFiles" xml:space="preserve">
+    <value>Dateien &amp;sortieren</value>
+  </data>
+  <data name="ByDateAdded" xml:space="preserve">
+    <value>Nach Hinzufügedatum</value>
+  </data>
+  <data name="ByFileName" xml:space="preserve">
+    <value>Nach Dateiname</value>
+  </data>
+  <data name="BySize" xml:space="preserve">
+    <value>Nach Größe</value>
+  </data>
+  <data name="ByStatus" xml:space="preserve">
+    <value>Nach Status</value>
+  </data>
+  <data name="ByTimeRemaining" xml:space="preserve">
+    <value>Nach verbleibender Zeit</value>
+  </data>
+  <data name="ByTransferSpeed" xml:space="preserve">
+    <value>Nach Übertragungsgeschwindigkeit</value>
+  </data>
+  <data name="ByLastAttempt" xml:space="preserve">
+    <value>Nach letztem Versuch</value>
+  </data>
+  <data name="ByDescription" xml:space="preserve">
+    <value>Nach Beschreibung</value>
+  </data>
+  <data name="Help" xml:space="preserve">
+    <value>&amp;Hilfe</value>
+  </data>
+  <data name="BrowserExtension" xml:space="preserve">
+    <value>&amp;Browser-Erweiterung</value>
+  </data>
+  <data name="AboutTDownloader2" xml:space="preserve">
+    <value>&amp;Über T-Downloader</value>
+  </data>
+  <data name="AddURL" xml:space="preserve">
+    <value>URL hinzufügen</value>
+  </data>
+  <data name="AddANewDownloadCtrlN" xml:space="preserve">
+    <value>Neuen Download hinzufügen (Strg+N)</value>
+  </data>
+  <data name="Resume" xml:space="preserve">
+    <value>Fortsetzen</value>
+  </data>
+  <data name="StartOrResumeSelectedDownloads" xml:space="preserve">
+    <value>Ausgewählte Downloads starten oder fortsetzen</value>
+  </data>
+  <data name="Stop2" xml:space="preserve">
+    <value>Anhalten</value>
+  </data>
+  <data name="StopSelectedDownloads" xml:space="preserve">
+    <value>Ausgewählte Downloads anhalten</value>
+  </data>
+  <data name="StopAll2" xml:space="preserve">
+    <value>Alle anhalten</value>
+  </data>
+  <data name="StopAllDownloads" xml:space="preserve">
+    <value>Alle Downloads anhalten</value>
+  </data>
+  <data name="Remove2" xml:space="preserve">
+    <value>Entfernen</value>
+  </data>
+  <data name="RemoveSelectedDownloadsFromTheList" xml:space="preserve">
+    <value>Ausgewählte Downloads aus der Liste entfernen</value>
+  </data>
+  <data name="DeleteFromDisk2" xml:space="preserve">
+    <value>Vom Datenträger löschen</value>
+  </data>
+  <data name="DeleteSelectedFilesMoveToRecycleBin" xml:space="preserve">
+    <value>Ausgewählte Dateien löschen (in den Papierkorb verschieben)</value>
+  </data>
+  <data name="Clean" xml:space="preserve">
+    <value>Bereinigen</value>
+  </data>
+  <data name="RemoveCompletedDownloadsFromTheList" xml:space="preserve">
+    <value>Abgeschlossene Downloads aus der Liste entfernen</value>
+  </data>
+  <data name="Settings2" xml:space="preserve">
+    <value>Einstellungen</value>
+  </data>
+  <data name="Settings3" xml:space="preserve">
+    <value>Einstellungen</value>
+  </data>
+  <data name="Schedule" xml:space="preserve">
+    <value>Planen</value>
+  </data>
+  <data name="SchedulerAndDownloadQueue" xml:space="preserve">
+    <value>Zeitplan und Download-Warteschlange</value>
+  </data>
+  <data name="StartQueue2" xml:space="preserve">
+    <value>Warteschlange starten</value>
+  </data>
+  <data name="StartQueue3" xml:space="preserve">
+    <value>Warteschlange starten</value>
+  </data>
+  <data name="StopQueue" xml:space="preserve">
+    <value>Warteschlange anhalten</value>
+  </data>
+  <data name="StopQueuePendingDownloads" xml:space="preserve">
+    <value>Warteschlange anhalten (ausstehende Downloads)</value>
+  </data>
+  <data name="Extension" xml:space="preserve">
+    <value>Erweiterung</value>
+  </data>
+  <data name="BrowserExtension2" xml:space="preserve">
+    <value>Browser-Erweiterung</value>
+  </data>
+  <data name="About" xml:space="preserve">
+    <value>Über</value>
+  </data>
+  <data name="Categories" xml:space="preserve">
+    <value>Kategorien</value>
+  </data>
+  <data name="HideCategories2" xml:space="preserve">
+    <value>Kategorien ausblenden</value>
+  </data>
+  <data name="AllDownloads" xml:space="preserve">
+    <value>Alle Downloads</value>
+  </data>
+  <data name="Unfinished" xml:space="preserve">
+    <value>Nicht abgeschlossen</value>
+  </data>
+  <data name="Completed2" xml:space="preserve">
+    <value>Abgeschlossen</value>
+  </data>
+  <data name="Queues" xml:space="preserve">
+    <value>Warteschlangen</value>
+  </data>
+  <data name="MainQueue" xml:space="preserve">
+    <value>Hauptwarteschlange</value>
+  </data>
+  <data name="ShowInFolder" xml:space="preserve">
+    <value>Im Ordner anzeigen</value>
+  </data>
+  <data name="CalculateChecksumHash" xml:space="preserve">
+    <value>Prüfsumme (Hash) berechnen…</value>
+  </data>
+  <data name="Resume2" xml:space="preserve">
+    <value>Fortsetzen</value>
+  </data>
+  <data name="ProgressWindow2" xml:space="preserve">
+    <value>Fortschrittsfenster</value>
+  </data>
+  <data name="Open2" xml:space="preserve">
+    <value>Ö&amp;ffnen</value>
+  </data>
+  <data name="AddURL2" xml:space="preserve">
+    <value>&amp;URL hinzufügen…</value>
+  </data>
+  <data name="StopAll3" xml:space="preserve">
+    <value>Alle &amp;anhalten</value>
+  </data>
+  <data name="RetryFailedBrowserCaptures" xml:space="preserve">
+    <value>Fehlgeschlagene Browser-Erfassungen &amp;wiederholen</value>
+  </data>
+  <data name="Completed3" xml:space="preserve">
+    <value>Abgeschlossen</value>
+  </data>
+  <data name="Downloading" xml:space="preserve">
+    <value>Wird heruntergeladen</value>
+  </data>
+  <data name="Queued" xml:space="preserve">
+    <value>In Warteschlange</value>
+  </data>
+  <data name="Paused" xml:space="preserve">
+    <value>Angehalten </value>
+  </data>
+  <data name="Paused2" xml:space="preserve">
+    <value>Angehalten</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>Fehler</value>
+  </data>
+  <data name="Active" xml:space="preserve">
+    <value>Aktiv: {0}</value>
+  </data>
+  <data name="Speed" xml:space="preserve">
+    <value>Geschwindigkeit: </value>
+  </data>
+  <data name="Total" xml:space="preserve">
+    <value>Gesamt: {0}</value>
+  </data>
+  <data name="ItemsSelected" xml:space="preserve">
+    <value>{0} Elemente ausgewählt</value>
+  </data>
+  <data name="DownloadCompleted3" xml:space="preserve">
+    <value>Download abgeschlossen</value>
+  </data>
+  <data name="DownloadedSuccessfully" xml:space="preserve">
+    <value>{0} wurde erfolgreich heruntergeladen.</value>
+  </data>
+  <data name="TheClipboardHasNoValidHTTPOrHTTPS" xml:space="preserve">
+    <value>Die Zwischenablage enthält keine gültige HTTP- oder HTTPS-Adresse. Kopieren Sie eine Download-Adresse und versuchen Sie es erneut.</value>
+  </data>
+  <data name="TheMainWindowIsNotReadyWaitAnd" xml:space="preserve">
+    <value>Das Hauptfenster ist noch nicht bereit. Warten Sie und versuchen Sie es erneut.</value>
+  </data>
+  <data name="TheMainWindowClosedOpenTDownloaderAnd" xml:space="preserve">
+    <value>Das Hauptfenster wurde geschlossen. Öffnen Sie T-Downloader und versuchen Sie es erneut.</value>
+  </data>
+  <data name="RemoveDownloadsFromTheListFilesOnDisk" xml:space="preserve">
+    <value>{0} Downloads aus der Liste entfernen?
+(Dateien auf dem Datenträger bleiben erhalten.)</value>
+  </data>
+  <data name="NoCompletedDownloads" xml:space="preserve">
+    <value>Keine abgeschlossenen Downloads.</value>
+  </data>
+  <data name="RemoveCompletedDownloadsFromTheListFilesOn" xml:space="preserve">
+    <value>{0} abgeschlossene Downloads aus der Liste entfernen?
+(Dateien auf dem Datenträger bleiben erhalten.)</value>
+  </data>
+  <data name="RemoveCompletedDownloads2" xml:space="preserve">
+    <value>Abgeschlossene Downloads entfernen</value>
+  </data>
+  <data name="FileNotFoundCheckThisLocation" xml:space="preserve">
+    <value>Datei nicht gefunden. Prüfen Sie diesen Speicherort:
+</value>
+  </data>
+  <data name="BrowserExtensionFolderNotFoundInChromeEdge" xml:space="preserve">
+    <value>Ordner der Browser-Erweiterung nicht gefunden.
+Aktivieren Sie in Chrome/Edge unter Erweiterungen den Entwicklermodus, wählen Sie „Entpackte Erweiterung laden“ und den Ordner „extension“.</value>
+  </data>
+  <data name="OpeningTheExtensionFolderInChromeEdgeEnable" xml:space="preserve">
+    <value>Der Erweiterungsordner wird geöffnet. Aktivieren Sie in Chrome/Edge unter Erweiterungen den Entwicklermodus, wählen Sie „Entpackte Erweiterung laden“ und diesen Ordner.</value>
+  </data>
+  <data name="ShowCategories" xml:space="preserve">
+    <value>Kategorien &amp;einblenden</value>
+  </data>
+  <data name="DownloadsAreWaitingForConfirmationExitingNowWill" xml:space="preserve">
+    <value>{0} Downloads warten auf Bestätigung. Beim Beenden gehen diese Downloads verloren (die Browser-Kopien wurden gelöscht).
+
+Trotzdem beenden?</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>Beenden</value>
+  </data>
+  <data name="Highest" xml:space="preserve">
+    <value>Höchste</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>Allgemein</value>
+  </data>
+  <data name="MinimizeToSystemTrayWhenClosingTheWindow" xml:space="preserve">
+    <value>Beim Schließen im Infobereich minimieren</value>
+  </data>
+  <data name="MonitorDownloadableClipboardURLsAndAsk" xml:space="preserve">
+    <value>Download-Adressen in der Zwischenablage überwachen und nachfragen</value>
+  </data>
+  <data name="ShowFileInformationForBrowserDownloads" xml:space="preserve">
+    <value>Dateiinformationen bei Browser-Downloads anzeigen</value>
+  </data>
+  <data name="ShowTheCompletedDialogAfterADownload" xml:space="preserve">
+    <value>Abschlussfenster nach einem Download anzeigen</value>
+  </data>
+  <data name="PlayASoundOnCompletion" xml:space="preserve">
+    <value>Bei Abschluss einen Ton abspielen</value>
+  </data>
+  <data name="StartWithWindows" xml:space="preserve">
+    <value>Mit Windows starten</value>
+  </data>
+  <data name="DataFolder2" xml:space="preserve">
+    <value>Datenordner:</value>
+  </data>
+  <data name="Connection" xml:space="preserve">
+    <value>Verbindung</value>
+  </data>
+  <data name="ConnectionsPerDownload132" xml:space="preserve">
+    <value>Verbindungen je Download (1–32):</value>
+  </data>
+  <data name="MaximumSimultaneousDownloads" xml:space="preserve">
+    <value>Maximale gleichzeitige Downloads:</value>
+  </data>
+  <data name="SpeedLimitKBS0Unlimited" xml:space="preserve">
+    <value>Geschwindigkeitsbegrenzung (KB/s, 0 = unbegrenzt):</value>
+  </data>
+  <data name="DownloadsUseASingleConnectionIfTheServer" xml:space="preserve">
+    <value>Downloads nutzen eine Verbindung, wenn der Server keine Range-Anfragen unterstützt.</value>
+  </data>
+  <data name="SaveLocation" xml:space="preserve">
+    <value>Speicherort</value>
+  </data>
+  <data name="MainSaveFolder" xml:space="preserve">
+    <value>Hauptspeicherordner:</value>
+  </data>
+  <data name="ChooseTheMainSaveFolder" xml:space="preserve">
+    <value>Hauptspeicherordner auswählen</value>
+  </data>
+  <data name="CategoryFoldersLeaveEmptyToUseTheCategory" xml:space="preserve">
+    <value>Kategorieordner (leer lassen für Kategorienamen unter dem Hauptordner):</value>
+  </data>
+  <data name="Folder" xml:space="preserve">
+    <value>Ordner</value>
+  </data>
+  <data name="ChooseTheCategoryFolder" xml:space="preserve">
+    <value>Kategorieordner auswählen</value>
+  </data>
+  <data name="RestoreDefaults" xml:space="preserve">
+    <value>Standardwerte wiederherstellen</value>
+  </data>
+  <data name="BrowserCapture" xml:space="preserve">
+    <value>Browser-Erfassung</value>
+  </data>
+  <data name="CaptureBrowserDownloads" xml:space="preserve">
+    <value>Browser-Downloads abfangen</value>
+  </data>
+  <data name="MinimumFileSizeKB" xml:space="preserve">
+    <value>Minimale Dateigröße (KB):</value>
+  </data>
+  <data name="FileTypesToCaptureSeparateWithSpaces" xml:space="preserve">
+    <value>Zu erfassende Dateitypen (durch Leerzeichen trennen):</value>
+  </data>
+  <data name="ExcludedSitesOnePerLine" xml:space="preserve">
+    <value>Ausgeschlossene Websites (eine je Zeile):</value>
+  </data>
+  <data name="Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ShowDownloadThisVideoOverVideos" xml:space="preserve">
+    <value>„Dieses Video herunterladen“ über Videos anzeigen</value>
+  </data>
+  <data name="YtDlpPathLeaveEmptyToSearchAutomatically" xml:space="preserve">
+    <value>yt-dlp-Pfad (leer lassen für automatische Suche):</value>
+  </data>
+  <data name="ChooseTheYtDlpFile" xml:space="preserve">
+    <value>yt-dlp-Datei auswählen</value>
+  </data>
+  <data name="FfmpegPathOrFolderLeaveEmptyToSearch" xml:space="preserve">
+    <value>ffmpeg-Pfad oder Ordner (leer lassen für automatische Suche):</value>
+  </data>
+  <data name="ChooseTheFfmpegFile" xml:space="preserve">
+    <value>ffmpeg-Datei auswählen</value>
+  </data>
+  <data name="DefaultQuality" xml:space="preserve">
+    <value>Standardqualität:</value>
+  </data>
+  <data name="OpenYtDlpDownloadsGithubComYtDlp" xml:space="preserve">
+    <value>yt-dlp-Downloads öffnen (github.com/yt-dlp/yt-dlp/releases)</value>
+  </data>
+  <data name="OpenFfmpegBuildsGyanDevFfmpegBuilds" xml:space="preserve">
+    <value>ffmpeg-Builds öffnen (gyan.dev/ffmpeg/builds)</value>
+  </data>
+  <data name="SearchOrderThisPathAPPDATATDownloaderTools" xml:space="preserve">
+    <value>Suchreihenfolge: dieser Pfad, %APPDATA%/T-Downloader/tools, App-Ordner/tools, PATH. T-Downloader lädt oder installiert diese Werkzeuge nicht; DRM-Inhalte werden nicht unterstützt.</value>
+  </data>
+  <data name="Apply" xml:space="preserve">
+    <value>Übernehmen</value>
+  </data>
+  <data name="Found" xml:space="preserve">
+    <value>Gefunden: </value>
+  </data>
+  <data name="YtDlpNotFoundUseTheInstallationLink" xml:space="preserve">
+    <value>yt-dlp nicht gefunden. Verwenden Sie den Installationslink unten.</value>
+  </data>
+  <data name="FfmpegNotFoundInstallItToMergeVideo" xml:space="preserve">
+    <value>ffmpeg nicht gefunden. Installieren Sie es, um Video und Audio zusammenzuführen.</value>
+  </data>
+  <data name="ChooseAFolder" xml:space="preserve">
+    <value>Ordner auswählen</value>
+  </data>
+  <data name="DownloadStatus" xml:space="preserve">
+    <value>Download-Status</value>
+  </data>
+  <data name="FileSize" xml:space="preserve">
+    <value>Dateigröße</value>
+  </data>
+  <data name="Downloaded" xml:space="preserve">
+    <value>Heruntergeladen</value>
+  </data>
+  <data name="TransferSpeed2" xml:space="preserve">
+    <value>Übertragungsgeschwindigkeit</value>
+  </data>
+  <data name="TimeRemaining2" xml:space="preserve">
+    <value>Verbleibende Zeit</value>
+  </data>
+  <data name="ResumeSupport" xml:space="preserve">
+    <value>Fortsetzen möglich</value>
+  </data>
+  <data name="HideDetails" xml:space="preserve">
+    <value>&lt;&lt; Details ausblenden</value>
+  </data>
+  <data name="Pause" xml:space="preserve">
+    <value>Anhalten</value>
+  </data>
+  <data name="StartPositionsAndDownloadProgressByConnection" xml:space="preserve">
+    <value>Startpositionen und Download-Fortschritt nach Verbindung</value>
+  </data>
+  <data name="Information" xml:space="preserve">
+    <value>Information</value>
+  </data>
+  <data name="ShowDetails" xml:space="preserve">
+    <value>Details einblenden &gt;&gt;</value>
+  </data>
+  <data name="ActionFailedTryAgainDetails" xml:space="preserve">
+    <value>Aktion fehlgeschlagen. Versuchen Sie es erneut. Details: </value>
+  </data>
+  <data name="Yes" xml:space="preserve">
+    <value>Ja</value>
+  </data>
+  <data name="No" xml:space="preserve">
+    <value>Nein</value>
+  </data>
+  <data name="Downloading2" xml:space="preserve">
+    <value>Wird heruntergeladen  {0}</value>
+  </data>
+  <data name="Connecting" xml:space="preserve">
+    <value>Verbindung wird hergestellt…</value>
+  </data>
+  <data name="Retrying" xml:space="preserve">
+    <value>Erneuter Versuch ({0})</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>Fehlgeschlagen</value>
+  </data>
+  <data name="Idle" xml:space="preserve">
+    <value>Inaktiv</value>
+  </data>
+  <data name="Monday" xml:space="preserve">
+    <value>Montag</value>
+  </data>
+  <data name="Tuesday" xml:space="preserve">
+    <value>Dienstag</value>
+  </data>
+  <data name="Wednesday" xml:space="preserve">
+    <value>Mittwoch</value>
+  </data>
+  <data name="Thursday" xml:space="preserve">
+    <value>Donnerstag</value>
+  </data>
+  <data name="Friday" xml:space="preserve">
+    <value>Freitag</value>
+  </data>
+  <data name="Saturday" xml:space="preserve">
+    <value>Samstag</value>
+  </data>
+  <data name="Sunday" xml:space="preserve">
+    <value>Sonntag</value>
+  </data>
+  <data name="Scheduler2" xml:space="preserve">
+    <value>Zeitplan</value>
+  </data>
+  <data name="StartAt" xml:space="preserve">
+    <value>Starten um:</value>
+  </data>
+  <data name="Days" xml:space="preserve">
+    <value>Tage:</value>
+  </data>
+  <data name="WhenTheQueueFinishesThisSelectionOnly" xml:space="preserve">
+    <value>Nach Abschluss der Warteschlange (nur diese Auswahl):</value>
+  </data>
+  <data name="DoNothing" xml:space="preserve">
+    <value>Nichts tun</value>
+  </data>
+  <data name="ShowNotification" xml:space="preserve">
+    <value>Benachrichtigung anzeigen</value>
+  </data>
+  <data name="ExitApp30SCountdown" xml:space="preserve">
+    <value>App beenden (30 s Countdown)</value>
+  </data>
+  <data name="QueuedFiles" xml:space="preserve">
+    <value>Dateien in der Warteschlange:</value>
+  </data>
+  <data name="FileName2" xml:space="preserve">
+    <value>Dateiname</value>
+  </data>
+  <data name="StartNow" xml:space="preserve">
+    <value>Jetzt starten</value>
+  </data>
+  <data name="TheAppClosedUnexpectedly" xml:space="preserve">
+    <value>Die App wurde unerwartet geschlossen</value>
+  </data>
+  <data name="YouCanHelpFixThisProblemByReporting" xml:space="preserve">
+    <value>Sie können durch einen Fehlerbericht zur Behebung beitragen. Der Bericht erstellt ein öffentliches GitHub-Issue; personenbezogene Daten werden maskiert.</value>
+  </data>
+  <data name="PersonalDataMaskedErrorReport" xml:space="preserve">
+    <value>Personenbezogene Daten maskiert — Fehlerbericht</value>
+  </data>
+  <data name="ReportStatus" xml:space="preserve">
+    <value>Berichtsstatus</value>
+  </data>
+  <data name="SendErrorReport2" xml:space="preserve">
+    <value>Fehlerbericht senden</value>
+  </data>
+  <data name="ReportCopied" xml:space="preserve">
+    <value>Bericht kopiert.</value>
+  </data>
+  <data name="CouldNotCompleteTheActionTryAgain" xml:space="preserve">
+    <value>Die Aktion konnte nicht abgeschlossen werden. Versuchen Sie es erneut.</value>
+  </data>
+  <data name="Later" xml:space="preserve">
+    <value>Später</value>
+  </data>
+  <data name="SkipThisVersion" xml:space="preserve">
+    <value>Diese Version überspringen</value>
+  </data>
+  <data name="PleaseWait" xml:space="preserve">
+    <value>Bitte warten…</value>
+  </data>
+  <data name="TryAgain" xml:space="preserve">
+    <value>Wiederholen</value>
+  </data>
+  <data name="UpdateNow" xml:space="preserve">
+    <value>Jetzt aktualisieren</value>
+  </data>
+  <data name="NewVersionAvailable" xml:space="preserve">
+    <value>Neue Version verfügbar</value>
+  </data>
+  <data name="ThisVersionIsNoLongerSupportedUpdateTo" xml:space="preserve">
+    <value>Diese Version wird nicht mehr unterstützt. Aktualisieren Sie, um fortzufahren.
+
+</value>
+  </data>
+  <data name="Installing" xml:space="preserve">
+    <value>Wird installiert…</value>
+  </data>
+  <data name="Downloading3" xml:space="preserve">
+    <value>Wird heruntergeladen… {0}%</value>
+  </data>
+  <data name="VideoSupportIsUnavailableInstallYtDlpIn" xml:space="preserve">
+    <value>Video-Unterstützung ist nicht verfügbar. Installieren Sie yt-dlp unter Einstellungen &gt; Video.</value>
+  </data>
+  <data name="TheMainWindowIsUnavailableOpenTDownloader" xml:space="preserve">
+    <value>Das Hauptfenster ist nicht verfügbar. Öffnen Sie T-Downloader und versuchen Sie es erneut.</value>
+  </data>
+  <data name="CouldNotApplyStartWithWindowsSettingsWere" xml:space="preserve">
+    <value>„Mit Windows starten“ konnte nicht angewendet werden. Einstellungen wurden nicht gespeichert. Prüfen Sie Ihre Berechtigungen und versuchen Sie es erneut.</value>
+  </data>
+  <data name="CouldNotOpenOrAddTheDownloadTry" xml:space="preserve">
+    <value>Der Download konnte nicht geöffnet oder hinzugefügt werden. Versuchen Sie es erneut.</value>
+  </data>
+  <data name="AURLIsRequiredEnterADownloadURL" xml:space="preserve">
+    <value>Eine Adresse ist erforderlich. Geben Sie eine Download-Adresse ein.</value>
+  </data>
+  <data name="ADownloadIDIsRequiredSelectADownload" xml:space="preserve">
+    <value>Eine Download-ID ist erforderlich. Wählen Sie einen Download und versuchen Sie es erneut.</value>
+  </data>
+  <data name="ManualReport" xml:space="preserve">
+    <value>Manueller Bericht</value>
+  </data>
+  <data name="ErrorReportPreparedByTheUser" xml:space="preserve">
+    <value>Vom Benutzer vorbereiteter Fehlerbericht</value>
+  </data>
+  <data name="OpenOnPhone" xml:space="preserve">
+    <value>Auf Smartphone öffnen</value>
+  </data>
+  <data name="SendToPhone" xml:space="preserve">
+    <value>An Smartphone senden</value>
+  </data>
+  <data name="CouldNotConnectToTBridgeOpenT" xml:space="preserve">
+    <value>Verbindung zu T-Bridge fehlgeschlagen. Öffnen Sie T-Bridge und versuchen Sie es erneut.</value>
+  </data>
+  <data name="OpeningOnPhone" xml:space="preserve">
+    <value>Wird auf Smartphone geöffnet</value>
+  </data>
+  <data name="SentToPhone" xml:space="preserve">
+    <value>An Smartphone gesendet</value>
+  </data>
+  <data name="CouldNotSendToYourPhoneCheckThe" xml:space="preserve">
+    <value>Senden an Ihr Smartphone fehlgeschlagen. Prüfen Sie die Verbindung in T-Bridge und versuchen Sie es erneut.</value>
+  </data>
+  <data name="CouldNotReadTheStreamOpenTheVideo" xml:space="preserve">
+    <value>Der Stream konnte nicht gelesen werden. Öffnen Sie das Video im Browser und versuchen Sie es erneut. Details: </value>
+  </data>
+  <data name="DownloadAll" xml:space="preserve">
+    <value>Alle herunterladen</value>
+  </data>
+  <data name="YtDlpNotFoundInstallationInformation" xml:space="preserve">
+    <value>yt-dlp nicht gefunden — Installationsinformationen</value>
+  </data>
+  <data name="LoadingQualities" xml:space="preserve">
+    <value>Qualitätsstufen werden geladen…</value>
+  </data>
+  <data name="NoDownloadableMediaFoundOnThisPagePlay" xml:space="preserve">
+    <value>Keine herunterladbaren Medien auf dieser Seite gefunden. Spielen Sie das Video ab und versuchen Sie es erneut.</value>
+  </data>
+  <data name="OtherQualities" xml:space="preserve">
+    <value>Weitere Qualitätsstufen…</value>
+  </data>
+  <data name="ForAQualityNotListedHereSelectIt" xml:space="preserve">
+    <value>Wählen Sie eine hier nicht aufgeführte Qualität im Videoplayer und spielen Sie das Video einige Sekunden ab.
+</value>
+  </data>
+  <data name="IfTheBrowserExtensionDetectsThatQualityURL" xml:space="preserve">
+    <value>Wenn die Browser-Erweiterung die Adresse dieser Qualitätsstufe erkennt, erscheint sie hier.
+
+Versuchen Sie andernfalls, die Seitenadresse mit yt-dlp herunterzuladen.</value>
+  </data>
+  <data name="TheAppIsNotReadyWaitAndTry" xml:space="preserve">
+    <value>Die App ist noch nicht bereit. Warten Sie und versuchen Sie es erneut.</value>
+  </data>
+  <data name="Cancelled" xml:space="preserve">
+    <value>Abgebrochen.</value>
+  </data>
+  <data name="CachedQualityList" xml:space="preserve">
+    <value>  (Qualitätsliste aus dem Cache)</value>
+  </data>
+  <data name="HLSSelectionFailedTryAgainDetails" xml:space="preserve">
+    <value>  HLS-Auswahl fehlgeschlagen. Versuchen Sie es erneut. Details: </value>
+  </data>
+  <data name="YtDlpNotFoundSetItsPathIn" xml:space="preserve">
+    <value>yt-dlp nicht gefunden. Legen Sie den Pfad unter Einstellungen &gt; Video fest.</value>
+  </data>
+  <data name="NoDownloadableMediaFoundOnThisPagePlay2" xml:space="preserve">
+    <value>Keine herunterladbaren Medien auf dieser Seite gefunden. Spielen Sie das Video ab und versuchen Sie es erneut.</value>
+  </data>
+  <data name="TDownloaderVideoPanel" xml:space="preserve">
+    <value>T-Downloader-Videofenster</value>
+  </data>
+  <data name="TDownloaderVideoPanel2" xml:space="preserve">
+    <value>T-Downloader-Videofenster
+
+</value>
+  </data>
+  <data name="ClickTheButtonToViewVideoQualitiesA" xml:space="preserve">
+    <value>Klicken Sie auf die Schaltfläche, um Qualitätsstufen anzuzeigen; eine einzelne Mediendatei wird direkt heruntergeladen.
+</value>
+  </data>
+  <data name="DragThePanelToMoveItSavedPer" xml:space="preserve">
+    <value>Ziehen Sie das Fenster zum Verschieben (je Website gespeichert); doppelklicken Sie auf die Oberfläche, um die ursprüngliche Position wiederherzustellen.
+</value>
+  </data>
+  <data name="TheXButtonHidesThePanelInThis" xml:space="preserve">
+    <value>Die X-Schaltfläche blendet das Fenster in diesem Tab aus. Sie können es unter Einstellungen &gt; Video deaktivieren.
+
+</value>
+  </data>
+  <data name="DRMContentIsNotSupportedChooseUnprotectedContent" xml:space="preserve">
+    <value>DRM-Inhalte werden nicht unterstützt. Wählen Sie ungeschützte Inhalte.</value>
+  </data>
+  <data name="YtDlpNotFound" xml:space="preserve">
+    <value>yt-dlp nicht gefunden.
+
+</value>
+  </data>
+  <data name="HLSDASHStreamsAndSitesSuchAsYouTube" xml:space="preserve">
+    <value>HLS/DASH-Streams und Websites wie YouTube benötigen yt-dlp (und ffmpeg zum Zusammenführen von Video und Audio). T-Downloader lädt oder installiert diese Werkzeuge nicht.
+
+</value>
+  </data>
+  <data name="FfmpegHttpsWwwGyanDevFfmpegBuildsOr" xml:space="preserve">
+    <value>• ffmpeg: https://www.gyan.dev/ffmpeg/builds/ (oder https://ffmpeg.org)
+
+</value>
+  </data>
+  <data name="PlaceYtDlpExeAndFfmpegExeIn" xml:space="preserve">
+    <value>Legen Sie yt-dlp.exe und ffmpeg.exe in diesem Ordner ab:
+</value>
+  </data>
+  <data name="OrSetTheirPathsInSettingsVideo" xml:space="preserve">
+    <value>oder legen Sie die Pfade unter Einstellungen &gt; Video fest.
+
+</value>
+  </data>
+  <data name="OpenTheYtDlpDownloadPageInYour" xml:space="preserve">
+    <value>yt-dlp-Downloadseite im Browser öffnen?</value>
+  </data>
+  <data name="YtDlpNotFound2" xml:space="preserve">
+    <value>yt-dlp nicht gefunden</value>
+  </data>
+  <data name="Downloaded2" xml:space="preserve">
+    <value>Heruntergeladen</value>
+  </data>
+  <data name="DownloadedBytes" xml:space="preserve">
+    <value>Heruntergeladen: {0} ({1} Bytes)</value>
+  </data>
+  <data name="Bytes" xml:space="preserve">
+    <value>{0} ({1:N0} Bytes)</value>
+  </data>
+  <data name="S" xml:space="preserve">
+    <value>{0} s</value>
+  </data>
+  <data name="MinS" xml:space="preserve">
+    <value>{0} Min. {1} s</value>
+  </data>
+  <data name="HMin" xml:space="preserve">
+    <value>{0} Std. {1} Min.</value>
+  </data>
+  <data name="CouldNotDeleteTheFileCode0xCheck" xml:space="preserve">
+    <value>Datei konnte nicht gelöscht werden (Code 0x{0:X}): {1}. Prüfen Sie die Berechtigungen und versuchen Sie es erneut.</value>
+  </data>
+  <data name="MoveFilesTotalToTheRecycleBinYou" xml:space="preserve">
+    <value>{0} Dateien (insgesamt {1}) in den Papierkorb verschieben? Vor dem endgültigen Löschen von Dateien, die nicht in den Papierkorb verschoben werden können, werden Sie gesondert gefragt.</value>
+  </data>
+  <data name="FilesWereKeptOnDiskBecauseRecyclingFailed" xml:space="preserve">
+    <value>{0} Dateien bleiben auf dem Datenträger, da das Verschieben in den Papierkorb fehlgeschlagen ist und endgültiges Löschen abgelehnt wurde (aus der Liste entfernt).</value>
+  </data>
+  <data name="CouldNotMoveFilesToTheRecycleBin" xml:space="preserve">
+    <value>{0} Dateien konnten nicht in den Papierkorb verschoben werden. Prüfen Sie die Berechtigungen und versuchen Sie es erneut.</value>
+  </data>
+  <data name="DownloadThisVideo" xml:space="preserve">
+    <value>Dieses Video herunterladen</value>
+  </data>
+  <data name="DownloadThisVideoWithTDownloader" xml:space="preserve">
+    <value>Dieses Video mit T-Downloader herunterladen</value>
+  </data>
+  <data name="AboutThisPanel" xml:space="preserve">
+    <value>Über dieses Fenster</value>
+  </data>
+  <data name="CloseHideInThisTab" xml:space="preserve">
+    <value>Schließen (in diesem Tab ausblenden)</value>
+  </data>
+  <data name="TheDownloadEngineIsAlreadyRunningWaitFor" xml:space="preserve">
+    <value>Die Download-Engine läuft bereits. Warten Sie auf den Abschluss.</value>
+  </data>
+  <data name="InvalidCookieOrHeaderValueRefreshThePage" xml:space="preserve">
+    <value>Ungültiger Cookie- oder Headerwert. Aktualisieren Sie die Seite im Browser und versuchen Sie es erneut.</value>
+  </data>
+  <data name="TheRemoteFileChangedDuringDownloadAddThe" xml:space="preserve">
+    <value>Die entfernte Datei wurde während des Downloads geändert. Fügen Sie die Adresse erneut hinzu.</value>
+  </data>
+  <data name="TheServerDidNotReturnAPartialResponse" xml:space="preserve">
+    <value>Der Server hat keine Teilantwort gesendet. Versuchen Sie es mit einer Verbindung erneut.</value>
+  </data>
+  <data name="TheServerReturnedAnUnexpectedRangeRequestedReceived" xml:space="preserve">
+    <value>Der Server hat einen unerwarteten Bereich gesendet (angefordert {0}, erhalten {1}). Starten Sie den Download erneut.</value>
+  </data>
+  <data name="TheConnectionClosedEarlyCheckYourNetworkAnd" xml:space="preserve">
+    <value>Die Verbindung wurde vorzeitig geschlossen. Prüfen Sie Ihr Netzwerk und versuchen Sie es erneut.</value>
+  </data>
+  <data name="YourSessionCookieMayBeMissingAddThe" xml:space="preserve">
+    <value> — Ihr Sitzungscookie fehlt möglicherweise. Fügen Sie die Adresse erneut aus dem Browser hinzu (Cookies werden nicht gespeichert).</value>
+  </data>
+  <data name="TooManyRedirectsCheckTheURLAndTry" xml:space="preserve">
+    <value>Zu viele Weiterleitungen. Prüfen Sie die Adresse und versuchen Sie es erneut.</value>
+  </data>
+  <data name="UnsupportedRedirectURLUseAnHTTPOrHTTPS" xml:space="preserve">
+    <value>Nicht unterstützte Weiterleitungsadresse. Verwenden Sie eine HTTP- oder HTTPS-Adresse.</value>
+  </data>
+  <data name="TooManyPendingConfirmationsCloseAConfirmationDialog" xml:space="preserve">
+    <value>Zu viele ausstehende Bestätigungen. Schließen Sie ein Bestätigungsfenster und versuchen Sie es erneut.</value>
+  </data>
+  <data name="CouldNotProcessTheRequestWithin24Hours" xml:space="preserve">
+    <value>Die Anfrage konnte innerhalb von 24 Stunden nicht verarbeitet werden. Fügen Sie die Adresse erneut hinzu.</value>
+  </data>
+  <data name="TheRequestFileIsDamagedAddTheURL" xml:space="preserve">
+    <value>Die Anfragedatei ist beschädigt. Fügen Sie die Adresse erneut hinzu.</value>
+  </data>
+  <data name="TheRequestWasRejectedCheckTheURLAnd" xml:space="preserve">
+    <value>Die Anfrage wurde abgelehnt. Prüfen Sie die Adresse und versuchen Sie es erneut.</value>
+  </data>
+  <data name="TheMessageIsEmptyTryAgain" xml:space="preserve">
+    <value>Die Nachricht ist leer. Versuchen Sie es erneut.</value>
+  </data>
+  <data name="DisconnectedOpenTBridgeAndTryAgain" xml:space="preserve">
+    <value>Getrennt. Öffnen Sie T-Bridge und versuchen Sie es erneut.</value>
+  </data>
+  <data name="DownloadsJsonWasDamagedThePreviousVersionDownloads" xml:space="preserve">
+    <value>downloads.json war beschädigt; die vorherige Version (downloads.json.bak) wurde wiederhergestellt. Prüfen Sie Ihre Downloads.</value>
+  </data>
+  <data name="TheDownloadListAndBackupCouldNotBe" xml:space="preserve">
+    <value>Die Download-Liste und Sicherung konnten nicht gelesen werden. Eine leere Liste wurde geöffnet; die beschädigte Datei wurde als downloads.json.corrupt gespeichert. Fügen Sie Ihre Adressen erneut hinzu.</value>
+  </data>
+  <data name="DownloadsJsonWasMissingTheBackupDownloadsJson" xml:space="preserve">
+    <value>downloads.json fehlte; die Sicherung (downloads.json.bak) wurde wiederhergestellt. Prüfen Sie Ihre Downloads.</value>
+  </data>
+  <data name="InvalidURLEnterAnHTTPOrHTTPSURL" xml:space="preserve">
+    <value>Ungültige Adresse. Geben Sie eine HTTP- oder HTTPS-Adresse ein.</value>
+  </data>
+  <data name="VideoDownloaderYtDlpIsNotConfiguredSet" xml:space="preserve">
+    <value>Video-Downloader (yt-dlp) ist nicht konfiguriert. Legen Sie den Pfad unter Einstellungen &gt; Video fest.</value>
+  </data>
+  <data name="QueueFinishedExitingInSStopTheQueue" xml:space="preserve">
+    <value>Warteschlange abgeschlossen; Beenden in {0} s (zum Abbrechen Warteschlange anhalten).</value>
+  </data>
+  <data name="AllQueuedDownloadsCompleted" xml:space="preserve">
+    <value>Alle Downloads in der Warteschlange wurden abgeschlossen.</value>
+  </data>
+  <data name="ThePlaylistIsTooLargeChooseAnotherStream" xml:space="preserve">
+    <value>Die Wiedergabeliste ist zu groß. Wählen Sie einen anderen Stream.</value>
+  </data>
+  <data name="TheServerTimedOutWhileLoadingThePlaylist" xml:space="preserve">
+    <value>Zeitüberschreitung beim Laden der Wiedergabeliste. Prüfen Sie Ihr Netzwerk und versuchen Sie es erneut.</value>
+  </data>
+  <data name="InvalidURLEnterAValidHTTPOrHTTPS" xml:space="preserve">
+    <value>Ungültige Adresse. Geben Sie eine gültige HTTP- oder HTTPS-Adresse ein.</value>
+  </data>
+  <data name="TheURLIsNotAnHLSPlaylistChoose" xml:space="preserve">
+    <value>Die Adresse ist keine HLS-Wiedergabeliste. Wählen Sie einen gültigen Stream.</value>
+  </data>
+  <data name="ThePlaylistHasNoSegmentsPlayTheVideo" xml:space="preserve">
+    <value>Die Wiedergabeliste enthält keine Segmente. Spielen Sie das Video ab und versuchen Sie es erneut.</value>
+  </data>
+  <data name="LiveStreamsAreNotSupportedChooseARecorded" xml:space="preserve">
+    <value>Livestreams werden nicht unterstützt. Wählen Sie ein aufgezeichnetes Video.</value>
+  </data>
+  <data name="DRMProtectedContentCannotBeDownloadedChooseUnprotected" xml:space="preserve">
+    <value>DRM-geschützte Inhalte können nicht heruntergeladen werden. Wählen Sie ungeschützte Inhalte (</value>
+  </data>
+  <data name="DefaultQuality2" xml:space="preserve">
+    <value>Standardqualität</value>
+  </data>
+  <data name="FfmpegIsRequiredToMergeSeparateVideoAnd" xml:space="preserve">
+    <value>ffmpeg wird zum Zusammenführen getrennter Video- und Audiostreams benötigt. Legen Sie den Pfad unter Einstellungen &gt; Video fest.</value>
+  </data>
+  <data name="Converting" xml:space="preserve">
+    <value>Wird konvertiert {0}%</value>
+  </data>
+  <data name="Converting0" xml:space="preserve">
+    <value>Wird konvertiert 0%</value>
+  </data>
+  <data name="FfmpegCouldNotMergeVideoAndAudioDownloaded" xml:space="preserve">
+    <value>ffmpeg konnte Video und Audio nicht zusammenführen; heruntergeladene Segmente bleiben erhalten. Prüfen Sie ffmpeg und versuchen Sie es erneut.</value>
+  </data>
+  <data name="NotEnoughDiskSpaceFreeAboutRequiredFree" xml:space="preserve">
+    <value>Nicht genügend Speicherplatz ({0}): {1} frei, etwa {2} benötigt ({3}). Geben Sie Speicherplatz frei oder ändern Sie den Speicherort.</value>
+  </data>
+  <data name="InvalidAESKeyChooseAnUnprotectedStream" xml:space="preserve">
+    <value>Ungültiger AES-Schlüssel. Wählen Sie einen ungeschützten Stream (</value>
+  </data>
+  <data name="WhenStartingTheDownload" xml:space="preserve">
+    <value>beim Starten des Downloads</value>
+  </data>
+  <data name="TheDownloadTimedOutCheckYourNetworkAnd" xml:space="preserve">
+    <value>Zeitüberschreitung beim Download. Prüfen Sie Ihr Netzwerk und versuchen Sie es erneut.</value>
+  </data>
+  <data name="TheDownloadStoppedWithMissingSegmentsRetryTo" xml:space="preserve">
+    <value>Der Download wurde mit fehlenden Segmenten unterbrochen. Versuchen Sie es erneut, um fortzusetzen.</value>
+  </data>
+  <data name="BeforeMerging" xml:space="preserve">
+    <value>vor dem Zusammenführen</value>
+  </data>
+  <data name="Merging" xml:space="preserve">
+    <value>Wird zusammengeführt {0}%</value>
+  </data>
+  <data name="TheServerRefusedASegmentHTTPRefreshThe" xml:space="preserve">
+    <value>Der Server hat ein Segment abgelehnt (HTTP {0}). Aktualisieren Sie die Seite und fügen Sie die Adresse erneut hinzu.</value>
+  </data>
+  <data name="ASegmentExceedsTheSizeLimitMBMB" xml:space="preserve">
+    <value>Ein Segment überschreitet die Größenbegrenzung ({0} MB &gt; {1} MB). Wählen Sie einen anderen Stream.</value>
+  </data>
+  <data name="ASegmentExceedsTheSizeLimitChooseAnother" xml:space="preserve">
+    <value>Ein Segment überschreitet die Größenbegrenzung. Wählen Sie einen anderen Stream.</value>
+  </data>
+  <data name="CouldNotDownloadASegmentCheckYourNetwork" xml:space="preserve">
+    <value>Ein Segment konnte nicht heruntergeladen werden. Prüfen Sie Ihr Netzwerk und versuchen Sie es erneut. Details: </value>
+  </data>
+  <data name="SAMPLEAESEncryptedStream" xml:space="preserve">
+    <value>SAMPLE-AES-verschlüsselter Stream</value>
+  </data>
+  <data name="DRMKey" xml:space="preserve">
+    <value>DRM-Schlüssel (</value>
+  </data>
+  <data name="NoStreamURLFoundPlayTheVideoAnd" xml:space="preserve">
+    <value>Keine Stream-Adresse gefunden. Spielen Sie das Video ab und versuchen Sie es erneut.</value>
+  </data>
+  <data name="NoUsableVODHLSPlaylistFoundPlayA" xml:space="preserve">
+    <value>Keine verwendbare VOD-HLS-Wiedergabeliste gefunden. Spielen Sie ein aufgezeichnetes Video ab und versuchen Sie es erneut.</value>
+  </data>
+  <data name="QualityHls" xml:space="preserve">
+    <value>Qualität {0} hls{1}</value>
+  </data>
+  <data name="AudioHls" xml:space="preserve">
+    <value>Audio {0} hls</value>
+  </data>
+  <data name="OtherStreamHls" xml:space="preserve">
+    <value>Weiterer Stream {0} ({1}) hls</value>
+  </data>
+  <data name="PHlsUnverified" xml:space="preserve">
+    <value>{0}p hls (ungeprüft)</value>
+  </data>
+  <data name="DownloadedSegmentsKeptRestartToResume" xml:space="preserve">
+    <value> (heruntergeladene Segmente bleiben erhalten; zum Fortsetzen neu starten)</value>
+  </data>
+  <data name="CouldNotStartYtDlpCheckItsPath" xml:space="preserve">
+    <value>yt-dlp konnte nicht gestartet werden. Prüfen Sie den Pfad unter Einstellungen &gt; Video. Details: </value>
+  </data>
+  <data name="YtDlpTimedOutCheckYourNetworkAnd" xml:space="preserve">
+    <value>Zeitüberschreitung bei yt-dlp. Prüfen Sie Ihr Netzwerk und versuchen Sie es erneut.</value>
+  </data>
+  <data name="CouldNotReadYtDlpOutputUpdateYt" xml:space="preserve">
+    <value>Die yt-dlp-Ausgabe konnte nicht gelesen werden. Aktualisieren Sie yt-dlp und versuchen Sie es erneut.</value>
+  </data>
+  <data name="YtDlpNotFoundSetItsPathIn2" xml:space="preserve">
+    <value>yt-dlp nicht gefunden. Legen Sie den Pfad unter Einstellungen &gt; Video fest oder folgen Sie dem Installationslink.</value>
+  </data>
+  <data name="BestQuality" xml:space="preserve">
+    <value>Beste Qualität</value>
+  </data>
+  <data name="AudioOnly" xml:space="preserve">
+    <value>Nur Audio ({0}){1}</value>
+  </data>
+  <data name="DRMProtectedContentCannotBeDownloadedChooseUnprotected2" xml:space="preserve">
+    <value>DRM-geschützte Inhalte können nicht heruntergeladen werden. Wählen Sie ungeschützte Inhalte.</value>
+  </data>
+  <data name="FfmpegNotFoundSetItsPathInSettings" xml:space="preserve">
+    <value>ffmpeg nicht gefunden. Legen Sie den Pfad unter Einstellungen &gt; Video fest, um Video und Audio zusammenzuführen.</value>
+  </data>
+  <data name="YtDlpDoesNotSupportThisURLChoose" xml:space="preserve">
+    <value>yt-dlp unterstützt diese Adresse nicht. Wählen Sie eine unterstützte Video-Adresse.</value>
+  </data>
+  <data name="ThisVideoRequiresSignInSignInThrough" xml:space="preserve">
+    <value>Dieses Video erfordert eine Anmeldung. Melden Sie sich im Browser an und fügen Sie die Adresse erneut hinzu.</value>
+  </data>
+  <data name="ThisVideoIsUnavailablePrivateRemovedOrRegion" xml:space="preserve">
+    <value>Dieses Video ist nicht verfügbar (privat, entfernt oder regional gesperrt). Wählen Sie ein anderes Video.</value>
+  </data>
+  <data name="TheServerDeniedAccessHTTP403SignIn" xml:space="preserve">
+    <value>Der Server hat den Zugriff verweigert (HTTP 403). Melden Sie sich im Browser an und versuchen Sie es erneut.</value>
+  </data>
+  <data name="VideoNotFoundHTTP404CheckTheURL" xml:space="preserve">
+    <value>Video nicht gefunden (HTTP 404). Prüfen Sie die Adresse oder wählen Sie ein anderes Video.</value>
+  </data>
+  <data name="CouldNotReachTheServerCheckYourNetwork" xml:space="preserve">
+    <value>Der Server ist nicht erreichbar. Prüfen Sie Ihr Netzwerk und versuchen Sie es erneut.</value>
+  </data>
+  <data name="YtDlpFailedUpdateYtDlpAndTry" xml:space="preserve">
+    <value>yt-dlp ist fehlgeschlagen. Aktualisieren Sie yt-dlp und versuchen Sie es erneut.</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>Sprache</value>
+  </data>
+  <data name="SystemLanguage" xml:space="preserve">
+    <value>Systemsprache (Standard)</value>
+  </data>
+  <data name="Turkish" xml:space="preserve">
+    <value>Türkçe</value>
+  </data>
+  <data name="English" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="German" xml:space="preserve">
+    <value>Deutsch</value>
+  </data>
+  <data name="RestartLanguage" xml:space="preserve">
+    <value>Ihre Spracheinstellung wurde gespeichert. T-Downloader jetzt neu starten, um sie anzuwenden?</value>
+  </data>
+  <data name="LanguageSaved" xml:space="preserve">
+    <value>Spracheinstellung gespeichert</value>
+  </data>
+  <data name="BridgeInvitationTitle" xml:space="preserve">
+    <value>Datei auf Ihrem Smartphone nutzen</value>
+  </data>
+  <data name="BridgeInvitationBody" xml:space="preserve">
+    <value>Möchten Sie diese Datei an Ihr Smartphone senden? Mit T-Bridge geht das mit einem Klick.</value>
+  </data>
+  <data name="GetBridge" xml:space="preserve">
+    <value>T-Bridge holen</value>
+  </data>
+  <data name="PhoneDisconnected" xml:space="preserve">
+    <value>Ihr Smartphone ist nicht verbunden — öffnen Sie T-Bridge auf Ihrem Smartphone.</value>
+  </data>
+  <data name="DatePattern" xml:space="preserve">
+    <value>dd.MM.yyyy HH:mm</value>
+  </data>
+  <data name="SizeBytes" xml:space="preserve">
+    <value>{0} ({1:N0} Bytes)</value>
+  </data>
+  <data name="Seconds" xml:space="preserve">
+    <value>{0} s</value>
+  </data>
+  <data name="MinutesSeconds" xml:space="preserve">
+    <value>{0} Min. {1} s</value>
+  </data>
+  <data name="HoursMinutes" xml:space="preserve">
+    <value>{0} Std. {1} Min.</value>
+  </data>
+  <data name="PerSecond" xml:space="preserve">
+    <value>/s</value>
+  </data>
+  <data name="GetApp" xml:space="preserve">
+    <value>{0} holen</value>
+  </data>
+  <data name="CategoryCompressed" xml:space="preserve">
+    <value>Komprimiert</value>
+  </data>
+  <data name="CategoryDocuments" xml:space="preserve">
+    <value>Dokumente</value>
+  </data>
+  <data name="CategoryMusic" xml:space="preserve">
+    <value>Musik</value>
+  </data>
+  <data name="CategoryPrograms" xml:space="preserve">
+    <value>Programme</value>
+  </data>
+  <data name="CategoryVideo" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="CategoryPictures" xml:space="preserve">
+    <value>Bilder</value>
+  </data>
+  <data name="CategoryGeneral" xml:space="preserve">
+    <value>Allgemein</value>
+  </data>
+  <data name="DownloadFailed" xml:space="preserve">
+    <value>Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.</value>
+  </data>
+  <data name="FileLabel" xml:space="preserve">
+    <value>Datei:</value>
+  </data>
+  <data name="SizeLabel" xml:space="preserve">
+    <value>Größe:</value>
+  </data>
+  <data name="VideoLabel" xml:space="preserve">
+    <value>Video: </value>
+  </data>
+  <data name="ConnectionNumber" xml:space="preserve">
+    <value>Nr.</value>
+  </data>
+  <data name="AllExecutables" xml:space="preserve">
+    <value>Alle ausführbaren Dateien</value>
+  </data>
+  <data name="NoMasterQuality" xml:space="preserve">
+    <value>Die Hauptwiedergabeliste enthält keine Qualitätsstufen. Wählen Sie einen anderen Stream.</value>
+  </data>
+  <data name="AppName" xml:space="preserve">
+    <value>T-Downloader</value>
+  </data>
+  <data name="InstagramLabel" xml:space="preserve">
+    <value>Instagram:</value>
+  </data>
+  <data name="UrlLabel" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="Md5Label" xml:space="preserve">
+    <value>MD5:</value>
+  </data>
+  <data name="Sha256Label" xml:space="preserve">
+    <value>SHA-256:</value>
+  </data>
+  <data name="DeveloperSignature" xml:space="preserve">
+    <value>Taha Şaprak</value>
+  </data>
+  <data name="ExtDownload" xml:space="preserve">
+    <value>Mit T-Downloader herunterladen</value>
+  </data>
+  <data name="ExtAllLinks" xml:space="preserve">
+    <value>Alle Links mit T-Downloader herunterladen</value>
+  </data>
+  <data name="ExtSelectedLinks" xml:space="preserve">
+    <value>Ausgewählte Links herunterladen</value>
+  </data>
+  <data name="ExtVideoDownload" xml:space="preserve">
+    <value>Dieses Video herunterladen</value>
+  </data>
+  <data name="ExtNoReply" xml:space="preserve">
+    <value>T-Downloader antwortet nicht. Öffnen Sie die App und versuchen Sie es erneut.</value>
+  </data>
+  <data name="ExtLoading" xml:space="preserve">
+    <value>Qualitätsstufen werden geladen…</value>
+  </data>
+  <data name="ExtRetry" xml:space="preserve">
+    <value>↻ Wiederholen</value>
+  </data>
+  <data name="ExtOtherFiles" xml:space="preserve">
+    <value>Weitere Dateien</value>
+  </data>
+  <data name="ExtFile" xml:space="preserve">
+    <value>Datei</value>
+  </data>
+  <data name="ExtAudioOnly" xml:space="preserve">
+    <value>Nur Audio</value>
+  </data>
+  <data name="ExtVideo" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="ExtSending" xml:space="preserve">
+    <value>Wird gesendet…</value>
+  </data>
+  <data name="ExtSent" xml:space="preserve">
+    <value>✓ An T-Downloader gesendet</value>
+  </data>
+  <data name="ExtSendFailed" xml:space="preserve">
+    <value>T-Downloader ist nicht erreichbar. Öffnen Sie die App und versuchen Sie es erneut.</value>
+  </data>
+  <data name="ExtNeedTool" xml:space="preserve">
+    <value>Dieses Video benötigt yt-dlp. Legen Sie den Pfad unter Einstellungen &gt; Video fest.</value>
+  </data>
+  <data name="ExtVideoFailed" xml:space="preserve">
+    <value>Das Video konnte nicht gelesen werden. Spielen Sie es ab und versuchen Sie es erneut.</value>
+  </data>
+  <data name="ExtConnected" xml:space="preserve">
+    <value>Verbunden</value>
+  </data>
+  <data name="ExtVersion" xml:space="preserve">
+    <value> (Version {0})</value>
+  </data>
+  <data name="ExtDisconnected" xml:space="preserve">
+    <value>Nicht mit der App verbunden</value>
+  </data>
+  <data name="ExtOfflineHint" xml:space="preserve">
+    <value>Downloads bleiben im Browser, wenn T-Downloader nicht installiert ist oder nicht läuft. Öffnen Sie die App.</value>
+  </data>
+  <data name="ExtChecking" xml:space="preserve">
+    <value>Wird geprüft…</value>
+  </data>
+  <data name="ExtCapture" xml:space="preserve">
+    <value>Browser-Downloads abfangen</value>
+  </data>
+  <data name="ExtPauseSite" xml:space="preserve">
+    <value>Auf dieser Website anhalten</value>
+  </data>
+  <data name="ExtPauseHost" xml:space="preserve">
+    <value>Auf dieser Website anhalten ({0})</value>
+  </data>
+  <data name="ExtDescription" xml:space="preserve">
+    <value>Downloads und Videos mit der T-Downloader-Desktop-App abfangen.</value>
+  </data>
+  <data name="BytesSuffix" xml:space="preserve">
+    <value> Bytes).</value>
+  </data>
+  <data name="Legal" xml:space="preserve">
+    <value>Rechtliches</value>
+  </data>
+  <data name="Privacy" xml:space="preserve">
+    <value>Datenschutzerklärung</value>
+  </data>
+  <data name="License" xml:space="preserve">
+    <value>Lizenz</value>
+  </data>
+  <data name="Notices" xml:space="preserve">
+    <value>Open-Source-Hinweise</value>
+  </data>
+  <data name="QueuedForPhone" xml:space="preserve">
+    <value>Die Datei wurde zur Übertragung auf Ihr Smartphone eingereiht.</value>
+  </data>
+</root>

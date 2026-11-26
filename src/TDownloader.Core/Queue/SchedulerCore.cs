@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using TDownloader.Core.Downloads;
 using TDownloader.Core.Settings;
 
@@ -105,10 +106,10 @@ public sealed class SchedulerCore
                 {
                     case "exit":
                         _exitAt = now + ExitCountdown;
-                        Notify?.Invoke($"Kuyruk bitti; {(int)ExitCountdown.TotalSeconds} sn içinde çıkılacak (iptal için kuyruğu durdurun).");
+                        Notify?.Invoke(Strings.QueueFinishedExitingInSStopTheQueue((int)ExitCountdown.TotalSeconds));
                         ExitCountdownChanged?.Invoke((int)ExitCountdown.TotalSeconds);
                         break;
-                    case "notify": Notify?.Invoke("Kuyruktaki tüm indirmeler tamamlandı."); break;
+                    case "notify": Notify?.Invoke(Strings.AllQueuedDownloadsCompleted); break;
                 }
             }
         }

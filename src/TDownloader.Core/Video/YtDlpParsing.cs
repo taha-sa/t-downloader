@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Globalization;
 using System.Text.Json;
 
@@ -101,15 +102,15 @@ public static class YtDlpParsing
             options.Add(new QualityOption($"{grp.Key}p{fps} {best.Ext}{SizeText(size)}", fmt, "mp4", grp.Key, size, false));
         }
         if (options.Count == 0 && video.Count > 0)
-            options.Add(new QualityOption("En iyi kalite", "bv*+ba/b", "mp4", 0, 0, false)); // yükseklik bilinmiyor (bazı HLS)
+            options.Add(new QualityOption(Strings.BestQuality, "bv*+ba/b", "mp4", 0, 0, false)); // yükseklik bilinmiyor (bazı HLS)
         if (audio.Count > 0)
         {
             var a = audio.FirstOrDefault(x => x.Ext == "m4a") ?? audio.OrderByDescending(x => x.Tbr ?? 0).First();
             string sel = a.Ext == "m4a" ? "bestaudio[ext=m4a]/bestaudio" : "bestaudio";
-            options.Add(new QualityOption($"Sadece ses ({a.Ext}){SizeText(a.Size)}", sel, a.Ext, -1, a.Size, true));
+            options.Add(new QualityOption(Strings.AudioOnly(a.Ext, SizeText(a.Size)), sel, a.Ext, -1, a.Size, true));
         }
         if (options.Count == 0)
-            options.Add(new QualityOption("En iyi kalite", "best", "mp4", 0, 0, false));
+            options.Add(new QualityOption(Strings.BestQuality, "best", "mp4", 0, 0, false));
         if (options.Count > MaxOptions) options = options.Take(MaxOptions).ToList();
         return new VideoInfo(title, options);
     }
@@ -125,7 +126,7 @@ public static class YtDlpParsing
         return options.ToList().IndexOf(ok);
     }
 
-    private static string SizeText(long b) => b <= 0 ? "" : $" ({b / 1048576.0:0.#} MB)";
+    private static string SizeText(long b) => b <= 0 ? "" : $" ({b / 1048576.0:0.#}\u00a0MB)";
 
     private static string? Str(JsonElement e, string n) =>
         e.ValueKind == JsonValueKind.Object && e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
@@ -140,18 +141,18 @@ public static class YtDlpParsing
     {
         var text = stderr ?? "";
         string lower = text.ToLowerInvariant();
-        if (System.Text.RegularExpressions.Regex.IsMatch(lower, @"\bdrm\b")) return "Bu içerik DRM korumalı olduğu için indirilemez.";
+        if (System.Text.RegularExpressions.Regex.IsMatch(lower, @"\bdrm\b")) return Strings.DRMProtectedContentCannotBeDownloadedChooseUnprotected2;
         if (lower.Contains("ffmpeg") && (lower.Contains("not found") || lower.Contains("not installed") || lower.Contains("no such file")))
-            return "ffmpeg bulunamadı. Video ve ses birleştirilemiyor; Seçenekler > Video sekmesinden ffmpeg yolunu belirtin.";
-        if (lower.Contains("unsupported url")) return "Bu adres yt-dlp tarafından desteklenmiyor.";
+            return Strings.FfmpegNotFoundSetItsPathInSettings;
+        if (lower.Contains("unsupported url")) return Strings.YtDlpDoesNotSupportThisURLChoose;
         if (lower.Contains("sign in") || lower.Contains("not a bot") || lower.Contains("login required") || lower.Contains("age-restricted") || lower.Contains("members-only"))
-            return "Bu video için oturum açmak gerekiyor (tarayıcıdan oturum çerezi alınamadı veya süresi doldu).";
+            return Strings.ThisVideoRequiresSignInSignInThrough;
         if (lower.Contains("video unavailable") || lower.Contains("private video") || lower.Contains("has been removed") || lower.Contains("not available in your country"))
-            return "Video kullanılamıyor (özel, silinmiş veya bölgenize kapalı olabilir).";
-        if (lower.Contains("http error 403")) return "Sunucu erişimi reddetti (HTTP 403).";
-        if (lower.Contains("http error 404")) return "Video bulunamadı (HTTP 404).";
+            return Strings.ThisVideoIsUnavailablePrivateRemovedOrRegion;
+        if (lower.Contains("http error 403")) return Strings.TheServerDeniedAccessHTTP403SignIn;
+        if (lower.Contains("http error 404")) return Strings.VideoNotFoundHTTP404CheckTheURL;
         if (lower.Contains("getaddrinfo") || lower.Contains("unable to download") || lower.Contains("timed out") || lower.Contains("connection"))
-            return "Ağ hatası: sunucuya ulaşılamadı.";
+            return Strings.CouldNotReachTheServerCheckYourNetwork;
         var err = text.Split('\n').Select(l => l.Trim()).LastOrDefault(l => l.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase));
         if (err != null)
         {
@@ -159,7 +160,7 @@ public static class YtDlpParsing
             return err.Length > 300 ? err[..300] + "…" : err;
         }
         var last = text.Split('\n').Select(l => l.Trim()).LastOrDefault(l => l.Length > 0);
-        return last == null ? "yt-dlp başarısız oldu." : last.Length > 300 ? last[..300] + "…" : last;
+        return last == null ? Strings.YtDlpFailedUpdateYtDlpAndTry : last.Length > 300 ? last[..300] + "…" : last;
     }
 }
 

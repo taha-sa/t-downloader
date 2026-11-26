@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
@@ -143,14 +144,14 @@ public static class InboxSpool
         {
             try
             {
-                if (now - time > MaxAge) { Fail(path, "24 saatten uzun süre işlenemedi"); continue; }
+                if (now - time > MaxAge) { Fail(path, Strings.CouldNotProcessTheRequestWithin24Hours); continue; }
                 var plain = Unprotect(File.ReadAllText(path, Encoding.UTF8));
                 var msg = plain == null ? null : IpcSerializer.TryDeserialize(plain) as DownloadMessage;
-                if (msg == null || string.IsNullOrEmpty(msg.Url)) { Fail(path, "Bozuk istek dosyası"); continue; }
+                if (msg == null || string.IsNullOrEmpty(msg.Url)) { Fail(path, Strings.TheRequestFileIsDamagedAddTheURL); continue; }
                 switch (handler(msg, path))
                 {
                     case DrainAction.Done: File.Delete(path); handled++; break;
-                    case DrainAction.Failed: Fail(path, "İstek reddedildi"); break;
+                    case DrainAction.Failed: Fail(path, Strings.TheRequestWasRejectedCheckTheURLAnd); break;
                 }
             }
             catch (IOException) { /* başka işlem kullanıyor / az önce silindi: sonraki turda */ }

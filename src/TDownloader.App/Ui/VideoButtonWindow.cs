@@ -1,4 +1,5 @@
-﻿using System.Drawing.Drawing2D;
+using TDownloader.Core.Localization;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
@@ -54,7 +55,7 @@ public sealed class VideoButtonWindow : Form
     private ButtonRegion _hover, _down;
     private bool _dragging;
     private Point _dragStartCursor, _dragStartLoc;
-    private string _mainText = "Bu videoyu indir";
+    private string _mainText = Strings.DownloadThisVideo;
     private PanelLayout _layout;
 
     public event Action? MainClicked;
@@ -307,9 +308,9 @@ public sealed class VideoButtonWindow : Form
 
     private string? TipFor(ButtonRegion r) => r switch
     {
-        ButtonRegion.Main => "Bu videoyu T-Downloader ile indir",
-        ButtonRegion.Help => "Bu panel hakkında",
-        ButtonRegion.Close => "Kapat (bu sekmede gizle)",
+        ButtonRegion.Main => Strings.DownloadThisVideoWithTDownloader,
+        ButtonRegion.Help => Strings.AboutThisPanel,
+        ButtonRegion.Close => Strings.CloseHideInThisTab,
         _ => null,
     };
 

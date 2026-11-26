@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+using UpdateCard = TDownloader.App.Sdk.UpdateCard;
+using System.Drawing;
 using TSuite.Update;
 
 namespace TDownloader.App.Services;

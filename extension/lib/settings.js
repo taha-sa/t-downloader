@@ -1,4 +1,4 @@
-// Ayarlar: App'ten gelen `settings` + kullanıcının yerel aç/kapat anahtarı.
+﻿// Ayarlar: App'ten gelen `settings` + kullanıcının yerel aç/kapat anahtarı.
 import { DEFAULT_SETTINGS } from "./protocol.js";
 
 let appSettings = { ...DEFAULT_SETTINGS };
@@ -18,6 +18,7 @@ async function load() {
 export function applyAppSettings(msg) {
   appSettings = {
     ...appSettings,
+    language: typeof msg.language === "string" ? msg.language : appSettings.language,
     interceptEnabled: msg.interceptEnabled ?? appSettings.interceptEnabled,
     minFileSizeKb: Number.isFinite(msg.minFileSizeKb) ? msg.minFileSizeKb : appSettings.minFileSizeKb,
     excludedSites: Array.isArray(msg.excludedSites) ? msg.excludedSites : appSettings.excludedSites,
@@ -54,4 +55,5 @@ export function effective() {
 }
 
 // Sayfa içi düğme ve geometri için arayüz ayarları.
-export const uiConfig = () => ({ showVideoButton: appSettings.showVideoButton !== false, nativeButton: appSettings.nativeButton === true });
+export const uiConfig = () => ({ ...(appSettings.language ? { language: appSettings.language } : {}), showVideoButton: appSettings.showVideoButton !== false, nativeButton: appSettings.nativeButton === true });
+

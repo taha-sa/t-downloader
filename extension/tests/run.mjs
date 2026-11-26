@@ -1,6 +1,8 @@
 // Chrome API'leri sahte nesnelerle taklit eden testler. Çalıştır: node tests/run.mjs
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import "../localization.js";
+globalThis.TDownloaderLocale.set("tr");
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
@@ -368,7 +370,7 @@ await test("content.js payload: en büyük görünür video", () => {
     chrome: { runtime: { sendMessage: () => Promise.resolve(), onMessage: mkListener() } },
   };
   sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
+  sandbox.TDownloaderLocale = globalThis.TDownloaderLocale; vm.createContext(sandbox);
   vm.runInContext(readFileSync(join(root, "content.js"), "utf8"), sandbox);
   const p = JSON.parse(JSON.stringify(sandbox.__TD_TEST__.exports.buildPayload(doc, win)));
   assert.equal(p.visible, true);
@@ -391,7 +393,7 @@ function loadContent(winExtra, docExtra, els = []) {
   const sandbox = { window: win, document: doc, __TD_TEST__: {}, setTimeout, setInterval: () => 0, Date, JSON, Math, parseFloat,
     MutationObserver: class { observe() {} }, chrome: { runtime: { sendMessage: () => Promise.resolve(), onMessage: mkListener() } } };
   sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
+  sandbox.TDownloaderLocale = globalThis.TDownloaderLocale; vm.createContext(sandbox);
   vm.runInContext(readFileSync(join(root, "content.js"), "utf8"), sandbox);
   return { doc, win, ex: sandbox.__TD_TEST__.exports };
 }
@@ -426,7 +428,7 @@ await test("button.js: video seçimi ve düğme konumu", () => {
   win.top = win;
   const sandbox = { window: win, document: doc, __TD_TEST__: {}, parseFloat, Math, setTimeout, clearTimeout, requestAnimationFrame: () => 0, addEventListener() {}, innerWidth: 1000, innerHeight: 600,
     chrome: { runtime: { sendMessage() {}, onMessage: mkListener(), getURL: (p) => "chrome-extension://x/" + p } } };
-  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  sandbox.globalThis = sandbox; sandbox.TDownloaderLocale = globalThis.TDownloaderLocale; vm.createContext(sandbox);
   vm.runInContext(readFileSync(join(root, "button.js"), "utf8"), sandbox);
   const b = sandbox.__TD_TEST__.button;
   const vid = (w, h, o = {}) => ({ tagName: "VIDEO", closest: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: w, height: h, right: w, bottom: h }), ...o });
@@ -445,7 +447,7 @@ await test("button.js: video seçimi ve düğme konumu", () => {
   assert.equal(b.buttonPos(R(100, 700, 640, 360), 160, 30, 1000, 600).visible, false);               // altta
   assert.equal(b.buttonPos(R(100, -345, 640, 360), 160, 30, 1000, 600).visible, false);             // video görünür ama düğme bölgesi üst kenarın dışında
   assert.equal(b.groupOf({ kind: "file" }), "Dosya");
-  assert.equal(b.groupOf({ audioOnly: true }), "Sadece ses");
+  assert.equal(b.groupOf({ audioOnly: true }), "Yalnızca ses");
 });
 
 // ---- önceden alma YOK: kalite isteği yalnızca düğme tıklamasıyla gider ----
@@ -462,7 +464,7 @@ await test("önceden alma yok: media mesajı ve düğme yüklemesi qualities gö
   const msgs = [];
   const sandbox = { window: win, document: doc, __TD_TEST__: {}, parseFloat, Math, setTimeout, clearTimeout, requestAnimationFrame: () => 0, addEventListener() {}, innerWidth: 1000, innerHeight: 600,
     chrome: { runtime: { sendMessage(m) { msgs.push(m); }, onMessage: mkListener(), getURL: (p) => "chrome-extension://x/" + p } } };
-  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  sandbox.globalThis = sandbox; sandbox.TDownloaderLocale = globalThis.TDownloaderLocale; vm.createContext(sandbox);
   const src = readFileSync(join(root, "button.js"), "utf8");
   vm.runInContext(src, sandbox);
   await new Promise((r) => setTimeout(r, 50));
@@ -488,7 +490,7 @@ function loadButton(ov = {}) {
   win.top = win;
   const sandbox = { window: win, document: doc, __TD_TEST__: {}, parseFloat, Math, setTimeout, clearTimeout, requestAnimationFrame: () => 0, addEventListener() {}, innerWidth: 1000, innerHeight: 600,
     chrome: { runtime: { sendMessage() {}, onMessage: mkListener(), getURL: (p) => "chrome-extension://x/" + p } } };
-  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  sandbox.globalThis = sandbox; sandbox.TDownloaderLocale = globalThis.TDownloaderLocale; vm.createContext(sandbox);
   Object.assign(doc, ov.doc || {}); Object.assign(sandbox, ov.sandbox || {});
   vm.runInContext(readFileSync(join(root, "button.js"), "utf8"), sandbox);
   return { b: sandbox.__TD_TEST__.button, sandbox, els, doc };
@@ -578,7 +580,7 @@ await test("content.js: nativeButton=false iken geometri altyapısı HİÇ kurul
     setInterval: () => { intervals++; return 7; }, clearInterval: () => { cleared++; },
     MutationObserver: class { constructor() { observers++; } observe() {} disconnect() { disconnects++; } },
     chrome: { runtime: { sendMessage: (m, cb) => { if (typeof cb === "function") cb({ nativeButton: false }); return Promise.resolve(); }, onMessage: om } } };
-  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  sandbox.globalThis = sandbox; sandbox.TDownloaderLocale = globalThis.TDownloaderLocale; vm.createContext(sandbox);
   vm.runInContext(readFileSync(join(root, "content.js"), "utf8"), sandbox);
   const heavy = ["w:scroll", "w:resize", "w:mousemove", "w:message", "d:fullscreenchange", "d:play", "d:loadedmetadata"];
   assert.deepEqual(heavy.filter((x) => added.includes(x)), [], "geometri dinleyicileri kurulmamalı");
@@ -942,7 +944,7 @@ function loadButtonCapturing() {
   const sandbox = { window: win, document: doc, __TD_TEST__: {}, parseFloat, Math, setTimeout: () => 0, clearTimeout, setInterval: () => 0, clearInterval() {}, requestAnimationFrame: () => 0,
     addEventListener: (t, f) => { (winLs[t] ??= []).push(f); }, innerWidth: 1000, innerHeight: 600, location: { hostname: "site.test" },
     chrome: { runtime: { sendMessage(m, cb) { msgs.push(m); if (m && m.kind === "cfg" && cb) cb({ showVideoButton: true }); }, onMessage: mkListener(), getURL: (p) => "chrome-extension://x/" + p } } };
-  sandbox.globalThis = sandbox; vm.createContext(sandbox);
+  sandbox.globalThis = sandbox; sandbox.TDownloaderLocale = globalThis.TDownloaderLocale; vm.createContext(sandbox);
   vm.runInContext(readFileSync(join(root, "button.js"), "utf8"), sandbox);
   return { b: sandbox.__TD_TEST__.button, winLs, btnLs, msgs, els, vid, shadowMode: () => shadowMode, elFromPointCalls: () => elFromPointCalls };
 }
@@ -971,7 +973,7 @@ await test("A2: shadow root 'closed'; sentetik (isTrusted=false) mousemove/click
 });
 await test("A8: qualitySelect gönderilemediyse düğme hata gösterir (başarı sayılmaz)", () => {
   const src = readFileSync(join(root, "button.js"), "utf8");
-  assert.ok(/r\.ok === true/.test(src) && /ulaşılamadı; indirme başlatılamadı/.test(src));
+  assert.ok(/r\.ok === true/.test(src) && /ExtSendFailed/.test(src));
   const bg = readFileSync(join(root, "background.js"), "utf8");
   assert.ok(/sendResponse\(\{ ok: native\.send\(buildQualitySelect/.test(bg));
 });
@@ -1259,6 +1261,21 @@ await test("downloads.ui: bağlıyken arayüz gizlenir, devralma kapanınca geri
   assert.equal(capture.isUiHidden(), false);
   assert.equal(uiCalls.at(-1), true);
   settings.setUserCapture(true);
+});
+
+await test("localization: app language overrides browser language and unsupported languages use English", () => {
+  const locale = globalThis.TDownloaderLocale;
+  for (const [language, expected] of [["tr-TR", "Bağlı"], ["en-US", "Connected"], ["de-DE", "Verbunden"], ["fr-FR", "Connected"]]) {
+    locale.set(language);
+    assert.equal(locale.t("ExtConnected"), expected);
+    assert.ok(locale.t("ExtVersion", "1.2.3").includes("1.2.3"));
+    assert.ok(!locale.t("ExtNoReply").includes("!"));
+  }
+  locale.set("tr");
+});
+await test("localization: desktop settings propagate the selected language", () => {
+  settings.applyAppSettings({ language: "de-DE" });
+  assert.equal(settings.uiConfig().language, "de-DE");
 });
 
 console.log(`

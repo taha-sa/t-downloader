@@ -42,6 +42,6 @@ public class AppUiLogicTests
     public void DiskDelete_ConfirmText()
     {
         var t = DiskDeletePlan.ConfirmText(3, 5L * 1024 * 1024);
-        Assert.Equal("3 dosya diskten silinecek (toplam 5 MB). Dosyalar Geri Dönüşüm Kutusu'na gönderilecek; kutuya gönderilemeyen dosya için ayrıca sorulur (sessizce kalıcı silinmez). Emin misiniz?", t);
+        Assert.Equal("3 dosya diskten silinecek (toplam 5 MB). Dosyalar Geri Dönüşüm Kutusu'na gönderilecek; kutuya gönderilemeyen dosya için ayrıca sorulur (sessizce kalıcı silinmez). Emin misiniz?", t);
     }
 }

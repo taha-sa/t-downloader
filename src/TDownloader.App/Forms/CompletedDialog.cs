@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using TDownloader.Core.Localization;
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
@@ -71,8 +72,8 @@ public sealed class CompletedDialog : Form
         ClientSize = new Size(W, H);
         BackColor = Theme.Bg;
         Opacity = 0;
-        Text = "İndirme tamamlandı";
-        AccessibleName = "İndirme tamamlandı";
+        Text = Strings.DownloadCompleted;
+        AccessibleName = Strings.DownloadCompleted;
         AccessibleRole = AccessibleRole.Dialog;
         var wa = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
         Location = new Point(wa.Right - W - 16, wa.Bottom - H - 16);
@@ -114,7 +115,7 @@ public sealed class CompletedDialog : Form
     {
         _icon?.Dispose();
         _icon = ShellIcons.Large(_queue.Current?.FileName ?? "");
-        AccessibleName = "İndirme tamamlandı: " + (_queue.Current?.FileName ?? "");
+        AccessibleName = Strings.DownloadCompleted2 + (_queue.Current?.FileName ?? "");
         _focus = "";
         _exists = true;
         _cacheKey[0] = _cacheKey[1] = "";
@@ -158,7 +159,7 @@ public sealed class CompletedDialog : Form
         if (cur == null) return;
 
         // başlık çubuğu: marka + sayfalayıcı + kapat
-        TextRenderer.DrawText(g, "T-Downloader", _fBody, new Rectangle(Pad, 8, 150, 20), Theme.TextDim, Flags);
+        TextRenderer.DrawText(g, Strings.AppName, _fBody, new Rectangle(Pad, 8, 150, 20), Theme.TextDim, Flags);
         var closeR = new Rectangle(W - 44, 4, 36, 26);
         bool closeHot = _hover == "close";
         if (closeHot) { using var b = new SolidBrush(Color.FromArgb(40, Theme.Danger)); using var gp = Round(closeR, 6); g.FillPath(b, gp); }
@@ -176,31 +177,36 @@ public sealed class CompletedDialog : Form
 
         // üst bilgi: 32 px simge + başlık + alt başlık
         if (_icon != null) g.DrawImage(_icon, new Rectangle(Pad, 42, 32, 32));
-        TextRenderer.DrawText(g, "İndirme tamamlandı", _fTitle, new Rectangle(Pad + 44, 38, 330, 24), Theme.Text, Flags);
+        TextRenderer.DrawText(g, Strings.DownloadCompleted, _fTitle, new Rectangle(Pad + 44, 38, 330, 24), Theme.Text, Flags);
         var sub = new Rectangle(Pad + 44, 62, 360, 18);
         TextRenderer.DrawText(g, "✓", _fBold, new Rectangle(sub.X, sub.Y, 14, sub.Height), Theme.Ok, Flags);
         TextRenderer.DrawText(g, CompletedText.SizeLine(cur.Size), _fBody, new Rectangle(sub.X + 16, sub.Y, sub.Width - 16, sub.Height), Theme.TextDim, Flags);
 
         // alanlar
-        DrawField(g, 0, "url", "Adres", cur.Url, 90);
-        DrawField(g, 1, "path", "Kaydedildiği yer", cur.Path, 138);
+        DrawField(g, 0, "url", Strings.URL, cur.Url, 90);
+        DrawField(g, 1, "path", Strings.SavedTo, cur.Path, 138);
 
         // düğmeler
         int by = 190, bx = Pad;
-        bx = DrawButton(g, "open", "Aç", bx, by, 84, primary: true, enabled: _exists);
-        bx = DrawButton(g, "openwith", "Birlikte aç…", bx, by, 112, false, _exists);
-        bx = DrawButton(g, "folder", "Klasörü aç", bx, by, 100, false, _exists);
+        bx = DrawButton(g, "open", Strings.Open, bx, by, 84, primary: true, enabled: _exists);
+        bx = DrawButton(g, "openwith", Strings.OpenWith, bx, by, 112, false, _exists);
+        bx = DrawButton(g, "folder", Strings.OpenFolder, bx, by, 100, false, _exists);
         var closeBtn = new Rectangle(W - Pad - 72, by, 72, 32);
-        DrawButtonAt(g, "closebtn", "Kapat", closeBtn, false, true);
+        DrawButtonAt(g, "closebtn", Strings.Close, closeBtn, false, true);
 
         // telefon eylemleri (Telefona gönder / Telefonda aç): yalnızca uygunsa, ikinci satırda
         int shift = 0, ex = Pad;
         for (int k = 0; k < ExtraActions.Count; k++)
         {
             var act = ExtraActions[k];
-            if (!act.IsAvailable(cur)) continue;
+            bool enabled = act is not Services.PhoneSendAction || !Services.PhoneStatus.Installed || Services.PhoneStatus.Available;
             shift = ExtraRowH;
-            ex = DrawButton(g, "extra" + k, act.Text, ex, by + ExtraRowH, 132, false, true);
+            ex = DrawButton(g, "extra" + k, act.Text, ex, by + ExtraRowH, 190, false, enabled);
+        }
+        if (shift > 0 && Services.PhoneStatus.Installed && !Services.PhoneStatus.Available)
+        {
+            TextRenderer.DrawText(g, Strings.PhoneDisconnected, _fBody, new Rectangle(Pad, by + ExtraRowH + 36, W - 2 * Pad, 30), Theme.TextDim, TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+            shift += 40;
         }
         int want = H + shift;
         if (want != _h && !_resizePending && IsHandleCreated) { _resizePending = true; BeginInvoke(() => ApplyHeight(want)); }
@@ -219,20 +225,20 @@ public sealed class CompletedDialog : Form
             g.DrawLines(pen, new[] { new PointF(cb.X + 3.5f, cb.Y + 8.5f), new PointF(cb.X + 6.8f, cb.Y + 11.5f), new PointF(cb.X + 12.5f, cb.Y + 4.5f) });
         }
         var cbText = new Rectangle(cb.Right + 8, 236 + shift, 250, 20);
-        TextRenderer.DrawText(g, "Bu pencereyi bir daha gösterme", _fBody, cbText, Theme.TextDim, Flags);
+        TextRenderer.DrawText(g, Strings.DoNotShowThisWindowAgain, _fBody, cbText, Theme.TextDim, Flags);
         _hit["never"] = new Rectangle(cb.X, 236 + shift, cbText.Right - cb.X, 20);
         _order.Add("never");
         if (_focus == "never") { using var fp = new Pen(Theme.Accent, 2f) { DashStyle = DashStyle.Dot }; g.DrawRectangle(fp, Rectangle.Inflate(_hit["never"], 2, 1)); }
         if (_note != "")
             TextRenderer.DrawText(g, _note, _fBody, new Rectangle(W - Pad - 200, 236 + shift, 200, 20), Theme.Ok, Flags | TextFormatFlags.Right);
         else if (!_exists)
-            TextRenderer.DrawText(g, "Dosya taşınmış veya silinmiş", _fBody, new Rectangle(W - Pad - 170, 236 + shift, 170, 20), Theme.TextDim, Flags | TextFormatFlags.Right);
+            TextRenderer.DrawText(g, Strings.TheFileWasMovedOrDeletedCheckIts, _fBody, new Rectangle(W - Pad - 170, 236 + shift, 170, 20), Theme.TextDim, Flags | TextFormatFlags.Right);
     }
 
     private void DrawField(Graphics g, int slot, string id, string label, string value, int y)
     {
         bool flashed = _flash == id;
-        TextRenderer.DrawText(g, flashed ? label + "  · kopyalandı" : label, _fBody, new Rectangle(Pad, y, W - 2 * Pad, 16), flashed ? Theme.Ok : Theme.TextDim, Flags);
+        TextRenderer.DrawText(g, flashed ? label + Strings.Copied : label, _fBody, new Rectangle(Pad, y, W - 2 * Pad, 16), flashed ? Theme.Ok : Theme.TextDim, Flags);
         var box = new Rectangle(Pad, y + 18, W - 2 * Pad, 28);
         using (var gp = Round(box, 6))
         {
@@ -336,7 +342,7 @@ public sealed class CompletedDialog : Form
             case "openwith": OpenWith(cur); break;
             case "folder": ShowInFolder(cur); break;
             case string x when x.StartsWith("extra") && int.TryParse(x.AsSpan(5), out var xi) && xi >= 0 && xi < ExtraActions.Count:
-                if (!_exists || !File.Exists(cur.Path)) { ShowNote("Dosya bulunamadı"); break; }
+                if (ExtraActions[xi] is not Services.PhoneSendAction && (!_exists || !File.Exists(cur.Path))) { ShowNote(Strings.FileNotFoundCheckItsLocationAndTry); break; }
                 ExtraActions[xi].Execute(cur); break;
             case "prev": if (_queue.Prev()) OnEntryChanged(); break;
             case "next": if (_queue.Next()) OnEntryChanged(); break;
@@ -385,8 +391,8 @@ public sealed class CompletedDialog : Form
     {
         if (!_exists) return;
         if (ExecutableGuard.IsRisky(c.Path)
-            && MessageBox.Show(this, $"\"{c.FileName}\" çalıştırılabilir bir dosya. İnternetten indirilen programlar zararlı olabilir.\n\nYine de açılsın mı?",
-                "T-Downloader", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            && MessageBox.Show(this, Strings.IsAnExecutableFileProgramsDownloadedFromThe(c.FileName),
+                Strings.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
             return;   // onay iptal: açılmaz, pencere kalır
         try { Process.Start(new ProcessStartInfo(c.Path) { UseShellExecute = true })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         CloseAll();
@@ -395,13 +401,15 @@ public sealed class CompletedDialog : Form
     private void OpenWith(CompletedEntry c)
     {
         if (!_exists) return;
-        try { Process.Start(new ProcessStartInfo("rundll32.exe", $"shell32.dll,OpenAs_RunDLL \"{c.Path}\"") { UseShellExecute = false })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+        if (!_exists || c.Path.IndexOfAny(['"', '\0']) >= 0) return;
+        try { Process.Start(new ProcessStartInfo("rundll32.exe", $"shell32.dll,OpenAs_RunDLL \"{c.Path.TrimEnd('\\')}\"") { UseShellExecute = false })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
     private void ShowInFolder(CompletedEntry c)
     {
         if (!_exists) return;
-        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{c.Path}\"") { UseShellExecute = false })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+        if (!_exists || c.Path.IndexOfAny(['"', '\0']) >= 0) return;
+        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{c.Path.TrimEnd('\\')}\"") { UseShellExecute = false })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         CloseAll();
     }
 

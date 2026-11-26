@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+using TDownloader.Core.Localization;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using TDownloader.App.Services;
@@ -17,9 +18,9 @@ public sealed class MainForm : Form
 
     private static readonly Col[] Cols =
     {
-        new("name", "Dosya Adı", 230), new("q", "K", 24, HorizontalAlignment.Center), new("size", "Boyut", 72, HorizontalAlignment.Right),
-        new("status", "Durum", 100), new("eta", "Kalan Süre", 82), new("speed", "Aktarım Hızı", 86),
-        new("last", "Son Deneme Tarihi", 118), new("added", "Eklenme Tarihi", 118), new("desc", "Açıklama", 160),
+        new("name", Strings.FileName, 230), new("q", Strings.Q, 24, HorizontalAlignment.Center), new("size", Strings.Size, 72, HorizontalAlignment.Right),
+        new("status", Strings.Status, 100), new("eta", Strings.TimeRemaining, 82), new("speed", Strings.TransferSpeed, 86),
+        new("last", Strings.LastAttempt, 118), new("added", Strings.DateAdded, 118), new("desc", Strings.Description, 160),
     };
 
     private readonly AppServices _svc;
@@ -32,10 +33,10 @@ public sealed class MainForm : Form
     private readonly MenuStrip _menu = new();
     private readonly ToolStrip _tool = new();
     private readonly StatusStrip _status = new();
-    private readonly ToolStripStatusLabel _stMain = new("Hazır") { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly ToolStripStatusLabel _stActive = new("Aktif: 0") { AutoSize = false, Width = 90, BorderSides = ToolStripStatusLabelBorderSides.Left };
-    private readonly ToolStripStatusLabel _stSpeed = new("Hız: 0 B/sn") { AutoSize = false, Width = 130, BorderSides = ToolStripStatusLabelBorderSides.Left };
-    private readonly ToolStripStatusLabel _stTotal = new("Toplam: 0") { AutoSize = false, Width = 90, BorderSides = ToolStripStatusLabelBorderSides.Left };
+    private readonly ToolStripStatusLabel _stMain = new(Strings.Ready) { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly ToolStripStatusLabel _stActive = new(Strings.Active0) { AutoSize = false, Width = 90, BorderSides = ToolStripStatusLabelBorderSides.Left };
+    private readonly ToolStripStatusLabel _stSpeed = new(Strings.Speed0BS) { AutoSize = false, Width = 130, BorderSides = ToolStripStatusLabelBorderSides.Left };
+    private readonly ToolStripStatusLabel _stTotal = new(Strings.Total0) { AutoSize = false, Width = 90, BorderSides = ToolStripStatusLabelBorderSides.Left };
     private readonly SplitContainer _split = new();
     private readonly Panel _catPanel = new();
     private readonly DarkTree _tree = new();
@@ -89,7 +90,7 @@ public sealed class MainForm : Form
         _s = Dlu.Scale;
         Font = Theme.UiFont();
         BackColor = Theme.Bg; ForeColor = Theme.Text;
-        Text = "T-Downloader";
+        Text = Strings.AppName;
         Icon = Icons.AppIcon();
         // IDM ana pencere: 532x209 DLU liste+ağaç alanı (798 px genişlik); yükseklik pratik amaçlı büyütüldü.
         ClientSize = new Size(Dlu.X(532), Scaled(500));
@@ -117,12 +118,12 @@ public sealed class MainForm : Form
             try
             {
                 if (_tray.Visible)
-                    _tray.ShowBalloonTip(3000, "T-Downloader", msg, ToolTipIcon.Info);
+                    _tray.ShowBalloonTip(3000, Strings.AppName, msg, ToolTipIcon.Info);
             }
             catch { }
         });
         _sched.ExitRequested += () => UiPost(ExitApp);
-        _sched.ExitCountdownChanged += n => UiPost(() => { if (n >= 0) _stMain.Text = $"Çıkış: {n} sn (iptal için kuyruğu durdurun)"; });
+        _sched.ExitCountdownChanged += n => UiPost(() => { if (n >= 0) _stMain.Text = Strings.ExitingInSStopTheQueueToCancel(n); });
 
         _extensionDir = FindExtensionDir();
         RestoreUiState();
@@ -200,12 +201,12 @@ public sealed class MainForm : Form
     /// <summary>Başarısız tarayıcı indirmesi bildirimi (tepsi balonu + durum çubuğu). Balona tıklamak yeniden dener.</summary>
     public void NotifyCaptureFailed(string what)
     {
-        string msg = "Tarayıcıdan gelen indirme eklenemedi: " + what;
+        string msg = Strings.CouldNotAddTheBrowserDownloadTryAgain + what;
         TryUiPost(() =>
         {
-            _stMain.Text = msg + " (Tekrar dene: tepsi simgesi menüsü)";
+            _stMain.Text = msg + Strings.TryAgainTrayMenu;
             _balloonRetry = RetryFailedCaptures;
-            try { if (_tray.Visible) _tray.ShowBalloonTip(8000, "T-Downloader - Tekrar dene", msg + ". Tekrar denemek için tıklayın.", ToolTipIcon.Warning); } catch { }
+            try { if (_tray.Visible) _tray.ShowBalloonTip(8000, Strings.TDownloaderTryAgain, msg + Strings.ClickToTryAgain, ToolTipIcon.Warning); } catch { }
         });
     }
 
@@ -214,8 +215,8 @@ public sealed class MainForm : Form
     {
         TryUiPost(() =>
         {
-            _stMain.Text = "Aynı bağlantı zaten ekleniyor/eklendi: " + url;
-            try { if (_tray.Visible) _tray.ShowBalloonTip(3000, "T-Downloader", "Aynı bağlantı zaten ekleniyor/eklendi.", ToolTipIcon.Info); } catch { }
+            _stMain.Text = Strings.ThisURLIsAlreadyBeingAddedOrHas + url;
+            try { if (_tray.Visible) _tray.ShowBalloonTip(3000, Strings.AppName, Strings.ThisURLIsAlreadyBeingAddedOrHas2, ToolTipIcon.Info); } catch { }
         });
     }
 
@@ -237,49 +238,49 @@ public sealed class MainForm : Form
         _menu.BackColor = Theme.Surface; _menu.ForeColor = Theme.Text;
         _menu.ImageScalingSize = new Size(Scaled(16), Scaled(16));
 
-        var tasks = new ToolStripMenuItem("&Görevler");
+        var tasks = new ToolStripMenuItem(Strings.Tasks);
         tasks.DropDownItems.AddRange(new ToolStripItem[]
         {
-            Mi("Yeni &URL ekle...", AddUrl, Keys.Control | Keys.N, "add"),
-            Mi("&Panodan URL ekle", AddFromClipboard, Keys.Control | Keys.V),
+            Mi(Strings.AddNewURL, AddUrl, Keys.Control | Keys.N, "add"),
+            Mi(Strings.AddURLFromClipboard, AddFromClipboard, Keys.Control | Keys.V),
             new ToolStripSeparator(),
-            Mi("&Tarayıcı eklentisi klasörünü aç", OpenExtensionFolder, Keys.None, "addon"),
+            Mi(Strings.OpenBrowserExtensionFolder, OpenExtensionFolder, Keys.None, "addon"),
             new ToolStripSeparator(),
-            Mi("Çı&kış", ExitAppByUser),
+            Mi(Strings.ExitMenu, ExitAppByUser),
         });
 
-        var file = new ToolStripMenuItem("&Dosya");
+        var file = new ToolStripMenuItem(Strings.File);
         file.DropDownItems.AddRange(new ToolStripItem[]
         {
-            Mi("&Durdur", StopSelected, Keys.None, "stop"),
-            Mi("&Şimdi indir / Devam et", ResumeSelected, Keys.None, "resume"),
-            Mi("&Sil", DeleteSelected, Keys.Delete, "delete"),
-            Mi("&Diskten Sil", DeleteSelectedFromDisk, Keys.Shift | Keys.Delete, "deletedisk"),
+            Mi(Strings.Stop, StopSelected, Keys.None, "stop"),
+            Mi(Strings.DownloadNowResume, ResumeSelected, Keys.None, "resume"),
+            Mi(Strings.Remove, DeleteSelected, Keys.Delete, "delete"),
+            Mi(Strings.DeleteFromDisk, DeleteSelectedFromDisk, Keys.Shift | Keys.Delete, "deletedisk"),
             new ToolStripSeparator(),
-            Mi("Dosyayı &aç", OpenSelectedFile),
-            Mi("&Klasörü aç", ShowSelectedInFolder),
-            Mi("İ&lerleme penceresi", ShowSelectedProgress),
+            Mi(Strings.OpenFile, OpenSelectedFile),
+            Mi(Strings.OpenFolder2, ShowSelectedInFolder),
+            Mi(Strings.ProgressWindow, ShowSelectedProgress),
         });
 
-        var dl = new ToolStripMenuItem("İ&ndirmeler");
+        var dl = new ToolStripMenuItem(Strings.Downloads);
         dl.DropDownItems.AddRange(new ToolStripItem[]
         {
-            Mi("&Tümünü durdur", _mgr.PauseAll, Keys.None, "stopall"),
+            Mi(Strings.StopAll, _mgr.PauseAll, Keys.None, "stopall"),
             new ToolStripSeparator(),
-            Mi("Tamamlananları &sil", DeleteCompleted, Keys.None, "deletedone"),
+            Mi(Strings.RemoveCompletedDownloads, DeleteCompleted, Keys.None, "deletedone"),
             new ToolStripSeparator(),
-            Mi("&Zamanlayıcı...", ShowScheduler, Keys.None, "scheduler"),
-            Mi("Kuyruğu &başlat", StartQueue, Keys.None, "queuestart"),
-            Mi("Kuyruğu d&urdur", StopQueue, Keys.None, "queuestop"),
+            Mi(Strings.Scheduler, ShowScheduler, Keys.None, "scheduler"),
+            Mi(Strings.StartQueue, StartQueue, Keys.None, "queuestart"),
+            Mi(Strings.StopQueueMenu, StopQueue, Keys.None, "queuestop"),
             new ToolStripSeparator(),
-            Mi("&Seçenekler...", ShowOptions, Keys.None, "options"),
+            Mi(Strings.Settings, ShowOptions, Keys.None, "options"),
         });
 
-        var view = new ToolStripMenuItem("G&örünüm");
-        _viewCats = Mi("Kategorileri &gizle", ToggleCategories);
-        var sort = new ToolStripMenuItem("Dosyaları &sırala");
+        var view = new ToolStripMenuItem(Strings.View);
+        _viewCats = Mi(Strings.HideCategories, ToggleCategories);
+        var sort = new ToolStripMenuItem(Strings.SortFiles);
         string[] keys = { "added", "name", "size", "status", "eta", "speed", "last", "desc" };
-        string[] titles = { "Eklenme sırasına göre", "Dosya adına göre", "Boyuta göre", "Duruma göre", "Kalan süreye göre", "Aktarım hızına göre", "Son deneme tarihine göre", "Açıklamaya göre" };
+        string[] titles = { Strings.ByDateAdded, Strings.ByFileName, Strings.BySize, Strings.ByStatus, Strings.ByTimeRemaining, Strings.ByTransferSpeed, Strings.ByLastAttempt, Strings.ByDescription };
         for (int i = 0; i < keys.Length; i++)
         {
             int ci = Array.FindIndex(Cols, c => c.Key == keys[i]);
@@ -287,12 +288,12 @@ public sealed class MainForm : Form
         }
         view.DropDownItems.AddRange(new ToolStripItem[] { _viewCats, sort });
 
-        var help = new ToolStripMenuItem("&Yardım");
+        var help = new ToolStripMenuItem(Strings.Help);
         help.DropDownItems.AddRange(new ToolStripItem[]
         {
-            Mi("&Tarayıcı eklentisi", OpenExtensionFolder, Keys.None, "addon"),
+            Mi(Strings.BrowserExtension, OpenExtensionFolder, Keys.None, "addon"),
             new ToolStripSeparator(),
-            Mi("T-Downloader &hakkında", ShowAbout, Keys.None, "about"),
+            Mi(Strings.AboutTDownloader2, ShowAbout, Keys.None, "about"),
         });
 
         _menu.Items.AddRange(new ToolStripItem[] { tasks, file, dl, view, help });
@@ -324,21 +325,21 @@ public sealed class MainForm : Form
             b.Click += (_, _) => click();
             _tool.Items.Add(b);
         }
-        B("URL Ekle", "Yeni indirme ekle (Ctrl+N)", "add", AddUrl);
-        B("Devam", "Seçili indirmeleri başlat / devam ettir", "resume", ResumeSelected);
-        B("Durdur", "Seçili indirmeleri durdur", "stop", StopSelected);
-        B("Tümü Dur.", "Tüm indirmeleri durdur", "stopall", _mgr.PauseAll);
-        B("Sil", "Seçili indirmeleri listeden sil", "delete", DeleteSelected);
-        B("Diskten Sil", "Seçilenleri diskten sil (Geri Dönüşüm Kutusu)", "deletedisk", DeleteSelectedFromDisk);
+        B(Strings.AddURL, Strings.AddANewDownloadCtrlN, "add", AddUrl);
+        B(Strings.Resume, Strings.StartOrResumeSelectedDownloads, "resume", ResumeSelected);
+        B(Strings.Stop2, Strings.StopSelectedDownloads, "stop", StopSelected);
+        B(Strings.StopAll2, Strings.StopAllDownloads, "stopall", _mgr.PauseAll);
+        B(Strings.Remove2, Strings.RemoveSelectedDownloadsFromTheList, "delete", DeleteSelected);
+        B(Strings.DeleteFromDisk2, Strings.DeleteSelectedFilesMoveToRecycleBin, "deletedisk", DeleteSelectedFromDisk);
         _btnDiskDelete = (ToolStripButton)_tool.Items[^1];
         _btnDiskDelete.Enabled = false;
-        B("Temizle", "Tamamlananları listeden sil", "deletedone", DeleteCompleted);
-        B("Ayarlar", "Seçenekler", "options", ShowOptions);
-        B("Zamanla", "Zamanlayıcı ve indirme kuyruğu", "scheduler", ShowScheduler);
-        B("K. Başlat", "Kuyruğu başlat", "queuestart", StartQueue);
-        B("K. Durdur", "Kuyruğu durdur (bekleyenleri)", "queuestop", StopQueue);
-        B("Eklenti", "Tarayıcı eklentisi", "addon", OpenExtensionFolder);
-        B("Hakkında", "T-Downloader hakkında", "about", ShowAbout);
+        B(Strings.Clean, Strings.RemoveCompletedDownloadsFromTheList, "deletedone", DeleteCompleted);
+        B(Strings.Settings2, Strings.Settings3, "options", ShowOptions);
+        B(Strings.Schedule, Strings.SchedulerAndDownloadQueue, "scheduler", ShowScheduler);
+        B(Strings.StartQueue2, Strings.StartQueue3, "queuestart", StartQueue);
+        B(Strings.StopQueue, Strings.StopQueuePendingDownloads, "queuestop", StopQueue);
+        B(Strings.Extension, Strings.BrowserExtension2, "addon", OpenExtensionFolder);
+        B(Strings.About, Strings.AboutTDownloader, "about", ShowAbout);
     }
 
     // ------------------------------------------------------------ gövde
@@ -355,8 +356,8 @@ public sealed class MainForm : Form
         // kategori paneli
         _catPanel.Dock = DockStyle.Fill;
         var caption = new Panel { Dock = DockStyle.Top, Height = Scaled(20), BackColor = Theme.Black };
-        var cl = new Label { Text = "Kategoriler", ForeColor = Theme.Accent, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(Scaled(6), 0, 0, 0) };
-        var close = new Button { Text = "×", Dock = DockStyle.Right, Width = Scaled(20), FlatStyle = FlatStyle.Flat, ForeColor = Theme.Text, AccessibleName = "Kategorileri gizle", TabStop = true };
+        var cl = new Label { Text = Strings.Categories, ForeColor = Theme.Accent, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(Scaled(6), 0, 0, 0) };
+        var close = new Button { Text = "×", Dock = DockStyle.Right, Width = Scaled(20), FlatStyle = FlatStyle.Flat, ForeColor = Theme.Text, AccessibleName = Strings.HideCategories2, TabStop = true };
         close.FlatAppearance.BorderSize = 0;
         close.FlatAppearance.MouseOverBackColor = Theme.Hover;
         close.Click += (_, _) => ToggleCategories();
@@ -370,14 +371,14 @@ public sealed class MainForm : Form
         _tree.BorderStyle = BorderStyle.None;
         _tree.ItemHeight = Scaled(20);
         TreeNode N(string t, string tag, string icon) => new(t) { Tag = tag, ImageKey = icon, SelectedImageKey = icon };
-        var all = N("Tüm İndirmeler", "all", "all");
+        var all = N(Strings.AllDownloads, "all", "all");
         foreach (var c in new[] { Categories.Compressed, Categories.Documents, Categories.Music, Categories.Programs, Categories.Video, Categories.Pictures })
-            all.Nodes.Add(N(c, "cat:" + c, "folder"));
+            all.Nodes.Add(N(CategoryLabels.Display(c), "cat:" + c, "folder"));
         _tree.Nodes.Add(all);
-        _tree.Nodes.Add(N("Tamamlanmayan", "unfinished", "unfinished"));
-        _tree.Nodes.Add(N("Tamamlanan", "finished", "finished"));
-        var q = N("Kuyruklar", "queue", "queues");
-        q.Nodes.Add(N("Ana kuyruk", "queue", "queues"));
+        _tree.Nodes.Add(N(Strings.Unfinished, "unfinished", "unfinished"));
+        _tree.Nodes.Add(N(Strings.Completed2, "finished", "finished"));
+        var q = N(Strings.Queues, "queue", "queues");
+        q.Nodes.Add(N(Strings.MainQueue, "queue", "queues"));
         _tree.Nodes.Add(q);
         all.Expand(); q.Expand();
         _tree.SelectedNode = all;
@@ -455,16 +456,16 @@ public sealed class MainForm : Form
             }
         };
 
-        var ctxOpen = Mi("Aç", OpenSelectedFile);
-        var ctxFolder = Mi("Klasörde göster", ShowSelectedInFolder);
-        var ctxHash = Mi("Sağlama Toplamı (Hash)...", ShowSelectedHash, Keys.None, "hash");
+        var ctxOpen = Mi(Strings.Open, OpenSelectedFile);
+        var ctxFolder = Mi(Strings.ShowInFolder, ShowSelectedInFolder);
+        var ctxHash = Mi(Strings.CalculateChecksumHash, ShowSelectedHash, Keys.None, "hash");
         var ctxSep1 = new ToolStripSeparator();
-        var ctxResume = Mi("Devam et", ResumeSelected, Keys.None, "resume");
-        var ctxStop = Mi("Durdur", StopSelected, Keys.None, "stop");
-        var ctxProgress = Mi("İlerleme penceresi", ShowSelectedProgress);
+        var ctxResume = Mi(Strings.Resume2, ResumeSelected, Keys.None, "resume");
+        var ctxStop = Mi(Strings.Stop2, StopSelected, Keys.None, "stop");
+        var ctxProgress = Mi(Strings.ProgressWindow2, ShowSelectedProgress);
         var ctxSep2 = new ToolStripSeparator();
-        var ctxDelete = Mi("Sil", DeleteSelected, Keys.None, "delete");
-        var ctxDisk = Mi("Diskten Sil", DeleteSelectedFromDisk, Keys.None, "deletedisk");
+        var ctxDelete = Mi(Strings.Remove2, DeleteSelected, Keys.None, "delete");
+        var ctxDisk = Mi(Strings.DeleteFromDisk2, DeleteSelectedFromDisk, Keys.None, "deletedisk");
         ctxDisk.ShortcutKeyDisplayString = "Shift+Del";
 
         _ctx.Items.AddRange(new ToolStripItem[]
@@ -514,13 +515,13 @@ public sealed class MainForm : Form
     private NotifyIcon BuildTray()
     {
         var m = new ContextMenuStrip { Renderer = new ThemeRenderer() };
-        m.Items.Add(Mi("&Aç", ShowMain));
-        m.Items.Add(Mi("&URL Ekle...", () => { ShowMain(); AddUrl(); }, Keys.None, "add"));
-        m.Items.Add(Mi("&Tümünü Durdur", _mgr.PauseAll, Keys.None, "stopall"));
-        m.Items.Add(Mi("Tarayıcıdan gelip eklenemeyenleri tekrar &dene", () => RetryFailedCaptures?.Invoke()));
+        m.Items.Add(Mi(Strings.Open2, ShowMain));
+        m.Items.Add(Mi(Strings.AddURL2, () => { ShowMain(); AddUrl(); }, Keys.None, "add"));
+        m.Items.Add(Mi(Strings.StopAll3, _mgr.PauseAll, Keys.None, "stopall"));
+        m.Items.Add(Mi(Strings.RetryFailedBrowserCaptures, () => RetryFailedCaptures?.Invoke()));
         m.Items.Add(new ToolStripSeparator());
-        m.Items.Add(Mi("Çı&kış", ExitAppByUser));
-        var n = new NotifyIcon { Icon = Icons.TrayIcon(), Text = "T-Downloader", ContextMenuStrip = m, Visible = true };
+        m.Items.Add(Mi(Strings.ExitMenu, ExitAppByUser));
+        var n = new NotifyIcon { Icon = Icons.TrayIcon(), Text = Strings.AppName, ContextMenuStrip = m, Visible = true };
         n.DoubleClick += (_, _) => ShowMain();
         n.BalloonTipClicked += (_, _) =>
         {
@@ -620,11 +621,11 @@ public sealed class MainForm : Form
         string pct = it.TotalSize > 0 ? $"{it.Downloaded * 100.0 / it.TotalSize:0.##}%" : "";
         return it.Status switch
         {
-            DownloadStatus.Completed => "Tamamlandı",
-            DownloadStatus.Downloading => pct.Length > 0 ? pct : "Alınıyor",
-            DownloadStatus.Queued => "Sırada",
-            DownloadStatus.Paused => it.Downloaded > 0 && pct.Length > 0 ? "Duraklatıldı " + pct : "Duraklatıldı",
-            DownloadStatus.Failed => "Hata",
+            DownloadStatus.Completed => Strings.Completed3,
+            DownloadStatus.Downloading => pct.Length > 0 ? pct : Strings.Downloading,
+            DownloadStatus.Queued => Strings.Queued,
+            DownloadStatus.Paused => it.Downloaded > 0 && pct.Length > 0 ? Strings.Paused + pct : Strings.Paused2,
+            DownloadStatus.Failed => Strings.Error,
             _ => "",
         };
     }
@@ -702,12 +703,12 @@ public sealed class MainForm : Form
     private void UpdateStatus()
     {
         static void T(ToolStripStatusLabel l, string v) { if (l.Text != v) l.Text = v; }
-        T(_stActive, $"Aktif: {_stats.Active}");
-        T(_stSpeed, "Hız: " + (_stats.Speed > 0 ? Fmt.Speed(_stats.Speed) : "0 B/sn"));
-        T(_stTotal, $"Toplam: {_stats.Total}");
+        T(_stActive, Strings.Active(_stats.Active));
+        T(_stSpeed, Strings.Speed + (_stats.Speed > 0 ? Fmt.Speed(_stats.Speed) : "0\u00a0B" + Strings.PerSecond));
+        T(_stTotal, Strings.Total(_stats.Total));
         int sel = _list.SelectedIndices.Count;
         if (_btnDiskDelete != null && _btnDiskDelete.Enabled != (sel > 0)) _btnDiskDelete.Enabled = sel > 0;
-        T(_stMain, sel > 0 ? $"{sel} öğe seçili" : "Hazır");
+        T(_stMain, sel > 0 ? Strings.ItemsSelected(sel) : Strings.Ready);
     }
 
     private void OnCompleted(DownloadItem i)
@@ -725,7 +726,7 @@ public sealed class MainForm : Form
         {
             if (_mgr.Settings.ShowCompletedDialog) ShowCompleted(i);              // bildirim balonunun yerine tamamlanma penceresi
             else if (_tray.Visible)   // tek tek tamamlanma balonu, zamanlayıcı "bitince" ayarından bağımsız
-                _tray.ShowBalloonTip(3000, "İndirme Tamamlandı", $"{i.FileName} başarıyla indirildi.", ToolTipIcon.Info);
+                _tray.ShowBalloonTip(3000, Strings.DownloadCompleted3, Strings.DownloadedSuccessfully(i.FileName), ToolTipIcon.Info);
         }
         catch { }
     }
@@ -805,7 +806,7 @@ public sealed class MainForm : Form
     {
         if (StaCall.TryRun(ReadClipboardText, ClipboardTimeoutMs, out var clip) && clip != null && IsHttp(clip))
             _ = PromptDownloadAsync(clip, null, null, null, null, -1, force: true);
-        else MessageBox.Show(this, "Panoda geçerli bir http/https bağlantısı yok.", "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        else MessageBox.Show(this, Strings.TheClipboardHasNoValidHTTPOrHTTPS, Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private static bool IsHttp(string t) => Uri.TryCreate(t, UriKind.Absolute, out var u) && (u.Scheme == "http" || u.Scheme == "https") && !t.Contains('\n');
@@ -875,7 +876,7 @@ public sealed class MainForm : Form
         string name = stem + "." + opt.Ext;
         return RunPromptAsync(() =>
         {
-            using var dlg = new FileInfoDialog(_mgr, source, name, opt.Size, probeSize: false, referrer: referer, cookies: ctx?.Cookies, userAgent: ctx?.UserAgent, description: "Video: " + opt.Label);
+            using var dlg = new FileInfoDialog(_mgr, source, name, opt.Size, probeSize: false, referrer: referer, cookies: ctx?.Cookies, userAgent: ctx?.UserAgent, description: Strings.VideoLabel + opt.Label);
             var r = dlg.ShowDialog();
             if (r is not (DialogResult.Yes or DialogResult.No)) return false;
             if (!ConfirmDiskSpace(dlg.SaveFolder, opt.Size, dlg.FileName)) return false;
@@ -886,7 +887,7 @@ public sealed class MainForm : Form
             }
             catch (ArgumentException ex)
             {
-                MessageBox.Show(ex.Message, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(ex.Message, Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
         });
@@ -905,10 +906,10 @@ public sealed class MainForm : Form
             {
                 try { tcs.TrySetResult(show()); }
                 catch (Exception ex) { tcs.TrySetException(ex); }
-            })) throw new InvalidOperationException("Ana pencere hazır değil.");
+            })) throw new InvalidOperationException(Strings.TheMainWindowIsNotReadyWaitAnd);
             // Gönderilen iş hiç çalışmadan form atılırsa (kapanış) kapı sonsuza dek beklemesin.
             var first = await Task.WhenAny(tcs.Task, _uiGone.Task).ConfigureAwait(false);
-            if (first != tcs.Task) throw new InvalidOperationException("Ana pencere kapandı.");
+            if (first != tcs.Task) throw new InvalidOperationException(Strings.TheMainWindowClosedOpenTDownloaderAnd);
             return await tcs.Task.ConfigureAwait(false);
         }
         finally { _promptGate.Release(); }
@@ -951,7 +952,7 @@ public sealed class MainForm : Form
         }
         catch (ArgumentException ex)
         {
-            MessageBox.Show(ex.Message, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(ex.Message, Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
     }
@@ -976,7 +977,7 @@ public sealed class MainForm : Form
     {
         var sel = Selected();
         if (sel.Count == 0) return;
-        if (MessageBox.Show(this, $"{sel.Count} indirme listeden silinsin mi?\n(Diskteki dosyalar silinmez.)", "Sil", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (MessageBox.Show(this, Strings.RemoveDownloadsFromTheListFilesOnDisk(sel.Count), Strings.Remove2, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         foreach (var i in sel) await _mgr.RemoveAsync(i.Id, false);
     }
 
@@ -993,7 +994,7 @@ public sealed class MainForm : Form
         {
             var targets = sel.Select(i => (i.Id, Path: i.SavePath)).ToList();
             long total = await Task.Run(() => DiskDeletePlan.TotalExistingSize(targets.Select(t => t.Path)));
-            if (MessageBox.Show(this, DiskDeletePlan.ConfirmText(targets.Count, total), "Diskten Sil", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            if (MessageBox.Show(this, DiskDeletePlan.ConfirmText(targets.Count, total), Strings.DeleteFromDisk2, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             int failed = 0, skipped = 0; string? firstError = null;
             var owner = Handle;
             foreach (var (id, path) in targets)
@@ -1004,8 +1005,8 @@ public sealed class MainForm : Form
                 if (res.Outcome == RecycleOutcome.Failed) { failed++; firstError ??= res.Err; }
                 else if (res.Outcome == RecycleOutcome.Skipped) skipped++;
             }
-            if (skipped > 0) MessageBox.Show(this, DiskDeletePlan.SkippedSummary(skipped), "Diskten Sil", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            if (failed > 0) MessageBox.Show(this, DiskDeletePlan.ErrorSummary(failed, firstError), "Diskten Sil", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (skipped > 0) MessageBox.Show(this, DiskDeletePlan.SkippedSummary(skipped), Strings.DeleteFromDisk2, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (failed > 0) MessageBox.Show(this, DiskDeletePlan.ErrorSummary(failed, firstError), Strings.DeleteFromDisk2, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally { _diskDeleting = false; }
     }
@@ -1013,8 +1014,8 @@ public sealed class MainForm : Form
     private async void DeleteCompleted()
     {
         var done = _mgr.Items.Where(i => i.Status == DownloadStatus.Completed).ToList();
-        if (done.Count == 0) { MessageBox.Show(this, "Tamamlanmış indirme yok.", "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
-        if (MessageBox.Show(this, $"{done.Count} tamamlanmış indirme listeden silinsin mi?\n(Diskteki dosyalar silinmez.)", "Tamamlananları sil", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (done.Count == 0) { MessageBox.Show(this, Strings.NoCompletedDownloads, Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+        if (MessageBox.Show(this, Strings.RemoveCompletedDownloadsFromTheListFilesOn(done.Count), Strings.RemoveCompletedDownloads2, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         foreach (var i in done) await _mgr.RemoveAsync(i.Id, false);
     }
 
@@ -1036,18 +1037,31 @@ public sealed class MainForm : Form
     {
         var i = Selected().FirstOrDefault();
         if (i == null) return;
-        if (!File.Exists(i.SavePath)) { MessageBox.Show(this, "Dosya bulunamadı:\n" + i.SavePath, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
-        try { Process.Start(new ProcessStartInfo(i.SavePath) { UseShellExecute = true }); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+        if (!File.Exists(i.SavePath)) { MessageBox.Show(this, Strings.FileNotFoundCheckThisLocation + i.SavePath, Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        if (ExecutableGuard.IsRisky(i.SavePath)
+            && MessageBox.Show(this, Strings.IsAnExecutableFileProgramsDownloadedFromThe(i.FileName),
+                Strings.AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            return;
+        try { Process.Start(new ProcessStartInfo(i.SavePath) { UseShellExecute = true })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
     private void ShowSelectedInFolder()
     {
         var i = Selected().FirstOrDefault();
-        if (i == null) return;
+        if (i == null || string.IsNullOrEmpty(i.SavePath) || i.SavePath.IndexOfAny(['"', '\0']) >= 0) return;
         try
         {
-            if (File.Exists(i.SavePath)) Process.Start("explorer.exe", $"/select,\"{i.SavePath}\"");
-            else { var dir = Path.GetDirectoryName(i.SavePath); if (dir != null && Directory.Exists(dir)) Process.Start("explorer.exe", $"\"{dir}\""); }
+            if (File.Exists(i.SavePath)) Process.Start("explorer.exe", $"/select,\"{i.SavePath.TrimEnd('\\')}\"")?.Dispose();
+            else
+            {
+                var dir = Path.GetDirectoryName(i.SavePath);
+                if (dir != null && Directory.Exists(dir))
+                {
+                    var psi = new ProcessStartInfo("explorer.exe");
+                    psi.ArgumentList.Add(dir);
+                    Process.Start(psi)?.Dispose();
+                }
+            }
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
@@ -1058,7 +1072,7 @@ public sealed class MainForm : Form
         if (i == null) return;
         if (!File.Exists(i.SavePath))
         {
-            MessageBox.Show(this, "Dosya bulunamadı:\n" + i.SavePath, "T-Downloader", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, Strings.FileNotFoundCheckThisLocation + i.SavePath, Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         using var d = new HashDialog(i.SavePath, i.FileName);
@@ -1099,12 +1113,12 @@ public sealed class MainForm : Form
     {
         if (_extensionDir == null)
         {
-            MessageBox.Show(this, "Tarayıcı eklentisi klasörü bulunamadı.\nChrome/Edge'de \"Uzantılar > Geliştirici modu > Paketlenmemiş yükle\" ile 'extension' klasörünü seçin.",
-                "Tarayıcı eklentisi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, Strings.BrowserExtensionFolderNotFoundInChromeEdge,
+                Strings.BrowserExtension2, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        MessageBox.Show(this, "Eklenti klasörü açılıyor. Chrome/Edge'de \"Uzantılar > Geliştirici modu > Paketlenmemiş yükle\" ile bu klasörü seçin.",
-            "Tarayıcı eklentisi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        MessageBox.Show(this, Strings.OpeningTheExtensionFolderInChromeEdgeEnable,
+            Strings.BrowserExtension2, MessageBoxButtons.OK, MessageBoxIcon.Information);
         try { Process.Start("explorer.exe", $"\"{_extensionDir}\""); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
@@ -1114,7 +1128,7 @@ public sealed class MainForm : Form
     {
         _split.Panel1Collapsed = !_split.Panel1Collapsed;
         _mgr.Settings.ShowCategories = !_split.Panel1Collapsed;
-        if (_viewCats != null) _viewCats.Text = _split.Panel1Collapsed ? "Kategorileri &göster" : "Kategorileri &gizle";
+        if (_viewCats != null) _viewCats.Text = _split.Panel1Collapsed ? Strings.ShowCategories : Strings.HideCategories;
     }
 
     // ------------------------------------------------------------ ayar kalıcılığı
@@ -1171,8 +1185,8 @@ public sealed class MainForm : Form
     private void ExitAppByUser()
     {
         int n = PendingPromptCount;
-        if (n > 0 && MessageBox.Show(this, $"{n} indirme onay penceresi bekliyor. Şimdi çıkarsanız bu indirmeler kaybolur (tarayıcı kopyaları silinmişti).\n\nYine de çıkılsın mı?",
-                "Çıkış", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        if (n > 0 && MessageBox.Show(this, Strings.DownloadsAreWaitingForConfirmationExitingNowWill(n),
+                Strings.Exit, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         ExitApp();
     }
 

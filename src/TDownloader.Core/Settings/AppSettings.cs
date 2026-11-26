@@ -4,6 +4,7 @@ namespace TDownloader.Core.Settings;
 
 public sealed class AppSettings
 {
+    public string Language { get; set; } = "";
     /// <summary>İndirme başına bağlantı sayısı (1–32).</summary>
     public int Connections { get; set; } = 8;
     /// <summary>Aynı sunucuya tüm indirmelerin toplam etkin bağlantı tavanı (1–64, varsayılan 32).</summary>

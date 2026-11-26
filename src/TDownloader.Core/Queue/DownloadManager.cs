@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Text.Json;
 using TDownloader.Core.Downloads;
 using TDownloader.Core.Settings;
@@ -121,13 +122,13 @@ public sealed class DownloadManager : IAsyncDisposable
             try { File.Copy(Paths.DownloadsFile, Paths.DownloadsFile + ".corrupt", overwrite: true); } catch (IOException) { }
             list = TryReadList(Paths.DownloadsFile + ".bak");
             LoadWarning = list != null
-                ? "downloads.json bozuktu; bir önceki sürüm (downloads.json.bak) yüklendi."
-                : "downloads.json bozuktu ve yedek okunamadı; liste boş başlatıldı (bozuk dosya downloads.json.corrupt olarak saklandı).";
+                ? Strings.DownloadsJsonWasDamagedThePreviousVersionDownloads
+                : Strings.TheDownloadListAndBackupCouldNotBe;
         }
         else if (list == null)
         {
             list = TryReadList(Paths.DownloadsFile + ".bak");   // ana dosya yok ama yedek var
-            if (list != null) LoadWarning = "downloads.json yoktu; yedekten (downloads.json.bak) yüklendi.";
+            if (list != null) LoadWarning = Strings.DownloadsJsonWasMissingTheBackupDownloadsJson;
         }
         lock (_gate)
         {
@@ -174,7 +175,7 @@ public sealed class DownloadManager : IAsyncDisposable
     public DownloadItem Add(AddDownloadRequest req)
     {
         if (!Uri.TryCreate(req.Url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
-            throw new ArgumentException("Geçersiz URL (yalnızca http/https).", nameof(req));
+            throw new ArgumentException(Strings.InvalidURLEnterAnHTTPOrHTTPSURL, nameof(req));
 
         var name = SanitizeFileName(string.IsNullOrWhiteSpace(req.FileName) ? NameFromUri(uri) : req.FileName!);
         var category = Categories.FromFileName(name);
@@ -196,7 +197,7 @@ public sealed class DownloadManager : IAsyncDisposable
     public DownloadItem AddExternal(AddExternalRequest req)
     {
         if (!Uri.TryCreate(req.Url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
-            throw new ArgumentException("Geçersiz URL (yalnızca http/https).", nameof(req));
+            throw new ArgumentException(Strings.InvalidURLEnterAnHTTPOrHTTPSURL, nameof(req));
         var name = SanitizeFileName(string.IsNullOrWhiteSpace(req.FileName) ? "video.mp4" : req.FileName);
         var category = Categories.FromFileName(name);
         var folder = !string.IsNullOrWhiteSpace(req.SaveFolder) ? req.SaveFolder! : FolderForCategory(category);
@@ -426,7 +427,7 @@ public sealed class DownloadManager : IAsyncDisposable
             bool canceled = false;
             try
             {
-                if (runner == null) res = new ExternalResult(false, "Video indirici (yt-dlp) yapılandırılmamış.", null);
+                if (runner == null) res = new ExternalResult(false, Strings.VideoDownloaderYtDlpIsNotConfiguredSet, null);
                 else
                     res = await runner.RunAsync(item, p =>
                     {

@@ -1,3 +1,4 @@
+using TDownloader.Core.Localization;
 using System.Diagnostics;
 using System.Text;
 using TDownloader.Core.Downloads;
@@ -8,7 +9,7 @@ namespace TDownloader.Core.Video;
 
 public sealed class YtDlpNotFoundException : Exception
 {
-    public YtDlpNotFoundException() : base("yt-dlp bulunamadı.") { }
+    public YtDlpNotFoundException() : base(Strings.YtDlpNotFoundSetItsPathIn) { }
 }
 
 public sealed class YtDlpException : Exception
@@ -39,13 +40,16 @@ public sealed class YtDlpClient : IExternalRunner
     public static void AddContextArgs(List<string> a, string? referer, MediaContext? ctx, string? cookieFile = null)
     {
         string? refr = !string.IsNullOrWhiteSpace(ctx?.Referer) ? ctx!.Referer : referer;
-        if (!string.IsNullOrWhiteSpace(refr)) { a.Add("--referer"); a.Add(refr); }
+        if (IsSafeHeader(refr)) { a.Add("--referer"); a.Add(refr!); }
         var origin = ctx != null ? ctx.EffectiveOrigin : (Uri.TryCreate(referer, UriKind.Absolute, out var u) ? u.GetLeftPart(UriPartial.Authority) : null);
-        if (!string.IsNullOrWhiteSpace(origin)) { a.Add("--add-header"); a.Add("Origin:" + origin); }
+        if (IsSafeHeader(origin)) { a.Add("--add-header"); a.Add("Origin:" + origin); }
         // Çerez ASLA komut satırında taşınmaz (süreç listesinde görünür): geçici Netscape dosyası (<see cref="CookieJarFile"/>).
         if (!string.IsNullOrWhiteSpace(cookieFile)) { a.Add("--cookies"); a.Add(cookieFile); }
-        if (!string.IsNullOrWhiteSpace(ctx?.UserAgent)) { a.Add("--user-agent"); a.Add(ctx!.UserAgent); }
+        if (IsSafeHeader(ctx?.UserAgent)) { a.Add("--user-agent"); a.Add(ctx!.UserAgent!); }
     }
+
+    private static bool IsSafeHeader(string? v) => !string.IsNullOrWhiteSpace(v) && !v.Any(c => c < 0x20 || c == 0x7F);
+    private static bool IsHttpUrl(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
 
     public static List<string> BuildInfoArgs(string url, string? referer, MediaContext? ctx = null, string? cookieFile = null)
     {
@@ -90,12 +94,13 @@ public sealed class YtDlpClient : IExternalRunner
 
     public async Task<VideoInfo> GetInfoAsync(string url, string? referer, CancellationToken ct = default, MediaContext? ctx = null)
     {
+        if (!IsHttpUrl(url)) throw new YtDlpException(Strings.InvalidURLEnterAnHTTPOrHTTPSURL);
         var exe = FindYtDlp() ?? throw new YtDlpNotFoundException();
         using var jar = CookieJarFile.Create(ctx);   // iş bitince silinir
         using var p = new Process { StartInfo = Psi(exe, BuildInfoArgs(url, referer, ctx, jar?.Path)) };
         try { p.Start(); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        { throw new YtDlpException("yt-dlp başlatılamadı: " + ex.Message); }
+        { throw new YtDlpException(Strings.CouldNotStartYtDlpCheckItsPath + ex.Message); }
         Util.ProcessJob.Assign(p);   // uygulama çökerse süreç yetim kalmasın
         try { p.StandardInput.Close(); } catch (IOException) { }
         var outTask = p.StandardOutput.ReadToEndAsync(ct);
@@ -107,21 +112,22 @@ public sealed class YtDlpClient : IExternalRunner
         {
             Kill(p);
             if (ct.IsCancellationRequested) throw;
-            throw new YtDlpException("yt-dlp zaman aşımına uğradı.");
+            throw new YtDlpException(Strings.YtDlpTimedOutCheckYourNetworkAnd);
         }
         string stdout = await outTask.ConfigureAwait(false), stderr = await errTask.ConfigureAwait(false);
         if (p.ExitCode != 0 || stdout.Trim().Length == 0) throw new YtDlpException(YtDlpParsing.MapError(stderr));
         try { return YtDlpParsing.ParseInfo(stdout); }
-        catch (System.Text.Json.JsonException) { throw new YtDlpException("yt-dlp çıktısı anlaşılamadı."); }
+        catch (System.Text.Json.JsonException) { throw new YtDlpException(Strings.CouldNotReadYtDlpOutputUpdateYt); }
     }
 
     // ---------------------------------------------------------------- indirme (IExternalRunner)
 
     public async Task<ExternalResult> RunAsync(DownloadItem item, Action<ExternalProgress> report, CancellationToken ct)
     {
+        if (!IsHttpUrl(item.Url)) return new ExternalResult(false, Strings.InvalidURLEnterAnHTTPOrHTTPSURL, null);
         var exe = FindYtDlp();
         if (exe == null)
-            return new ExternalResult(false, "yt-dlp bulunamadı. Seçenekler > Video sekmesinden yolunu belirtin veya kurulum bilgisine bakın.", null);
+            return new ExternalResult(false, Strings.YtDlpNotFoundSetItsPathIn2, null);
         var dir = Path.GetDirectoryName(item.SavePath)!;
         Directory.CreateDirectory(dir);
         // yt-dlp uzantıyı kendisi seçer: bu addaki herhangi bir tamamlanmış dosya (ör. kullanıcının Film.mp4'ü) varsa yeni ad seçilir.
@@ -135,7 +141,7 @@ public sealed class YtDlpClient : IExternalRunner
         var agg = new YtDlpProgressAggregator(YtDlpProgressAggregator.ExpectedStreams(item.ExternalFormat ?? "bv*+ba/b"));
         try { p.Start(); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        { return new ExternalResult(false, "yt-dlp başlatılamadı: " + ex.Message, null); }
+        { return new ExternalResult(false, Strings.CouldNotStartYtDlpCheckItsPath + ex.Message, null); }
         Util.ProcessJob.Assign(p);   // uygulama çökerse süreç yetim kalmasın
         try { p.StandardInput.Close(); } catch (IOException) { }
         using var reg = ct.Register(() => Kill(p));
@@ -158,7 +164,7 @@ public sealed class YtDlpClient : IExternalRunner
         var errTask = Task.Run(async () =>
         {
             string? line;
-            while ((line = await p.StandardError.ReadLineAsync().ConfigureAwait(false)) != null) lock (err) err.AppendLine(line);
+            while ((line = await p.StandardError.ReadLineAsync().ConfigureAwait(false)) != null) lock (err) { if (err.Length < 65536) err.AppendLine(line); }
         });
         await p.WaitForExitAsync().ConfigureAwait(false);
         await Task.WhenAll(outTask, errTask).ConfigureAwait(false);
