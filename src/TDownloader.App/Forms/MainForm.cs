@@ -720,10 +720,11 @@ public sealed class MainForm : Form
     {
         MarkDirty(i.Id);
         if (_mgr.Settings.PlayCompletionSound) _completionSound.Play();
+        // İlerleme penceresini indirme bittiği anda hemen kapat, ardından tamamlanma ekranını aç.
         if (_dialogs.TryGetValue(i.Id, out var d))
         {
-            d.RefreshItem(i);
-            d.ScheduleAutoClose(1500);
+            _dialogs.Remove(i.Id);
+            if (!d.IsDisposed) d.Close();
         }
         try
         {

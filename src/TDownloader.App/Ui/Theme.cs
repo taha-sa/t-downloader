@@ -241,6 +241,8 @@ public sealed class BufferedListView : ListView
     private readonly SolidBrush _brSurface = new(Theme.Surface);
     private readonly SolidBrush _brBg = new(Theme.Bg);
     private readonly SolidBrush _brAccent = new(Theme.Accent);
+    private readonly SolidBrush _brOnAccent = new(Theme.OnAccent);
+    private readonly SolidBrush _brDanger = new(Theme.Danger);
     private readonly SolidBrush _brHover = new(Theme.Hover);
     private readonly Pen _penBorder = new(Theme.Border);
     private readonly Pen _penGrid = new(Theme.Surface);
@@ -353,11 +355,19 @@ public sealed class BufferedListView : ListView
         var fg = sel && Focused ? Theme.OnAccent : (e.Item!.ForeColor == SystemColors.WindowText ? Theme.Text : e.Item!.ForeColor);
         int pad = (int)(4 * Dlu.Scale);
         int x = cell.X + pad;
-        if (col == 0 && SmallImageList != null && e.Item!.ImageIndex >= 0 && e.Item!.ImageIndex < SmallImageList.Images.Count)
+        if (col == 0)
         {
-            var sz = SmallImageList.ImageSize;
-            g.DrawImage(SmallImageList.Images[e.Item.ImageIndex], x, cell.Y + (cell.Height - sz.Height) / 2, sz.Width, sz.Height);
-            x += sz.Width + pad;
+            // Dosya adının solundaki başlangıç noktasını gösteren şık, pürüzsüz nokta
+            int dot = Math.Max(5, (int)Math.Round(5.5f * Dlu.Scale));
+            int dx = cell.X + (int)Math.Round(6 * Dlu.Scale);
+            int dy = cell.Y + (cell.Height - dot) / 2;
+            var prevSmooth = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var dotBrush = sel && Focused ? _brOnAccent
+                : (e.Item!.ForeColor == Theme.Danger ? _brDanger : _brAccent);
+            g.FillEllipse(dotBrush, dx, dy, dot, dot);
+            g.SmoothingMode = prevSmooth;
+            x = dx + dot + (int)Math.Round(7 * Dlu.Scale);
         }
         var tr = new Rectangle(x, cell.Y, Math.Max(0, cell.Right - x - pad), cell.Height);
         var align = col < Columns.Count ? Columns[col].TextAlign : HorizontalAlignment.Left;
@@ -386,7 +396,7 @@ public sealed class BufferedListView : ListView
     {
         if (disposing)
         {
-            _brSurface.Dispose(); _brBg.Dispose(); _brAccent.Dispose(); _brHover.Dispose();
+            _brSurface.Dispose(); _brBg.Dispose(); _brAccent.Dispose(); _brOnAccent.Dispose(); _brDanger.Dispose(); _brHover.Dispose();
             _penBorder.Dispose(); _penGrid.Dispose();
         }
         base.Dispose(disposing);

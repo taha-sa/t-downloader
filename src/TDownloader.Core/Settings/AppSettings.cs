@@ -48,14 +48,14 @@ public sealed class AppSettings
     public bool ShowFileInfoOnCapture { get; set; } = true;
     /// <summary>Indirme bitince "Indirme tamamlandi" penceresini goster (kapaliysa tepsi balonu).</summary>
     public bool ShowCompletedDialog { get; set; } = true;
-    public bool PlayCompletionSound { get; set; } = true;
+    public bool PlayCompletionSound { get; set; } = false;
     public bool StartWithWindows { get; set; } = true;
     public SchedulerSettings Scheduler { get; set; } = new();
     /// <summary>Kullanıcının "+" ile eklediği kategoriler (klasörleri CategoryFolders'ta tutulur).</summary>
     public List<string> CustomCategories { get; set; } = new();
-    /// <summary>Ayar şeması sürümü; 1: "dosya bilgisi penceresini göster" bir kerelik açık yapıldı.</summary>
+    /// <summary>Ayar şeması sürümü; 1: dosya bilgisi penceresi açık, 2: tamamlanma sesi varsayılan kapalı.</summary>
     public int SettingsVersion { get; set; }
-    public const int CurrentSettingsVersion = 1;
+    public const int CurrentSettingsVersion = 2;
 
     // ---- Video (yt-dlp) ----
     /// <summary>Videoların üstünde "Bu videoyu indir" düğmesini göster.</summary>
@@ -80,10 +80,21 @@ public sealed class AppSettings
             if (File.Exists(path))
             {
                 var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonDefaults.Options) ?? new();
+                bool migrated = false;
                 if (s.SettingsVersion < 1)
                 {
                     // Bir kerelik göç: IDM gibi her indirmede dosya bilgisi penceresi açılsın.
                     s.ShowFileInfoOnCapture = true;
+                    migrated = true;
+                }
+                if (s.SettingsVersion < 2)
+                {
+                    // Bir kerelik göç: indirme tamamlanma sesi varsayılan kapalı.
+                    s.PlayCompletionSound = false;
+                    migrated = true;
+                }
+                if (migrated)
+                {
                     s.SettingsVersion = CurrentSettingsVersion;
                     try { s.Save(path); } catch (Exception) { }
                 }
