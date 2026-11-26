@@ -79,17 +79,37 @@ public sealed class ShellIcons
         catch { return null; }
     }
 
-    /// <summary>Uzantıya göre büyük (32x32) shell simgesi; bulunamazsa null. (Tek seferlik, pencere açılırken; satır başına değil.)</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]?> LargeCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Uzantıya göre büyük (32x32) shell simgesi; uzantı bazlı önbellekli (SHGetFileInfo tekrarını önler).</summary>
     public static Bitmap? Large(string fileName)
     {
         try
         {
             var ext = ExtOf(fileName);
-            var fi = new SHFILEINFO();
-            SHGetFileInfo("x" + ext, 0x80, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_ICON | SHGFI_USEFILEATTRIBUTES);
-            if (fi.hIcon == IntPtr.Zero) return null;
-            try { using var ic = Icon.FromHandle(fi.hIcon); return ic.ToBitmap(); }
-            finally { DestroyIcon(fi.hIcon); }
+            var png = LargeCache.GetOrAdd(ext, static e =>
+            {
+                try
+                {
+                    var fi = new SHFILEINFO();
+                    SHGetFileInfo("x" + e, 0x80, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_ICON | SHGFI_USEFILEATTRIBUTES);
+                    if (fi.hIcon == IntPtr.Zero) return null;
+                    try
+                    {
+                        using var ic = Icon.FromHandle(fi.hIcon);
+                        using var bmp = ic.ToBitmap();
+                        using var ms = new MemoryStream();
+                        bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                        return ms.ToArray();
+                    }
+                    finally { DestroyIcon(fi.hIcon); }
+                }
+                catch { return null; }
+            });
+            if (png == null) return null;
+            using var s = new MemoryStream(png);
+            using var tmp = new Bitmap(s);
+            return new Bitmap(tmp);
         }
         catch { return null; }
     }

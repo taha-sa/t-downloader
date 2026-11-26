@@ -9,7 +9,7 @@ namespace TDownloader.App.Forms;
 
 /// <summary>
 /// "İndirme tamamlandı" penceresi (IDM'nin tamamlanma penceresi gibi işlev, T-Downloader teması): kenarlıksız 460x264, kendi başlık çubuğu,
-/// 12 px köşe, gölge, 150 ms fade-in, sağ-alt köşede, odak ÇALMAZ. Birden çok tamamlanma tek pencerede "1/3" sayfalayıcıyla birikir.
+/// 12 px köşe, gölge, 150 ms fade-in, ekranın ortasında, odak ÇALMAZ. Birden çok tamamlanma tek pencerede "1/3" sayfalayıcıyla birikir.
 /// </summary>
 public sealed class CompletedDialog : Form
 {
@@ -32,7 +32,7 @@ public sealed class CompletedDialog : Form
     private readonly string[] _cacheVal = new string[2];
     private readonly int[] _cacheW = new int[2];
     private Bitmap? _icon;
-    private DateTime _fadeStart;
+    private long _fadeStartMs;
     private bool _exists = true;
     private bool _neverShow;
     private string _hover = "", _down = "";
@@ -48,15 +48,31 @@ public sealed class CompletedDialog : Form
     private int _h = H;   // telefon eylem satırı görünürse yükselir; boyut paint dışında uygulanır
     private bool _resizePending;
 
+    private void SetRoundedRegion(int h)
+    {
+        using var gp = Round(new Rectangle(0, 0, W, h), Radius);
+        var prev = Region;
+        Region = new Region(gp);
+        prev?.Dispose();
+    }
+
+    private void CenterOnScreen()
+    {
+        var scr = Screen.FromPoint(Cursor.Position) ?? Screen.PrimaryScreen;
+        var wa = scr?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
+        Location = new Point(wa.Left + (wa.Width - W) / 2, wa.Top + (wa.Height - _h) / 2);
+    }
+
     private void ApplyHeight(int h)
     {
         _resizePending = false;
         if (IsDisposed || h == _h) return;
-        int bottom = Location.Y + _h;
+        int cy = Location.Y + _h / 2;
         _h = h;
         ClientSize = new Size(W, _h);
-        Location = new Point(Location.X, bottom - _h);
-        using (var gp = Round(new Rectangle(0, 0, W, _h), Radius)) Region = new Region(gp);
+        var wa = Screen.FromControl(this).WorkingArea;
+        Location = new Point(Location.X, Math.Clamp(cy - _h / 2, wa.Top, Math.Max(wa.Top, wa.Bottom - _h)));
+        SetRoundedRegion(_h);
         Invalidate();
     }
 
@@ -75,13 +91,12 @@ public sealed class CompletedDialog : Form
         Text = Strings.DownloadCompleted;
         AccessibleName = Strings.DownloadCompleted;
         AccessibleRole = AccessibleRole.Dialog;
-        var wa = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
-        Location = new Point(wa.Right - W - 16, wa.Bottom - H - 16);
-        using (var gp = Round(new Rectangle(0, 0, W, H), Radius)) Region = new Region(gp);
+        CenterOnScreen();
+        SetRoundedRegion(H);
 
         _fade.Tick += (_, _) =>
         {
-            double p = Math.Min(1, (DateTime.UtcNow - _fadeStart).TotalMilliseconds / 150.0);
+            double p = Math.Min(1, (Environment.TickCount64 - _fadeStartMs) / 150.0);
             Opacity = p;
             if (p >= 1) { _fade.Stop(); }
         };
@@ -104,7 +119,8 @@ public sealed class CompletedDialog : Form
         OnEntryChanged();
         if (!Visible)
         {
-            Opacity = 0; _fadeStart = DateTime.UtcNow;
+            CenterOnScreen();
+            Opacity = 0; _fadeStartMs = Environment.TickCount64;
             Show();
             _fade.Start();
         }
@@ -113,22 +129,35 @@ public sealed class CompletedDialog : Form
 
     private void OnEntryChanged()
     {
+        var cur = _queue.Current;
         _icon?.Dispose();
-        _icon = ShellIcons.Large(_queue.Current?.FileName ?? "");
-        AccessibleName = Strings.DownloadCompleted2 + (_queue.Current?.FileName ?? "");
+        _icon = null;
+        AccessibleName = Strings.DownloadCompleted2 + (cur?.FileName ?? "");
         _focus = "";
         _exists = true;
         _cacheKey[0] = _cacheKey[1] = "";
         Invalidate();
-        // Dosya var mı? UI thread'ini bloklamamak için arka planda (ağ sürücüsü olabilir).
-        var cur = _queue.Current;
         if (cur == null) return;
+        // Dosya kontrolü ve kabuk simgesi arka planda: UI thread'i 0 takılma.
         _ = Task.Run(() =>
         {
             bool ok;
             try { ok = File.Exists(cur.Path); } catch { ok = false; }
-            if (IsDisposed || !IsHandleCreated) return;
-            try { BeginInvoke(() => { if (_queue.Current == cur && _exists != ok) { _exists = ok; Invalidate(); } }); } catch (InvalidOperationException) { }
+            Bitmap? bmp = null;
+            try { bmp = ShellIcons.Large(cur.FileName); } catch { }
+            if (IsDisposed || !IsHandleCreated) { bmp?.Dispose(); return; }
+            try
+            {
+                BeginInvoke(() =>
+                {
+                    if (IsDisposed || _queue.Current != cur) { bmp?.Dispose(); return; }
+                    _icon?.Dispose();
+                    _icon = bmp;
+                    _exists = ok;
+                    Invalidate();
+                });
+            }
+            catch (InvalidOperationException) { bmp?.Dispose(); }
         });
     }
 
@@ -400,14 +429,12 @@ public sealed class CompletedDialog : Form
 
     private void OpenWith(CompletedEntry c)
     {
-        if (!_exists) return;
         if (!_exists || c.Path.IndexOfAny(['"', '\0']) >= 0) return;
         try { Process.Start(new ProcessStartInfo("rundll32.exe", $"shell32.dll,OpenAs_RunDLL \"{c.Path.TrimEnd('\\')}\"") { UseShellExecute = false })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
     private void ShowInFolder(CompletedEntry c)
     {
-        if (!_exists) return;
         if (!_exists || c.Path.IndexOfAny(['"', '\0']) >= 0) return;
         try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{c.Path.TrimEnd('\\')}\"") { UseShellExecute = false })?.Dispose(); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         CloseAll();

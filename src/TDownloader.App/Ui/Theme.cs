@@ -224,14 +224,26 @@ public class DluForm : Form
         => Add(new Label { Text = text, TextAlign = a, AutoEllipsis = true }, x, y, w, h);
 }
 
-/// <summary>Koyu tema, sarı seçim; owner-draw liste (sistem mavisi seçim rengi kullanılmaz).</summary>
+/// <summary>Koyu tema, vurgu rengi seçim; owner-draw liste (sistem mavisi seçim rengi kullanılmaz, hover'da alt sütunlar asla silinmez).</summary>
 public sealed class BufferedListView : ListView
 {
     /// <summary>Hücreler arasına ince ızgara çizgisi çizer.</summary>
     [System.ComponentModel.Browsable(false), System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public bool Grid { get; set; }
 
+    [System.ComponentModel.Browsable(false), System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public int SortColumn { get; set; } = -1;
+
+    [System.ComponentModel.Browsable(false), System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool SortAscending { get; set; } = true;
+
     private HeaderFiller? _filler;
+    private readonly SolidBrush _brSurface = new(Theme.Surface);
+    private readonly SolidBrush _brBg = new(Theme.Bg);
+    private readonly SolidBrush _brAccent = new(Theme.Accent);
+    private readonly SolidBrush _brHover = new(Theme.Hover);
+    private readonly Pen _penBorder = new(Theme.Border);
+    private readonly Pen _penGrid = new(Theme.Surface);
 
     public BufferedListView()
     {
@@ -298,24 +310,31 @@ public sealed class BufferedListView : ListView
     protected override void OnDrawColumnHeader(DrawListViewColumnHeaderEventArgs e)
     {
         var g = e.Graphics;
-        using (var br = new SolidBrush(Theme.Surface)) g.FillRectangle(br, e.Bounds);
-        using (var p = new Pen(Theme.Border))
-        {
-            g.DrawLine(p, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-            g.DrawLine(p, e.Bounds.Right - 1, e.Bounds.Top + 3, e.Bounds.Right - 1, e.Bounds.Bottom - 4);
-        }
+        g.FillRectangle(_brSurface, e.Bounds);
+        g.DrawLine(_penBorder, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+        g.DrawLine(_penBorder, e.Bounds.Right - 1, e.Bounds.Top + 3, e.Bounds.Right - 1, e.Bounds.Bottom - 4);
         var r = Rectangle.Inflate(e.Bounds, -(int)(5 * Dlu.Scale), 0);
-        TextRenderer.DrawText(g, e.Header?.Text ?? "", Font, r, Theme.Text, Flags(e.Header?.TextAlign ?? HorizontalAlignment.Left));
+        string title = e.Header?.Text ?? "";
+        if (e.ColumnIndex == SortColumn)
+            title = SortAscending ? title + " ▲" : title + " ▼";
+        TextRenderer.DrawText(g, title, Font, r, e.ColumnIndex == SortColumn ? Theme.Accent : Theme.Text, Flags(e.Header?.TextAlign ?? HorizontalAlignment.Left));
     }
 
     protected override void OnDrawItem(DrawListViewItemEventArgs e)
     {
         if (View != View.Details) { e.DrawDefault = true; return; }
-        var b = e.Bounds;
-        var row = new Rectangle(0, b.Y, Math.Max(ClientSize.Width, b.Right), b.Height);
-        using var br = new SolidBrush(RowBack(e.Item, e.ItemIndex));
-        e.Graphics.FillRectangle(br, row);
-        if (Grid) { using var p = new Pen(Theme.Surface); e.Graphics.DrawLine(p, 0, b.Bottom - 1, row.Right, b.Bottom - 1); }
+        // KRİTİK: Sanal+OwnerDraw modda fare satırın üstüne gelince Windows yalnızca OnDrawItem + sütun 0 çizebilir.
+        // Bu yüzden satırın tamamını burada boyamak sütun 1..N'i siler! Burada YALNIZCA son sütundan sonraki boş sağ alan boyanır;
+        // her hücre kendi arka planını OnDrawSubItem içinde boyar.
+        int colsRight = e.Bounds.Left;
+        foreach (ColumnHeader col in Columns) colsRight += col.Width;
+        int rightEdge = Math.Max(ClientSize.Width, e.Bounds.Right);
+        if (colsRight < rightEdge)
+        {
+            var tail = new Rectangle(colsRight, e.Bounds.Y, rightEdge - colsRight, e.Bounds.Height);
+            e.Graphics.FillRectangle(RowBackBrush(e.Item, e.ItemIndex), tail);
+            if (Grid) e.Graphics.DrawLine(_penGrid, tail.Left, e.Bounds.Bottom - 1, tail.Right, e.Bounds.Bottom - 1);
+        }
         e.DrawDefault = false;
     }
 
@@ -325,7 +344,11 @@ public sealed class BufferedListView : ListView
         var g = e.Graphics;
         int col = e.ColumnIndex;
         var cell = e.Bounds;
-        if (col == 0) cell = new Rectangle(cell.X, cell.Y, Columns[0].Width, cell.Height);
+        if (col == 0 && Columns.Count > 0) cell = new Rectangle(cell.X, cell.Y, Columns[0].Width, cell.Height);
+        if (cell.Width <= 0 || cell.Height <= 0) return;
+
+        g.FillRectangle(RowBackBrush(e.Item!, e.ItemIndex), cell);
+
         var sel = IsSel(e.Item!, e.ItemIndex);
         var fg = sel && Focused ? Theme.OnAccent : (e.Item!.ForeColor == SystemColors.WindowText ? Theme.Text : e.Item!.ForeColor);
         int pad = (int)(4 * Dlu.Scale);
@@ -338,14 +361,19 @@ public sealed class BufferedListView : ListView
         }
         var tr = new Rectangle(x, cell.Y, Math.Max(0, cell.Right - x - pad), cell.Height);
         var align = col < Columns.Count ? Columns[col].TextAlign : HorizontalAlignment.Left;
-        TextRenderer.DrawText(g, e.SubItem?.Text ?? "", Font, tr, fg, Flags(align));
-        if (Grid) { using var p = new Pen(Theme.Surface); g.DrawLine(p, cell.Right - 1, cell.Top, cell.Right - 1, cell.Bottom); }
+        if (tr.Width > 0)
+            TextRenderer.DrawText(g, e.SubItem?.Text ?? "", Font, tr, fg, Flags(align));
+        if (Grid)
+        {
+            g.DrawLine(_penGrid, cell.Left, cell.Bottom - 1, cell.Right, cell.Bottom - 1);
+            g.DrawLine(_penGrid, cell.Right - 1, cell.Top, cell.Right - 1, cell.Bottom);
+        }
     }
 
     // Sanal modda ListViewItem.Selected guvenilir degildir: secim dizinden okunur.
     private bool IsSel(ListViewItem it, int index) => VirtualMode ? SelectedIndices.Contains(index) : it.Selected;
 
-    private Color RowBack(ListViewItem it, int index) => IsSel(it, index) ? (Focused ? Theme.Accent : Theme.Hover) : BackColor;
+    private SolidBrush RowBackBrush(ListViewItem it, int index) => IsSel(it, index) ? (Focused ? _brAccent : _brHover) : _brBg;
 
     private static TextFormatFlags Flags(HorizontalAlignment a) =>
         TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine |
@@ -353,6 +381,16 @@ public sealed class BufferedListView : ListView
 
     protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
     protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _brSurface.Dispose(); _brBg.Dispose(); _brAccent.Dispose(); _brHover.Dispose();
+            _penBorder.Dispose(); _penGrid.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 }
 
 /// <summary>Koyu temalı ağaç: sarı seçim (odaktayken), gri seçim (odak yokken).</summary>

@@ -458,6 +458,7 @@ public sealed class MainForm : Form
 
         var ctxOpen = Mi(Strings.Open, OpenSelectedFile);
         var ctxFolder = Mi(Strings.ShowInFolder, ShowSelectedInFolder);
+        var ctxCopyUrl = Mi(Strings.Copy + " " + Strings.URL, CopySelectedUrl);
         var ctxHash = Mi(Strings.CalculateChecksumHash, ShowSelectedHash, Keys.None, "hash");
         var ctxSep1 = new ToolStripSeparator();
         var ctxResume = Mi(Strings.Resume2, ResumeSelected, Keys.None, "resume");
@@ -470,7 +471,7 @@ public sealed class MainForm : Form
 
         _ctx.Items.AddRange(new ToolStripItem[]
         {
-            ctxOpen, ctxFolder, ctxHash, ctxSep1,
+            ctxOpen, ctxFolder, ctxCopyUrl, ctxHash, ctxSep1,
             ctxResume, ctxStop, ctxProgress, ctxSep2,
             ctxDelete, ctxDisk
         });
@@ -488,6 +489,7 @@ public sealed class MainForm : Form
             bool canStop = sel.Any(i => i.Status is DownloadStatus.Downloading or DownloadStatus.Queued);
             bool hasIncomplete = sel.Any(i => i.Status != DownloadStatus.Completed);
 
+            ctxCopyUrl.Visible = sel.Count == 1;
             ctxHash.Visible = allCompleted && sel.Count == 1;
             ctxResume.Visible = canResume;
             ctxStop.Visible = canStop;
@@ -639,7 +641,8 @@ public sealed class MainForm : Form
         void Set(int c, string v) { var s = li.SubItems[c]; if (s.Text != v) s.Text = v; }
         Set(0, it.FileName);
         Set(1, it.Status is DownloadStatus.Queued or DownloadStatus.Downloading ? "•" : "");
-        Set(2, it.TotalSize > 0 ? Fmt.Size(it.TotalSize) : "");
+        long effectiveSize = it.TotalSize > 0 ? it.TotalSize : it.Downloaded;
+        Set(2, effectiveSize > 0 ? Fmt.Size(effectiveSize) : "");
         // Birleştirme/dönüştürme aşaması ("Birleştiriliyor %40") varsa yüzde yerine o gösterilir (A14).
         Set(3, active && p?.Phase is { Length: > 0 } phase ? phase : StatusText(it, true));
         // Hız / kalan süre metni satır başına en fazla saniyede 1 güncellenir; yüzde/boyut her turda.
@@ -668,34 +671,36 @@ public sealed class MainForm : Form
     private void Flush()
     {
         string[] ids;
-        lock (_dirtyLock) { ids = _dirty.ToArray(); _dirty.Clear(); }
-        if (ids.Length > 0)
+        lock (_dirtyLock)
         {
-            int top = (int)SendMessage(_list.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
-            int last = top + (int)SendMessage(_list.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero) + 1;
-            bool rebuild = false;
-            foreach (var id in ids)
-            {
-                if (!_items.TryGetValue(id, out var it)) continue;   // eklenme/silinme UI kuyruğunda; sonra işlenir
-                bool match = Match(it);
-                var row = RowFor(it);
-                row.Stale = true;
-                int ix = _view.IndexOf(id);
-                if (match != (ix >= 0)) rebuild = true;                    // süzgeçten çıktı / girdi
-                else if (ix >= top && ix <= last) _list.RedrawItems(ix, ix, false);
-
-                bool active = it.Status == DownloadStatus.Downloading;
-                _progress.TryGetValue(id, out var p);
-                _stats.Set(id, active, p?.SpeedBytesPerSec ?? 0);
-                if (_dialogs.TryGetValue(id, out var dlg))
-                {
-                    dlg.RefreshItem(it);
-                    if (p != null && active) dlg.ApplyProgress(p);
-                }
-                if (!active) _progress.TryRemove(id, out _);   // biten/duran indirmenin ilerleme kaydı tutulmaz
-            }
-            if (rebuild) RebuildList();
+            if (_dirty.Count == 0) return;
+            ids = _dirty.ToArray();
+            _dirty.Clear();
         }
+        int top = (int)SendMessage(_list.Handle, LVM_GETTOPINDEX, IntPtr.Zero, IntPtr.Zero);
+        int last = top + (int)SendMessage(_list.Handle, LVM_GETCOUNTPERPAGE, IntPtr.Zero, IntPtr.Zero) + 1;
+        bool rebuild = false;
+        foreach (var id in ids)
+        {
+            if (!_items.TryGetValue(id, out var it)) continue;   // eklenme/silinme UI kuyruğunda; sonra işlenir
+            bool match = Match(it);
+            var row = RowFor(it);
+            row.Stale = true;
+            int ix = _view.IndexOf(id);
+            if (match != (ix >= 0)) rebuild = true;                    // süzgeçten çıktı / girdi
+            else if (ix >= top && ix <= last) _list.RedrawItems(ix, ix, false);
+
+            bool active = it.Status == DownloadStatus.Downloading;
+            _progress.TryGetValue(id, out var p);
+            _stats.Set(id, active, p?.SpeedBytesPerSec ?? 0);
+            if (_dialogs.TryGetValue(id, out var dlg))
+            {
+                dlg.RefreshItem(it);
+                if (p != null && active) dlg.ApplyProgress(p);
+            }
+            if (!active) _progress.TryRemove(id, out _);   // biten/duran indirmenin ilerleme kaydı tutulmaz
+        }
+        if (rebuild) RebuildList();
         UpdateStatus();
     }
 
@@ -718,9 +723,7 @@ public sealed class MainForm : Form
         if (_dialogs.TryGetValue(i.Id, out var d))
         {
             d.RefreshItem(i);
-            var t = new System.Windows.Forms.Timer { Interval = 1500 };
-            t.Tick += (_, _) => { t.Stop(); t.Dispose(); if (!d.IsDisposed) d.Close(); };
-            t.Start();
+            d.ScheduleAutoClose(1500);
         }
         try
         {
@@ -763,7 +766,7 @@ public sealed class MainForm : Form
             int r = Key switch
             {
                 "name" => string.Compare(x.FileName, y.FileName, StringComparison.CurrentCultureIgnoreCase),
-                "size" => x.TotalSize.CompareTo(y.TotalSize),
+                "size" => (x.TotalSize > 0 ? x.TotalSize : x.Downloaded).CompareTo(y.TotalSize > 0 ? y.TotalSize : y.Downloaded),
                 "status" => x.Status.CompareTo(y.Status),
                 "speed" => x.SpeedBytesPerSec.CompareTo(y.SpeedBytesPerSec),
                 "last" => Nullable.Compare(x.LastTryAt, y.LastTryAt),
@@ -780,6 +783,8 @@ public sealed class MainForm : Form
     {
         if (col < 0) return;
         _sortCol = col; _sortAsc = asc;
+        _list.SortColumn = col;
+        _list.SortAscending = asc;
         ApplySort();
     }
 
@@ -882,7 +887,8 @@ public sealed class MainForm : Form
             if (!ConfirmDiskSpace(dlg.SaveFolder, opt.Size, dlg.FileName)) return false;
             try
             {
-                _mgr.AddExternal(new AddExternalRequest(dlg.Url, dlg.FileName, opt.Format, dlg.SaveFolder, referer, dlg.Description, dlg.StartNow, ctx?.Cookies, ctx?.UserAgent, ctx?.EffectiveOrigin, ctx?.CookieHost));
+                var item = _mgr.AddExternal(new AddExternalRequest(dlg.Url, dlg.FileName, opt.Format, dlg.SaveFolder, referer, dlg.Description, dlg.StartNow, ctx?.Cookies, ctx?.UserAgent, ctx?.EffectiveOrigin, ctx?.CookieHost));
+                if (dlg.StartNow) OpenProgress(item);
                 return true;
             }
             catch (ArgumentException ex)
@@ -959,9 +965,8 @@ public sealed class MainForm : Form
 
     private void OpenProgress(DownloadItem item)
     {
-        if (item.Kind == DownloadKind.External) return;   // yt-dlp öğeleri ana listede izlenir
         if (_dialogs.TryGetValue(item.Id, out var ex)) { ex.Show(); ex.Activate(); return; }
-        var d = new ProgressDialog(_mgr, item);
+        var d = new ProgressDialog(_mgr, item, _svc.SaveSettings);
         _dialogs[item.Id] = d;
         d.FormClosed += (_, _) => _dialogs.Remove(item.Id);
         d.Show();
@@ -1066,6 +1071,13 @@ public sealed class MainForm : Form
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
+    private void CopySelectedUrl()
+    {
+        var i = Selected().FirstOrDefault();
+        if (i == null || string.IsNullOrEmpty(i.Url)) return;
+        try { Clipboard.SetText(i.Url); } catch (ExternalException) { }
+    }
+
     private void ShowSelectedHash()
     {
         var i = Selected().FirstOrDefault();
@@ -1119,7 +1131,13 @@ public sealed class MainForm : Form
         }
         MessageBox.Show(this, Strings.OpeningTheExtensionFolderInChromeEdgeEnable,
             Strings.BrowserExtension2, MessageBoxButtons.OK, MessageBoxIcon.Information);
-        try { Process.Start("explorer.exe", $"\"{_extensionDir}\""); } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+        try
+        {
+            var psi = new ProcessStartInfo("explorer.exe");
+            psi.ArgumentList.Add(_extensionDir);
+            Process.Start(psi)?.Dispose();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
     // ------------------------------------------------------------ kategori paneli
