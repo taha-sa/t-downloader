@@ -42,15 +42,31 @@ public static class Theme
 public static class Dark
 {
     [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] private static extern int SetWindowTheme(IntPtr h, string? app, string? ids);
+    [DllImport("uxtheme.dll", EntryPoint = "#135")] private static extern int SetPreferredAppMode(int mode);
+    [DllImport("uxtheme.dll", EntryPoint = "#136")] private static extern void FlushMenuThemes();
+    [DllImport("uxtheme.dll", EntryPoint = "#133")] private static extern bool AllowDarkModeForWindow(IntPtr h, bool allow);
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int v, int size);
 
     private static int Rgb(Color c) => c.R | (c.G << 8) | (c.B << 16);
+
+    /// <summary>Süreç genelinde koyu Win32 kaydırma çubuğu ve sistem menüsü desteğini açar (Win10 1903+/Win11).</summary>
+    public static void InitApp()
+    {
+        try
+        {
+            SetPreferredAppMode(2); // ForceDark
+            FlushMenuThemes();
+        }
+        catch (Exception) { }
+    }
 
     /// <summary>Koyu başlık çubuğu (Win10 20H1+/Win11); desteklenmeyen sistemlerde sessizce yok sayılır.</summary>
     public static void Window(IntPtr h)
     {
         try
         {
+            AllowDarkModeForWindow(h, true);
+            SetWindowTheme(h, "DarkMode_Explorer", null);
             int on = 1; DwmSetWindowAttribute(h, 20, ref on, 4);
             int cap = Rgb(Theme.Black), txt = Rgb(Theme.Text), bdr = Rgb(Theme.Border);
             DwmSetWindowAttribute(h, 35, ref cap, 4);
@@ -61,7 +77,18 @@ public static class Dark
     }
 
     public static void SetTheme(IntPtr h, string name) { try { SetWindowTheme(h, name, null); } catch (Exception) { } }
-    public static void Explorer(IntPtr h) { try { SetWindowTheme(h, "DarkMode_Explorer", null); } catch (Exception) { } }
+    public static void Explorer(IntPtr h) { try { AllowDarkModeForWindow(h, true); SetWindowTheme(h, "DarkMode_Explorer", null); } catch (Exception) { } }
+
+    /// <summary>Yalnızca kaydırma çubuklarını koyulaştırır; owner-draw ListView/TreeView satırlarına Explorer vurgusu bulaştırmaz.</summary>
+    public static void ScrollBars(IntPtr h)
+    {
+        try
+        {
+            AllowDarkModeForWindow(h, true);
+            SetWindowTheme(h, "DarkMode_Explorer", "ScrollBar");
+        }
+        catch (Exception) { }
+    }
 
     private static void WithHandle(Control c, Action<IntPtr> a)
     {
@@ -112,6 +139,18 @@ public static class Dark
                 break;
             case TabPage p:
                 p.UseVisualStyleBackColor = false; p.BackColor = Theme.Bg;
+                WithHandle(p, Explorer);
+                break;
+            case RichTextBox rtb:
+                rtb.BackColor = Theme.Field; rtb.ForeColor = Theme.Text;
+                WithHandle(rtb, Explorer);
+                break;
+            case ListBox lb:
+                lb.BackColor = Theme.Field; lb.ForeColor = Theme.Text;
+                WithHandle(lb, Explorer);
+                break;
+            case ScrollableControl sc when sc.AutoScroll:
+                WithHandle(sc, Explorer);
                 break;
         }
     }
@@ -260,10 +299,39 @@ public sealed class BufferedListView : ListView
     {
         base.OnHandleCreated(e);
         SendMessage(Handle, 0x1036 /*LVM_SETEXTENDEDSTYLE*/, (IntPtr)0x10000, (IntPtr)0x10000); // LVS_EX_DOUBLEBUFFER
-        // Not: Explorer koyu teması uygulanmaz; fare altındaki satıra mavimsi sistem tonu çizdiği için (yan etki: açık renkli kaydırma çubuğu).
+        // Yalnızca ScrollBar alt kimliği: koyu kaydırma çubukları, satırlarda sıfır Explorer mavi hover izi.
+        Dark.ScrollBars(Handle);
         _filler?.ReleaseHandle();
         var hdr = SendMessage(Handle, 0x101F /*LVM_GETHEADER*/, IntPtr.Zero, IntPtr.Zero);
         if (hdr != IntPtr.Zero) { _filler = new HeaderFiller(); _filler.AssignHandle(hdr); }
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        if (m.Msg == 0x0085 /*WM_NCPAINT*/)
+            PaintScrollCorner();
+    }
+
+    /// <summary>Hem dikey hem yatay kaydırma çubuğu varken sağ-alt köşedeki açık renkli sistem karesini koyulaştırır.</summary>
+    private void PaintScrollCorner()
+    {
+        int style = GetWindowLong(Handle, -16 /*GWL_STYLE*/);
+        if ((style & 0x00300000 /*WS_VSCROLL|WS_HSCROLL*/) != 0x00300000) return;
+        if (!GetWindowRect(Handle, out var wr)) return;
+        int w = wr.Right - wr.Left, h = wr.Bottom - wr.Top;
+        int bdr = BorderStyle == BorderStyle.None ? 0 : 1;
+        int vsw = SystemInformation.VerticalScrollBarWidth;
+        int hsh = SystemInformation.HorizontalScrollBarHeight;
+        if (w <= vsw + bdr || h <= hsh + bdr) return;
+        IntPtr dc = GetWindowDC(Handle);
+        if (dc == IntPtr.Zero) return;
+        try
+        {
+            using var g = Graphics.FromHdc(dc);
+            g.FillRectangle(_brSurface, w - vsw - bdr, h - hsh - bdr, vsw, hsh);
+        }
+        finally { ReleaseDC(Handle, dc); }
     }
 
     protected override void OnHandleDestroyed(EventArgs e)
@@ -274,8 +342,11 @@ public sealed class BufferedListView : ListView
 
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr h);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindowDC(IntPtr h);
     [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr h, IntPtr dc);
     [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr h, int idx);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, ref RECT l);
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
 
@@ -413,7 +484,11 @@ public sealed class DarkTree : TreeView
         LineColor = Theme.Border;
     }
 
-    
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Dark.ScrollBars(Handle);
+    }
 
     protected override void OnDrawNode(DrawTreeNodeEventArgs e)
     {

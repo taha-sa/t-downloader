@@ -58,6 +58,7 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        Ui.Dark.InitApp();
         Application.SetDefaultFont(new Font("Tahoma", 8f));
         CrashReporter.Install(UpdateService.AppId, Strings.AppName, AppServices.Version, "taha-sa/t-downloader-releases", UpdateService.Theme);
         CrashReporter.InstallWinForms();
